@@ -8,27 +8,38 @@
     android:background="#F8F9FA">
 
     <ImageView
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:src="@android:drawable/ic_lock_lock"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:src="@drawable/ic_launcher"
         android:contentDescription="Shield Icon" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="20dp"
         android:text="LinkShield Sandbox"
         android:textColor="@android:color/black"
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textStyle="bold" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Protection is active in background.\nWhen you click any link in WhatsApp or Chrome, select LinkShield to open safely."
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="30dp"
+        android:text="Protect your device from malicious links.\nClick below to allow LinkShield to open links safely."
         android:textAlignment="center"
         android:textColor="@android:color/darker_gray"
         android:textSize="14sp" />
+
+    <Button
+        android:id="@+id/btnEnableProtection"
+        android:layout_width="match_parent"
+        android:layout_height="55dp"
+        android:text="Enable Link Protection"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:backgroundTint="#007AFF"
+        android:textColor="@android:color/white" />
 
 </LinearLayout>
