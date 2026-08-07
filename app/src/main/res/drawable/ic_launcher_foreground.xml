@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- White Shield - Large size for full circular fill effect -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,14 L90,28 L90,60 C90,80 54,98 54,98 C54,98 18,80 18,60 L18,28 Z" />
+</vector>
