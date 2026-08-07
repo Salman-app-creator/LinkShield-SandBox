@@ -14,7 +14,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShield">
 
-        <!-- Main Home Screen -->
+        <!-- Main Home Screen (With Enable Protection Button) -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -24,7 +24,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Link Interceptor (Directly opens sandbox) -->
+        <!-- Link Interceptor (Directly opens sandbox view) -->
         <activity
             android:name=".LinkInterceptorActivity"
             android:exported="true"
