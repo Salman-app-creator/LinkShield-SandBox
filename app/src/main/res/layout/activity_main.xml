@@ -1,46 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:background="#F8F9FA">
+    android:padding="32dp">
 
     <ImageView
-        android:layout_width="160dp"
-        android:layout_height="160dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_launcher"
-        android:contentDescription="Shield Icon" />
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_marginBottom="24dp"
+        android:src="@drawable/ic_launcher_foreground" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginBottom="8dp"
         android:text="LinkShield Sandbox"
-        android:textColor="@android:color/black"
-        android:textSize="26sp"
+        android:textSize="28sp"
         android:textStyle="bold" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
         android:layout_marginBottom="32dp"
-        android:text="Protect your device from malicious links.\nClick below to allow LinkShield to open links safely."
-        android:textAlignment="center"
-        android:textColor="@android:color/darker_gray"
-        android:textSize="15sp" />
+        android:gravity="center"
+        android:text="Secure, isolated browsing for every link you click"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="Checking status..."
+        android:textSize="14sp"
+        android:textStyle="bold" />
 
     <Button
         android:id="@+id/btnEnableProtection"
         android:layout_width="match_parent"
-        android:layout_height="58dp"
-        android:text="Enable Link Protection"
-        android:textSize="17sp"
-        android:textStyle="bold"
-        android:backgroundTint="#007AFF"
-        android:textColor="@android:color/white" />
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:text="Enable Link Protection" />
 
 </LinearLayout>
