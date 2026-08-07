@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">LinkShield</string>
+    <string name="app_name">LinkShield Sandbox</string>
+    <string name="open_in_official_app">Open in Official App</string>
+    <string name="sandbox_active">Safe Sandbox Active</string>
 </resources>
