@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
-        android:label="LinkShield"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-        
+        android:theme="@style/Theme.LinkShield"
+        tools:targetApi="31">
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -16,8 +23,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!-- Link opener intents -->
+        <activity
+            android:name=".LinkInterceptorActivity"
+            android:exported="true"
+            android:theme="@style/Theme.LinkShield.Transparent">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -26,15 +37,11 @@
                 <data android:scheme="https" />
             </intent-filter>
         </activity>
-    </application>
 
-</manifest>
-
-        <!-- Isolated Sandbox WebView -->
         <activity
             android:name=".SandboxWebViewActivity"
             android:exported="false"
-            android:process=":sandbox_process" />
+            android:configChanges="orientation|screenSize" />
 
     </application>
 
