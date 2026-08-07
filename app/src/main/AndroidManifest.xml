@@ -4,49 +4,69 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- REQUIRED: System ko batata hai ke yeh app WebView-based browser hai -->
+    <uses-feature
+        android:name="android.software.webview"
+        android:required="true" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_launcher"
-        android:roundIcon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LinkShield">
+        android:theme="@style/Theme.LinkShield"
+        android:usesCleartextTraffic="false">
 
-        <!-- Main Home Screen (With Enable Protection Button) -->
+        <!-- Main Home Screen -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Link Interceptor (Directly opens sandbox view) -->
+        <!-- Link Interceptor & Browser Registration -->
         <activity
             android:name=".LinkInterceptorActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.LinkShield.Transparent">
-            
-            <intent-filter android:autoVerify="true">
+
+            <!-- General http/https link interception -->
+            <intent-filter android:priority="999">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                
                 <data android:scheme="http" />
                 <data android:scheme="https" />
-                <data android:host="*" />
+            </intent-filter>
+
+            <!-- Browser app registration (Android 10+ / API 29+) -->
+            <!-- Bina is category ke app "Default Browser" list mein nahi dikhegi -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <category android:name="android.intent.category.APP_BROWSER" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
             </intent-filter>
 
         </activity>
 
-        <!-- Sandbox WebView -->
+        <!-- Sandbox WebView - Isolated browsing -->
         <activity
             android:name=".SandboxWebViewActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:documentLaunchMode="always"
             android:exported="false"
-            android:configChanges="orientation|screenSize" />
+            android:launchMode="standard" />
 
     </application>
 
