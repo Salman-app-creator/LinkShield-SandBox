@@ -21,14 +21,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.5"
 
       - name: Verify Gradle version
-        run: ./gradlew --version
+        run: gradle --version
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Upload Debug APK
         if: success()
