@@ -25,18 +25,23 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
+import com.linkshield.sandbox.ui.components.TopHeaderBar
 import com.linkshield.sandbox.ui.disclaimer.FirstLaunchDisclaimerDialog
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
+import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val disclaimerManager = DisclaimerManager(this)
+        val themeManager = ThemeManager(this)
 
         setContent {
-            LinkShieldTheme {
+            val darkTheme = remember { mutableStateOf(themeManager.isDarkTheme()) }
+
+            LinkShieldTheme(darkTheme = darkTheme.value) {
                 var accepted by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
 
                 if (!accepted) {
@@ -48,7 +53,16 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                LinkShieldApp()
+                LinkShieldApp(
+                    isDarkTheme = darkTheme.value,
+                    onThemeToggle = {
+                        val newIsDark = !darkTheme.value
+                        darkTheme.value = newIsDark
+                        themeManager.setTheme(
+                            if (newIsDark) ThemeManager.THEME_DARK else ThemeManager.THEME_LIGHT
+                        )
+                    }
+                )
             }
         }
     }
@@ -60,11 +74,20 @@ sealed class Tab(val route: String, val label: String, val icon: androidx.compos
 }
 
 @Composable
-fun LinkShieldApp() {
+fun LinkShieldApp(
+    isDarkTheme: Boolean = true,
+    onThemeToggle: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val tabs = listOf(Tab.Shield, Tab.Grabber)
 
     Scaffold(
+        topBar = {
+            TopHeaderBar(
+                isDarkTheme = isDarkTheme,
+                onThemeToggle = onThemeToggle
+            )
+        },
         bottomBar = {
             NavigationBar(containerColor = androidx.compose.ui.graphics.Color.Transparent) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
