@@ -30,7 +30,7 @@ class LicenseManager(context: Context) {
         private const val FREE_LIMIT = 20
 
         // 🔴 YEH URL BADLO: Apni Blogger page URL daalo yahan
-        const val BLOGGER_KEYS_URL = "https://your-blog-name.blogspot.com/p/keys.html"
+        const val BLOGGER_KEYS_URL = "https://raw.githubusercontent.com/Salman-app-creator/LinkShield-Sandbox/main/keys.json"
     }
 
     fun isProUser(): Boolean = prefs.getBoolean(KEY_IS_PRO, false)
