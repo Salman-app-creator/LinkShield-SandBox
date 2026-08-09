@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -18,7 +20,10 @@ import com.linkshield.sandbox.ui.theme.NeonGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopHeaderBar() {
+fun TopHeaderBar(
+    isDarkTheme: Boolean = true,
+    onThemeToggle: () -> Unit = {}
+) {
     TopAppBar(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -36,6 +41,16 @@ fun TopHeaderBar() {
             }
         },
         actions = {
+            // Theme Toggle Button
+            IconButton(onClick = onThemeToggle) {
+                Icon(
+                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                    contentDescription = if (isDarkTheme) "Light Mode" else "Dark Mode",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Sandbox Active Pill
             Box(
                 modifier = Modifier
                     .padding(end = 12.dp)
