@@ -57,7 +57,7 @@ Text("Easypaisa: 03136176616", style = MaterialTheme.typography.bodySmall)
 Spacer(modifier = Modifier.height(2.dp))
 
 // JazzCash Details
-Text("JazzCash: 03136176616", style = MaterialTheme.typography.bodySmall)
+Text("JazzCash: 03061934345", style = MaterialTheme.typography.bodySmall)
 Spacer(modifier = Modifier.height(4.dp))
 
                         // 🔴 EDIT KARO: Apna USDT TRC20 address
