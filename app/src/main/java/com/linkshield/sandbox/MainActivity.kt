@@ -11,14 +11,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -28,7 +33,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.license.LicenseManager
-import com.linkshield.sandbox.ui.disclaimer.FirstLaunchDisclaimerDialog
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.license.ProUpgradeDialog
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
@@ -41,27 +45,40 @@ class MainActivity : ComponentActivity() {
 
         val disclaimerManager = DisclaimerManager(this)
         val licenseManager = LicenseManager(this)
-
-        // Capture intercepted URL from intent (if launched via LinkInterceptorActivity)
         val interceptedUrl = intent?.getStringExtra("intercepted_url")
 
         setContent {
             LinkShieldTheme {
-                val context = LocalContext.current
                 val navController = rememberNavController()
-
-                var showDisclaimer by remember {
-                    mutableStateOf(!disclaimerManager.hasAccepted())
-                }
+                var showDisclaimer by remember { mutableStateOf(!disclaimerManager.hasAccepted()) }
                 var showProDialog by remember { mutableStateOf(false) }
 
                 if (showDisclaimer) {
-                    FirstLaunchDisclaimerDialog(
-                        onAccept = {
-                            disclaimerManager.accept()
-                            showDisclaimer = false
+                    Dialog(
+                        onDismissRequest = { },
+                        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+                    ) {
+                        Card(shape = RoundedCornerShape(20.dp)) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("Welcome to LinkShield Sandbox!", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("LinkShield Sandbox respects privacy and copyright laws. Please ensure you have the necessary permissions or rights from the content creator before downloading any media.", textAlign = TextAlign.Center)
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Button(
+                                    onClick = {
+                                        disclaimerManager.accept()
+                                        showDisclaimer = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Accept & Continue")
+                                }
+                            }
                         }
-                    )
+                    }
                 }
 
                 if (showProDialog) {
@@ -99,23 +116,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BottomNavBar(
-    navController: NavHostController,
-    onProClick: () -> Unit,
-    licenseManager: LicenseManager
-) {
+fun BottomNavBar(navController: NavHostController, onProClick: () -> Unit, licenseManager: LicenseManager) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val items = listOf(Screen.Unblock to Icons.Default.Shield, Screen.Grabber to Icons.Default.Download)
 
-    val items = listOf(
-        Screen.Unblock to Icons.Default.Shield,
-        Screen.Grabber to Icons.Default.Download
-    )
-
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        tonalElevation = 0.dp
-    ) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), tonalElevation = 0.dp) {
         items.forEach { (screen, icon) ->
             NavigationBarItem(
                 icon = { Icon(icon, contentDescription = screen.title) },
@@ -123,31 +129,17 @@ fun BottomNavBar(
                 selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                 onClick = {
                     navController.navigate(screen.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
                     }
                 }
             )
         }
-
         val isPro = licenseManager.isProUser()
         NavigationBarItem(
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Shield,
-                    contentDescription = "Pro",
-                    tint = if (isPro) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            label = {
-                Text(
-                    if (isPro) "PRO" else "UPGRADE",
-                    color = if (isPro) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
+            icon = { Icon(Icons.Default.Shield, contentDescription = "Pro", tint = if (isPro) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) },
+            label = { Text(if (isPro) "PRO" else "UPGRADE", color = if (isPro) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) },
             selected = false,
             onClick = onProClick
         )
@@ -155,27 +147,10 @@ fun BottomNavBar(
 }
 
 @Composable
-fun MainNavHost(
-    navController: NavHostController,
-    modifier: Modifier = Modifier,
-    licenseManager: LicenseManager,
-    onProRequired: () -> Unit,
-    interceptedUrl: String? = null
-) {
-    NavHost(
-        navController = navController,
-        startDestination = Screen.Unblock.route,
-        modifier = modifier
-    ) {
-        composable(Screen.Unblock.route) {
-            UnblockShieldScreen(initialUrl = interceptedUrl)
-        }
-        composable(Screen.Grabber.route) {
-            MediaGrabberScreen(
-                licenseManager = licenseManager,
-                onProRequired = onProRequired
-            )
-        }
+fun MainNavHost(navController: NavHostController, modifier: Modifier = Modifier, licenseManager: LicenseManager, onProRequired: () -> Unit, interceptedUrl: String? = null) {
+    NavHost(navController = navController, startDestination = Screen.Unblock.route, modifier = modifier) {
+        composable(Screen.Unblock.route) { UnblockShieldScreen(initialUrl = interceptedUrl) }
+        composable(Screen.Grabber.route) { MediaGrabberScreen(licenseManager = licenseManager, onProRequired = onProRequired) }
     }
 }
 
@@ -188,22 +163,17 @@ fun Context.openDefaultBrowserSettings() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
         if (!roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
-            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
-            startActivity(intent)
+            startActivity(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER))
         }
     } else {
-        val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-        startActivity(intent)
+        startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
     }
 }
 
 fun Context.isDefaultBrowser(): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-        roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)
+        (getSystemService(Context.ROLE_SERVICE) as RoleManager).isRoleHeld(RoleManager.ROLE_BROWSER)
     } else {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com"))
-        val resolveInfo = packageManager.resolveActivity(intent, 0)
-        resolveInfo?.activityInfo?.packageName == packageName
+        packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com")), 0)?.activityInfo?.packageName == packageName
     }
 }
