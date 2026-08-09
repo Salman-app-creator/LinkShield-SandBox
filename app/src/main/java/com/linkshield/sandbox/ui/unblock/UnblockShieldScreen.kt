@@ -1,11 +1,7 @@
 package com.linkshield.sandbox.ui.unblock
 
 import android.annotation.SuppressLint
-import android.app.role.RoleManager
-import android.content.Context
 import android.graphics.Bitmap
-import android.os.Build
-import android.provider.Settings
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -48,13 +44,14 @@ import kotlinx.coroutines.delay
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun UnblockShieldScreen() {
+fun UnblockShieldScreen(initialUrl: String? = null) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
     var isDefaultBrowser by remember { mutableStateOf(context.isDefaultBrowser()) }
-    var urlText by remember { mutableStateOf("https://www.google.com") }
-    var currentUrl by remember { mutableStateOf(urlText) }
+    val startUrl = initialUrl ?: "https://www.google.com"
+    var urlText by remember { mutableStateOf(startUrl) }
+    var currentUrl by remember { mutableStateOf(startUrl) }
     var isLoading by remember { mutableStateOf(false) }
     var loadingProgress by remember { mutableStateOf(0f) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -66,6 +63,7 @@ fun UnblockShieldScreen() {
 
     var webView by remember { mutableStateOf<WebView?>(null) }
 
+    // Check default browser status periodically
     LaunchedEffect(Unit) {
         while (true) {
             isDefaultBrowser = context.isDefaultBrowser()
@@ -81,6 +79,7 @@ fun UnblockShieldScreen() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // WebView fills the entire content area edge-to-edge
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
@@ -141,6 +140,7 @@ fun UnblockShieldScreen() {
             modifier = Modifier.fillMaxSize()
         )
 
+        // Chrome-style thin progress bar at very top
         AnimatedVisibility(
             visible = isLoading,
             modifier = Modifier.align(Alignment.TopCenter)
@@ -149,16 +149,19 @@ fun UnblockShieldScreen() {
                 progress = { loadingProgress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.dp),
+                    .height(3.dp),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = Color.Transparent
             )
         }
 
+        // Floating Address Bar (pill-shaped, translucent)
+        // statusBarsPadding ensures it sits below the system status bar
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                .statusBarsPadding()
+                .padding(top = 8.dp, start = 16.dp, end = 16.dp)
                 .fillMaxWidth()
         ) {
             OutlinedTextField(
@@ -167,7 +170,12 @@ fun UnblockShieldScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                placeholder = { Text("Search or enter URL", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                placeholder = {
+                    Text(
+                        "Search or enter URL",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -196,18 +204,21 @@ fun UnblockShieldScreen() {
                 ),
                 shape = RoundedCornerShape(28.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                     focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                 )
             )
         }
 
+        // Floating Navigation Dock (Back, Forward, Refresh, DoH toggle)
+        // Positioned above the app's bottom navigation bar with safe insets
         Card(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 80.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 8.dp)
                 .wrapContentWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(28.dp),
@@ -241,12 +252,17 @@ fun UnblockShieldScreen() {
                     Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                 }
 
+                // DoH Toggle with dropdown
                 Box {
                     IconButton(onClick = { showDnsMenu = true }) {
                         Icon(
                             imageVector = Icons.Default.Shield,
                             contentDescription = "DNS",
-                            tint = if (isDohEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isDohEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
 
@@ -271,7 +287,11 @@ fun UnblockShieldScreen() {
                             },
                             leadingIcon = {
                                 if (!isDohEnabled) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
                         )
@@ -287,7 +307,11 @@ fun UnblockShieldScreen() {
                                 },
                                 leadingIcon = {
                                     if (isDohEnabled && dnsManager.getCurrentProvider() == provider) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Icon(
+                                            Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
                             )
@@ -312,9 +336,13 @@ fun DefaultBrowserSetupScreen(onEnable: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier.padding(32.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Shield,
@@ -323,11 +351,16 @@ fun DefaultBrowserSetupScreen(onEnable: () -> Unit) {
                 tint = MaterialTheme.colorScheme.primary
             )
 
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 "Enable Protection",
                 style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 "LinkShield needs to be your default browser to intercept and protect links from WhatsApp, Email, Telegram, and other apps.",
@@ -335,6 +368,8 @@ fun DefaultBrowserSetupScreen(onEnable: () -> Unit) {
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Card(
                 colors = CardDefaults.cardColors(
@@ -359,6 +394,8 @@ fun DefaultBrowserSetupScreen(onEnable: () -> Unit) {
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = onEnable,
