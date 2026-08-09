@@ -52,10 +52,16 @@ fun ProUpgradeDialog(
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Payment Methods", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
-                        // 🔴 EDIT KARO: Apna Easypaisa/JazzCash number
-                        Text("Easypaisa / JazzCash: 03XX-XXXXXXX", style = MaterialTheme.typography.bodySmall)
+                        // Easypaisa Details
+Text("Easypaisa: 03136176616", style = MaterialTheme.typography.bodySmall)
+Spacer(modifier = Modifier.height(2.dp))
+
+// JazzCash Details
+Text("JazzCash: 03136176616", style = MaterialTheme.typography.bodySmall)
+Spacer(modifier = Modifier.height(4.dp))
+
                         // 🔴 EDIT KARO: Apna USDT TRC20 address
-                        Text("Crypto / USDT (TRC20): TX...your...wallet", style = MaterialTheme.typography.bodySmall)
+                        Text("Crypto / USDT (TRC20): TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             "Send 500 PKR or 2 USDT and share screenshot on WhatsApp to get your 16-Digit Pro License Key.",
@@ -69,7 +75,7 @@ fun ProUpgradeDialog(
                 // 🔴 EDIT KARO: Apna WhatsApp number (format: 923XXXXXXXXX)
                 OutlinedButton(
                     onClick = {
-                        val waNumber = "923XXXXXXXXX"
+                        val waNumber = "923136176616"
                         val message = "Hi, I want to buy LinkShield Pro License. I have made the payment."
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
