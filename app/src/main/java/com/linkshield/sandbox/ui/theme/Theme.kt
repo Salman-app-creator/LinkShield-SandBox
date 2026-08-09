@@ -21,9 +21,9 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF006B6B),
+    primary = Color(0xFF004D40),
     onPrimary = Color.White,
-    secondary = Color(0xFF007A5E),
+    secondary = Color(0xFF1B5E20),
     onSecondary = Color.White,
     background = LightBackground,
     surface = SurfaceLight,
@@ -31,7 +31,7 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = SurfaceVariantLight,
     onSurfaceVariant = TextSecondaryLight,
     error = AlertRed,
-    outline = Color(0xFF006B6B).copy(alpha = 0.3f)
+    outline = Color(0xFF004D40).copy(alpha = 0.3f)
 )
 
 @Composable
