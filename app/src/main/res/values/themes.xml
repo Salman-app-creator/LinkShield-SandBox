@@ -1,4 +1,9 @@
 <resources>
     <style name="Theme.LinkShield" parent="android:Theme.Material.NoActionBar">
     </style>
+    
+    <style name="Theme.LinkShield.Transparent" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
 </resources>
