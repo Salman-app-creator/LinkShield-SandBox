@@ -1,7 +1,6 @@
 package com.linkshield.sandbox.dns
 
 import android.content.Context
-import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
 import java.net.InetAddress
@@ -30,9 +29,12 @@ class DnsManager(context: Context) {
 
     fun enableDoh(provider: DnsProvider = DnsProvider.CLOUDFLARE): OkHttpClient {
         currentProvider = provider
+        val httpUrl = okhttp3.HttpUrl.parse(provider.url)
+            ?: throw IllegalArgumentException("Invalid DoH URL: ${provider.url}")
+
         val dns = DnsOverHttps.Builder()
             .client(bootstrapClient)
-            .url(okhttp3.HttpUrl.parse(provider.url)!!)
+            .url(httpUrl)
             .bootstrapDnsHosts(
                 InetAddress.getByName("1.1.1.1"),
                 InetAddress.getByName("1.0.0.1")
