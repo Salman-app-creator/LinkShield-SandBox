@@ -12,7 +12,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShield">
 
-        <!-- Main Entry Point (Jetpack Compose) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,7 +22,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Link Interceptor: Catches links from WhatsApp, browsers, etc. -->
         <activity
             android:name=".LinkInterceptorActivity"
             android:exported="true"
