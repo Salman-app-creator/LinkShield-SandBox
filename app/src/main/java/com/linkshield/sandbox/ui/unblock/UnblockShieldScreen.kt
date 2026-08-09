@@ -27,7 +27,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.dns.DnsProvider
-import com.linkshield.sandbox.ui.components.TopHeaderBar
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -76,8 +75,6 @@ fun UnblockShieldScreen() {
     var dnsEnabled by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopHeaderBar()
-
         OutlinedTextField(
             value = inputUrl,
             onValueChange = { inputUrl = it },
