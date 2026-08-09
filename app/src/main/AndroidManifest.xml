@@ -4,23 +4,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- REQUIRED: System ko batata hai ke yeh app WebView-based browser hai -->
-    <uses-feature
-        android:name="android.software.webview"
-        android:required="true" />
-
     <application
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LinkShield"
-        android:usesCleartextTraffic="false">
+        android:theme="@style/Theme.LinkShield">
 
-        <!-- Main Home Screen -->
+        <!-- Main Entry Point (Jetpack Compose) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -31,14 +23,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Link Interceptor & Browser Registration -->
+        <!-- Link Interceptor: Catches links from WhatsApp, browsers, etc. -->
         <activity
             android:name=".LinkInterceptorActivity"
             android:exported="true"
-            android:launchMode="singleTask"
             android:theme="@style/Theme.LinkShield.Transparent">
 
-            <!-- General http/https link interception -->
             <intent-filter android:priority="999">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -47,8 +37,6 @@
                 <data android:scheme="https" />
             </intent-filter>
 
-            <!-- Browser app registration (Android 10+ / API 29+) -->
-            <!-- Bina is category ke app "Default Browser" list mein nahi dikhegi -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -59,14 +47,6 @@
             </intent-filter>
 
         </activity>
-
-        <!-- Sandbox WebView - Isolated browsing -->
-        <activity
-            android:name=".SandboxWebViewActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:documentLaunchMode="always"
-            android:exported="false"
-            android:launchMode="standard" />
 
     </application>
 
