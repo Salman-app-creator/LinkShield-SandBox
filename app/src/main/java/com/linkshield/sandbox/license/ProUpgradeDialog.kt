@@ -11,10 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.linkshield.sandbox.license.LicenseManager
-import kotlinx.coroutines.launch
 
 @Composable
 fun ProUpgradeDialog(
@@ -23,10 +23,8 @@ fun ProUpgradeDialog(
     onUnlocked: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var keyInput by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var isValidating by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -44,38 +42,49 @@ fun ProUpgradeDialog(
                 Text(
                     "You've reached the 20 download limit. Upgrade to Pro for unlimited downloads and premium features.",
                     style = MaterialTheme.typography.bodyMedium,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Payment Methods", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // Easypaisa Details
-Text("Easypaisa: 03136176616", style = MaterialTheme.typography.bodySmall)
-Spacer(modifier = Modifier.height(2.dp))
+                        Text("WhatsApp Support", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("+92 3XX-XXXXXXX", style = MaterialTheme.typography.bodyLarge)
+                        Text("Send payment screenshot here to get your Pro Key", style = MaterialTheme.typography.labelSmall)
 
-// JazzCash Details
-Text("JazzCash: 03061934345", style = MaterialTheme.typography.bodySmall)
-Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        // 🔴 EDIT KARO: Apna USDT TRC20 address
-                        Text("Crypto / USDT (TRC20): TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub", style = MaterialTheme.typography.bodySmall)
+                        Text("Easypaisa / JazzCash", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("03XX-XXXXXXX", style = MaterialTheme.typography.bodyLarge)
+                        Text("Account Title: Your Name", style = MaterialTheme.typography.labelSmall)
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text("Crypto / USDT (TRC20)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("TX...your...wallet...address...here", style = MaterialTheme.typography.bodySmall)
+                        Text("Only send USDT on TRC20 network", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Send 500 PKR or 2 USDT and share screenshot on WhatsApp to get your 16-Digit Pro License Key.",
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Text("Price: 500 PKR  or  2 USDT", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 🔴 EDIT KARO: Apna WhatsApp number (format: 923XXXXXXXXX)
                 OutlinedButton(
                     onClick = {
-                        val waNumber = "923136176616"
+                        val waNumber = "923XXXXXXXXX"
                         val message = "Hi, I want to buy LinkShield Pro License. I have made the payment."
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
@@ -87,7 +96,7 @@ Spacer(modifier = Modifier.height(4.dp))
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Contact on WhatsApp")
+                    Text("Chat on WhatsApp")
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -106,43 +115,13 @@ Spacer(modifier = Modifier.height(4.dp))
 
                 Button(
                     onClick = {
-                        scope.launch {
-                            isValidating = true
-                            error = null
-                            val result = licenseManager.validateKeyOnline(keyInput)
-                            isValidating = false
-                            result.onSuccess { isValid ->
-                                if (isValid) {
-                                    onUnlocked()
-                                } else {
-                                    error = "Invalid license key"
-                                }
-                            }.onFailure {
-                                error = "Error: ${it.message}"
-                            }
+                        if (licenseManager.validateKey(keyInput)) {
+                            onUnlocked()
+                        } else {
+                            error = "Invalid license key"
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = keyInput.length == 16 && !isValidating
-                ) {
-                    if (isValidating) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Verifying...")
-                    } else {
-                        Text("Activate Pro")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onDismiss) {
-                    Text("Maybe Later")
-                }
-            }
-        }
-    }
-}
+                    enabled = keyInput.length == 16 || keyInput.replace("-", "").length == 16
+                )
+                
