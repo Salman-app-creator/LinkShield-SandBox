@@ -12,5 +12,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "LinkShield-SandBox"
+
+rootProject.name = "LinkShield SandBox"
 include ':app'
