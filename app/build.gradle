@@ -32,11 +32,13 @@ android {
         jvmTarget = '1.8'
     }
 }
-
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.activity:activity-compose:1.8.2'
+    
+    // Yeh line ADD karo
+    implementation 'com.google.android.material:material:1.11.0'
 
     implementation 'androidx.compose.ui:ui:1.6.0'
     implementation 'androidx.compose.ui:ui-graphics:1.6.0'
@@ -52,3 +54,5 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0'
 }
+
+
