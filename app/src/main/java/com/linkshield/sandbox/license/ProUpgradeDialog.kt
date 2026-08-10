@@ -28,18 +28,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.linkshield.sandbox.license.LicenseManager
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EDIT YOUR DETAILS HERE — only change these constants, nothing else needed
-// ─────────────────────────────────────────────────────────────────────────────
-private const val WHATSAPP_NUMBER   = "923136176616"          // 92XXXXXXXXXX format, no +
+private const val WHATSAPP_NUMBER   = "923136176616"
 private const val EASYPAISA_NUMBER  = "03136176616"
-private const val EASYPAISA_TITLE   = "Salman Latif"            // Apna Easypaisa account title
+private const val EASYPAISA_TITLE   = "Salman Latif"
 private const val JAZZCASH_NUMBER   = "03061934345"
-private const val JAZZCASH_TITLE    = "Salman Latif"            // Apna JazzCash account title
-private const val USDT_ADDRESS      = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"  // TRC20 wallet
+private const val JAZZCASH_TITLE    = "Salman Latif"
+private const val USDT_ADDRESS      = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"
 private const val PRICE_PKR         = "350"
 private const val PRICE_USDT        = "1.25"
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun ProUpgradeDialog(
@@ -70,7 +66,6 @@ fun ProUpgradeDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (success) {
-                    // ── SUCCESS STATE ──────────────────────────────────────────
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = null,
@@ -100,7 +95,6 @@ fun ProUpgradeDialog(
                     }
 
                 } else {
-                    // ── UPGRADE STATE ─────────────────────────────────────────
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = null,
@@ -122,7 +116,6 @@ fun ProUpgradeDialog(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ── PAYMENT CARD ───────────────────────────────────────────
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -131,7 +124,6 @@ fun ProUpgradeDialog(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
 
-                            // Price badge
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                 shape = RoundedCornerShape(8.dp),
@@ -149,7 +141,6 @@ fun ProUpgradeDialog(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // ── Easypaisa ─────────────────────────────────────
                             PaymentRow(
                                 label = "Easypaisa",
                                 value = EASYPAISA_NUMBER,
@@ -159,7 +150,6 @@ fun ProUpgradeDialog(
 
                             Divider(modifier = Modifier.padding(vertical = 10.dp))
 
-                            // ── JazzCash ──────────────────────────────────────
                             PaymentRow(
                                 label = "JazzCash",
                                 value = JAZZCASH_NUMBER,
@@ -169,7 +159,6 @@ fun ProUpgradeDialog(
 
                             Divider(modifier = Modifier.padding(vertical = 10.dp))
 
-                            // ── USDT TRC20 ────────────────────────────────────
                             Text(
                                 "Crypto / USDT (TRC20)",
                                 fontWeight = FontWeight.Bold,
@@ -210,7 +199,6 @@ fun ProUpgradeDialog(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // ── WhatsApp button ────────────────────────────────────────
                     OutlinedButton(
                         onClick = {
                             val message = "Hi, I want to buy LinkShield Pro License. I have made the payment."
@@ -230,7 +218,6 @@ fun ProUpgradeDialog(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // ── License key input ──────────────────────────────────────
                     Text(
                         "Enter your Pro Key below after payment:",
                         style = MaterialTheme.typography.bodySmall,
@@ -301,9 +288,6 @@ fun ProUpgradeDialog(
     }
 }
 
-/**
- * Reusable payment row — tap ANYWHERE on the row to copy the account number.
- */
 @Composable
 private fun PaymentRow(
     label: String,
