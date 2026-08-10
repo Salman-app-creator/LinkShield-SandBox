@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
@@ -42,7 +44,9 @@ import okhttp3.Request
 fun UnblockShieldScreen(
     initialUrl: String? = null,
     dnsManager: DnsManager,
-    onUrlChanged: (String) -> Unit = {}
+    onUrlChanged: (String) -> Unit = {},
+    isDarkTheme: Boolean = true,
+    onToggleTheme: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -254,6 +258,19 @@ fun UnblockShieldScreen(
                             }
                         }
                     }
+
+                    // Sun / Moon Theme Toggle
+                    IconButton(
+                        onClick = onToggleTheme,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                            tint = if (isDarkTheme) Color(0xFFFFB300) else Color(0xFF5F6B7A),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
 
                 // Progress bar below toolbar
@@ -324,7 +341,6 @@ fun UnblockShieldScreen(
                                 canGoForward = view?.canGoForward() ?: false
                             }
 
-                            // Proxy requests through DoH-enabled OkHttp to unblock restricted sites
                             override fun shouldInterceptRequest(
                                 view: WebView?,
                                 request: WebResourceRequest?
