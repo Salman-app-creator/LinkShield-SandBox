@@ -11,6 +11,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -32,9 +34,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.dns.DnsManager
 import okhttp3.Request
@@ -60,39 +64,92 @@ fun UnblockShieldScreen(
     var canGoForward by remember { mutableStateOf(false) }
     var showDnsMenu by remember { mutableStateOf(false) }
 
+    // Shield toggle — restored from persisted state
     var isDohEnabled by remember { mutableStateOf(dnsManager.isDohEnabled()) }
     var webView by remember { mutableStateOf<WebView?>(null) }
 
-    // Auto-enable Cloudflare DoH on first launch
+    // Animated shield icon tint
+    val shieldColor by animateColorAsState(
+        targetValue = if (isDohEnabled) Color(0xFF00F0FF) else Color(0xFF90A4AE),
+        animationSpec = tween(durationMillis = 300),
+        label = "shieldColor"
+    )
+
+    // Restore DoH on first compose if it was persisted ON
     LaunchedEffect(Unit) {
-        if (!dnsManager.isDohEnabled()) {
+        if (dnsManager.isShieldPersistedOn() && !dnsManager.isDohEnabled()) {
             try {
                 dnsManager.enableDoh(DnsManager.DnsProvider.CLOUDFLARE)
                 isDohEnabled = true
-                webView?.reload()
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
         }
     }
 
-    // Notify parent of URL changes for Grabber auto-paste
+    // Notify parent of URL changes for Grabber auto-fill
     LaunchedEffect(currentUrl) {
         onUrlChanged(currentUrl)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // TOP TOOLBAR — Chrome style, fixed at top
+
+        // ── TOP TOOLBAR ────────────────────────────────────────────────────────
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 3.dp
         ) {
             Column {
+                // Shield status indicator strip
+                if (isDohEnabled) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF00F0FF).copy(alpha = 0.10f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                tint = Color(0xFF00F0FF),
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "SHIELD ACTIVE — DoH: ${dnsManager.getCurrentProvider().displayName}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color(0xFF00F0FF),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF90A4AE).copy(alpha = 0.07f)
+                    ) {
+                        Text(
+                            text = "SHIELD INACTIVE",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = Color(0xFF90A4AE),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 2.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+
+                // Main toolbar row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
@@ -100,12 +157,14 @@ fun UnblockShieldScreen(
                     IconButton(
                         onClick = { webView?.goBack() },
                         enabled = canGoBack,
-                        modifier = Modifier.alpha(if (canGoBack) 1f else 0.4f)
+                        modifier = Modifier
+                            .size(40.dp)
+                            .alpha(if (canGoBack) 1f else 0.35f)
                     ) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -113,35 +172,40 @@ fun UnblockShieldScreen(
                     IconButton(
                         onClick = { webView?.goForward() },
                         enabled = canGoForward,
-                        modifier = Modifier.alpha(if (canGoForward) 1f else 0.4f)
+                        modifier = Modifier
+                            .size(40.dp)
+                            .alpha(if (canGoForward) 1f else 0.35f)
                     ) {
                         Icon(
                             Icons.Default.ArrowForward,
                             contentDescription = "Forward",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    // Refresh
-                    IconButton(onClick = { webView?.reload() }) {
+                    // Refresh / Stop
+                    IconButton(
+                        onClick = { webView?.reload() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = "Refresh",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    // URL Bar (Omnibox style)
+                    // URL Omnibox
                     OutlinedTextField(
                         value = urlText,
                         onValueChange = { urlText = it },
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp),
+                            .height(42.dp),
                         placeholder = {
                             Text(
                                 "Search or type URL",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
@@ -149,12 +213,12 @@ fun UnblockShieldScreen(
                             if (urlText.isNotEmpty()) {
                                 IconButton(
                                     onClick = { urlText = "" },
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
                                         Icons.Default.Close,
                                         contentDescription = "Clear",
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
@@ -170,13 +234,15 @@ fun UnblockShieldScreen(
                                 val url = when {
                                     urlText.startsWith("http") -> urlText
                                     urlText.contains(".") -> "https://$urlText"
-                                    else -> "https://www.google.com/search?q=$urlText"
+                                    else -> "https://www.google.com/search?q=${
+                                        java.net.URLEncoder.encode(urlText, "UTF-8")
+                                    }"
                                 }
                                 webView?.loadUrl(url)
                             }
                         ),
-                        shape = RoundedCornerShape(24.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium,
+                        shape = RoundedCornerShape(22.dp),
+                        textStyle = MaterialTheme.typography.bodySmall,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -185,7 +251,7 @@ fun UnblockShieldScreen(
                         )
                     )
 
-                    // DNS Shield Toggle
+                    // ── Shield Toggle Button ─────────────────────────────────
                     Box {
                         IconButton(
                             onClick = { showDnsMenu = true },
@@ -193,12 +259,8 @@ fun UnblockShieldScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Shield,
-                                contentDescription = "DNS",
-                                tint = if (isDohEnabled) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                contentDescription = if (isDohEnabled) "Shield ON" else "Shield OFF",
+                                tint = shieldColor,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -208,14 +270,24 @@ fun UnblockShieldScreen(
                             onDismissRequest = { showDnsMenu = false }
                         ) {
                             Text(
-                                "DNS Protection",
+                                "DNS Shield Protection",
                                 style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
-                            Divider()
+                            HorizontalDivider()
 
+                            // Disable option
                             DropdownMenuItem(
-                                text = { Text("Disabled") },
+                                text = {
+                                    Text(
+                                        "Disabled",
+                                        color = if (!isDohEnabled)
+                                            MaterialTheme.colorScheme.error
+                                        else
+                                            MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
                                 onClick = {
                                     dnsManager.disableDoh()
                                     isDohEnabled = false
@@ -227,12 +299,15 @@ fun UnblockShieldScreen(
                                         Icon(
                                             Icons.Default.CheckCircle,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
+                                            tint = MaterialTheme.colorScheme.error
                                         )
                                     }
                                 }
                             )
 
+                            HorizontalDivider()
+
+                            // Provider options
                             DnsManager.DnsProvider.entries.forEach { provider ->
                                 DropdownMenuItem(
                                     text = { Text(provider.displayName) },
@@ -242,15 +317,14 @@ fun UnblockShieldScreen(
                                             isDohEnabled = true
                                             showDnsMenu = false
                                             webView?.reload()
-                                        } catch (_: Exception) {
-                                        }
+                                        } catch (_: Exception) {}
                                     },
                                     leadingIcon = {
                                         if (isDohEnabled && dnsManager.getCurrentProvider() == provider) {
                                             Icon(
                                                 Icons.Default.CheckCircle,
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
+                                                tint = Color(0xFF00F0FF)
                                             )
                                         }
                                     }
@@ -259,27 +333,27 @@ fun UnblockShieldScreen(
                         }
                     }
 
-                    // Sun / Moon Theme Toggle
+                    // Light/Dark theme toggle
                     IconButton(
                         onClick = onToggleTheme,
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                            contentDescription = if (isDarkTheme) "Switch to Light" else "Switch to Dark",
                             tint = if (isDarkTheme) Color(0xFFFFB300) else Color(0xFF5F6B7A),
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
-                // Progress bar below toolbar
+                // Loading progress bar — compact 2dp strip
                 AnimatedVisibility(visible = isLoading) {
                     LinearProgressIndicator(
                         progress = { loadingProgress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(2.5.dp),
+                            .height(2.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = Color.Transparent
                     )
@@ -287,8 +361,12 @@ fun UnblockShieldScreen(
             }
         }
 
-        // WebView fills remaining space
-        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+        // ── WEBVIEW — fills ALL remaining space, zero extra padding ──────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
             AndroidView(
                 factory = { ctx ->
                     WebView(ctx).apply {
@@ -306,6 +384,8 @@ fun UnblockShieldScreen(
                             builtInZoomControls = true
                             displayZoomControls = false
                             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                            loadWithOverviewMode = true
+                            useWideViewPort = true
                         }
 
                         webChromeClient = object : WebChromeClient() {
@@ -327,7 +407,11 @@ fun UnblockShieldScreen(
                                 return false
                             }
 
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            override fun onPageStarted(
+                                view: WebView?,
+                                url: String?,
+                                favicon: Bitmap?
+                            ) {
                                 isLoading = true
                                 url?.let {
                                     currentUrl = it
@@ -341,63 +425,12 @@ fun UnblockShieldScreen(
                                 canGoForward = view?.canGoForward() ?: false
                             }
 
+                            /**
+                             * DoH-based ISP unblock:
+                             * When Shield is ON, all WebView network requests are routed
+                             * through the OkHttp DoH client, bypassing ISP DNS blocks
+                             * and opening restricted sites natively — no VPN required.
+                             */
                             override fun shouldInterceptRequest(
                                 view: WebView?,
-                                request: WebResourceRequest?
-                            ): WebResourceResponse? {
-                                if (!dnsManager.isDohEnabled()) return null
-
-                                val url = request?.url?.toString() ?: return null
-                                if (!url.startsWith("http")) return null
-
-                                return try {
-                                    val okBuilder = Request.Builder().url(url)
-                                    request.requestHeaders.forEach { (key, value) ->
-                                        if (key.equals("host", ignoreCase = true)) return@forEach
-                                        okBuilder.addHeader(key, value)
-                                    }
-
-                                    val response = dnsManager.getClient()
-                                        .newCall(okBuilder.build())
-                                        .execute()
-
-                                    if (!response.isSuccessful) return null
-
-                                    val contentType = response.body?.contentType()
-                                    val mimeType = if (contentType != null) {
-                                        "${contentType.type}/${contentType.subtype}"
-                                    } else "text/html"
-                                    val charset = contentType?.charset()?.name()
-
-                                    val responseHeaders = mutableMapOf<String, String>()
-                                    response.headers.forEach { header ->
-                                        responseHeaders[header.first] = header.second
-                                    }
-
-                                    WebResourceResponse(
-                                        mimeType,
-                                        charset,
-                                        response.code,
-                                        response.message,
-                                        responseHeaders,
-                                        response.body?.byteStream()
-                                    )
-                                } catch (_: Exception) {
-                                    null
-                                }
-                            }
-                        }
-
-                        loadUrl(currentUrl)
-                        webView = this
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-    }
-
-    BackHandler(enabled = canGoBack) {
-        webView?.goBack()
-    }
-}
+                                request: WebR
