@@ -56,7 +56,9 @@ class MainActivity : ComponentActivity() {
         val disclaimerManager = DisclaimerManager(this)
         val licenseManager = LicenseManager(this)
         val themeManager = ThemeManager(this)
-        val interceptedUrl = intent?.getStringExtra("intercepted_url")
+
+        // FIX: LinkInterceptorActivity puts extra as "url", not "intercepted_url"
+        val interceptedUrl = intent?.getStringExtra("url")
 
         setContent {
             val context = LocalContext.current
@@ -65,6 +67,7 @@ class MainActivity : ComponentActivity() {
 
             val dnsManager = remember { DnsManager(context) }
             var browserUrl by remember { mutableStateOf<String?>(null) }
+            var isShieldActive by remember { mutableStateOf(dnsManager.isDohEnabled()) }
 
             val roleRequestLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult()
@@ -161,7 +164,8 @@ class MainActivity : ComponentActivity() {
                             BottomNavBar(
                                 navController = navController,
                                 onProClick = { showProDialog = true },
-                                licenseManager = licenseManager
+                                licenseManager = licenseManager,
+                                isShieldActive = isShieldActive
                             )
                         }
                     }
@@ -181,7 +185,8 @@ class MainActivity : ComponentActivity() {
                                 val newTheme = if (isDarkTheme) ThemeManager.THEME_LIGHT else ThemeManager.THEME_DARK
                                 themeManager.setTheme(newTheme)
                                 isDarkTheme = !isDarkTheme
-                            }
+                            },
+                            onShieldStateChanged = { isShieldActive = it }
                         )
                     }
                 }
@@ -194,7 +199,8 @@ class MainActivity : ComponentActivity() {
 fun BottomNavBar(
     navController: NavHostController,
     onProClick: () -> Unit,
-    licenseManager: LicenseManager
+    licenseManager: LicenseManager,
+    isShieldActive: Boolean
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -204,15 +210,28 @@ fun BottomNavBar(
         Screen.Grabber to Icons.Default.Download
     )
 
+    // Compact bottom nav — 64dp instead of default 80dp
     NavigationBar(
+        modifier = Modifier.height(64.dp),
         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
         tonalElevation = 0.dp
     ) {
         items.forEach { (screen, icon) ->
+            val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+            val isShieldScreen = screen.route == Screen.Unblock.route
+
+            // Shield tab shows ACTIVE color when DoH is ON, otherwise standard selection colors
+            val tint = when {
+                isShieldScreen && isShieldActive -> MaterialTheme.colorScheme.primary
+                isSelected -> MaterialTheme.colorScheme.onSurface
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+
             NavigationBarItem(
-                icon = { Icon(icon, contentDescription = screen.title) },
-                label = { Text(screen.title) },
-                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                icon = { Icon(icon, contentDescription = screen.title, tint = tint) },
+                label = { Text(screen.title, color = tint) },
+                selected = isSelected,
+                alwaysShowLabel = true,
                 onClick = {
                     navController.navigate(screen.route) {
                         popUpTo(navController.graph.findStartDestination().id) {
@@ -257,7 +276,8 @@ fun MainNavHost(
     onBrowserUrlChanged: (String) -> Unit = {},
     sharedUrl: String? = null,
     isDarkTheme: Boolean = true,
-    onToggleTheme: () -> Unit = {}
+    onToggleTheme: () -> Unit = {},
+    onShieldStateChanged: (Boolean) -> Unit = {}
 ) {
     NavHost(
         navController = navController,
@@ -270,7 +290,8 @@ fun MainNavHost(
                 dnsManager = dnsManager,
                 onUrlChanged = onBrowserUrlChanged,
                 isDarkTheme = isDarkTheme,
-                onToggleTheme = onToggleTheme
+                onToggleTheme = onToggleTheme,
+                onShieldStateChanged = onShieldStateChanged
             )
         }
         composable(Screen.Grabber.route) {
