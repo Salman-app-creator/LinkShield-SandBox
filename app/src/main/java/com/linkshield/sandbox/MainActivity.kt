@@ -39,10 +39,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
+import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.license.ProUpgradeDialog
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
+import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 import kotlinx.coroutines.delay
 
@@ -53,29 +55,31 @@ class MainActivity : ComponentActivity() {
 
         val disclaimerManager = DisclaimerManager(this)
         val licenseManager = LicenseManager(this)
+        val themeManager = ThemeManager(this)
         val interceptedUrl = intent?.getStringExtra("intercepted_url")
 
         setContent {
-            LinkShieldTheme {
-                val context = LocalContext.current
-                var isDefaultBrowser by remember { mutableStateOf(context.isDefaultBrowser()) }
+            val context = LocalContext.current
+            var isDefaultBrowser by remember { mutableStateOf(context.isDefaultBrowser()) }
+            var isDarkTheme by remember { mutableStateOf(themeManager.isDarkTheme()) }
 
-                // Activity result launcher for RoleManager default browser request
-                val roleRequestLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.StartActivityForResult()
-                ) {
+            val dnsManager = remember { DnsManager(context) }
+            var browserUrl by remember { mutableStateOf<String?>(null) }
+
+            val roleRequestLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult()
+            ) {
+                isDefaultBrowser = context.isDefaultBrowser()
+            }
+
+            LaunchedEffect(Unit) {
+                while (true) {
                     isDefaultBrowser = context.isDefaultBrowser()
+                    delay(2000)
                 }
+            }
 
-                // Periodic fallback check every 2 seconds
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        isDefaultBrowser = context.isDefaultBrowser()
-                        delay(2000)
-                    }
-                }
-
-                // FULL APP LOCK: If not default browser, show lock screen and block everything
+            LinkShieldTheme(darkTheme = isDarkTheme) {
                 if (!isDefaultBrowser) {
                     DefaultBrowserLockScreen(
                         onEnable = {
@@ -167,8 +171,17 @@ class MainActivity : ComponentActivity() {
                             navController = navController,
                             modifier = Modifier.padding(padding),
                             licenseManager = licenseManager,
+                            dnsManager = dnsManager,
                             onProRequired = { showProDialog = true },
-                            interceptedUrl = interceptedUrl
+                            interceptedUrl = interceptedUrl,
+                            onBrowserUrlChanged = { browserUrl = it },
+                            sharedUrl = browserUrl,
+                            isDarkTheme = isDarkTheme,
+                            onToggleTheme = {
+                                val newTheme = if (isDarkTheme) ThemeManager.THEME_LIGHT else ThemeManager.THEME_DARK
+                                themeManager.setTheme(newTheme)
+                                isDarkTheme = !isDarkTheme
+                            }
                         )
                     }
                 }
@@ -238,8 +251,13 @@ fun MainNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     licenseManager: LicenseManager,
+    dnsManager: DnsManager,
     onProRequired: () -> Unit,
-    interceptedUrl: String? = null
+    interceptedUrl: String? = null,
+    onBrowserUrlChanged: (String) -> Unit = {},
+    sharedUrl: String? = null,
+    isDarkTheme: Boolean = true,
+    onToggleTheme: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
@@ -247,12 +265,20 @@ fun MainNavHost(
         modifier = modifier
     ) {
         composable(Screen.Unblock.route) {
-            UnblockShieldScreen(initialUrl = interceptedUrl)
+            UnblockShieldScreen(
+                initialUrl = interceptedUrl,
+                dnsManager = dnsManager,
+                onUrlChanged = onBrowserUrlChanged,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = onToggleTheme
+            )
         }
         composable(Screen.Grabber.route) {
             MediaGrabberScreen(
                 licenseManager = licenseManager,
-                onProRequired = onProRequired
+                dnsManager = dnsManager,
+                onProRequired = onProRequired,
+                sharedUrl = sharedUrl
             )
         }
     }
