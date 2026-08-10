@@ -47,25 +47,21 @@ fun MediaGrabberScreen(
     var isLoading by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<CobaltApiService.MediaResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var downloadCount by remember { mutableIntStateOf(licenseManager.getDownloadCount()) }
+    var downloadCount by remember { mutableStateOf(licenseManager.getDownloadCount()) }
     val isPro = licenseManager.isProUser()
 
     val cobaltApi = remember { CobaltApiService(context, dnsManager) }
-
-    // Track last auto-fetched URL to prevent duplicate fetches
     var lastAutoFetchedUrl by remember { mutableStateOf<String?>(null) }
 
-    // Auto-paste + auto-fetch URL when coming from browser (Shield tab)
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank() && sharedUrl != urlInput) {
             urlInput = sharedUrl
             error = null
             result = null
 
-            // Auto-trigger fetch if valid media link and not already fetched
             if (isValidMediaUrl(sharedUrl) && sharedUrl != lastAutoFetchedUrl) {
                 lastAutoFetchedUrl = sharedUrl
-                delay(400) // brief delay so user sees the fill
+                delay(400)
                 performFetch(
                     targetUrl = sharedUrl,
                     licenseManager = licenseManager,
@@ -342,9 +338,6 @@ fun MediaGrabberScreen(
     }
 }
 
-/**
- * Shared fetch logic used by both manual button and auto-fetch.
- */
 private fun performFetch(
     targetUrl: String,
     licenseManager: LicenseManager,
@@ -384,9 +377,6 @@ private fun performFetch(
     }
 }
 
-/**
- * Quick heuristic to detect known media platforms or direct file links.
- */
 private fun isValidMediaUrl(url: String): Boolean {
     val lower = url.lowercase()
     val platforms = listOf(
