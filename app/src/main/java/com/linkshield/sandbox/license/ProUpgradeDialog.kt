@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,7 +38,7 @@ private const val JAZZCASH_NUMBER   = "03061934345"
 private const val JAZZCASH_TITLE    = "Salman Latif"            // Apna JazzCash account title
 private const val USDT_ADDRESS      = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"  // TRC20 wallet
 private const val PRICE_PKR         = "350"
-private const val PRICE_USDT        = "1.5"
+private const val PRICE_USDT        = "1.25"
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -177,7 +178,12 @@ fun ProUpgradeDialog(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        copyToClipboard(context, "USDT Address", USDT_ADDRESS)
+                                    }
+                                    .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
@@ -187,19 +193,12 @@ fun ProUpgradeDialog(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = {
-                                        copyToClipboard(context, "USDT Address", USDT_ADDRESS)
-                                    },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Copy USDT Address",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy USDT Address",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                             Text(
                                 "Only send USDT on TRC20 network",
@@ -303,7 +302,7 @@ fun ProUpgradeDialog(
 }
 
 /**
- * Reusable payment row with a single-tap copy button.
+ * Reusable payment row — tap ANYWHERE on the row to copy the account number.
  */
 @Composable
 private fun PaymentRow(
@@ -321,7 +320,10 @@ private fun PaymentRow(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { copyToClipboard(context, label, value) }
+                .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -336,17 +338,12 @@ private fun PaymentRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(
-                onClick = { copyToClipboard(context, label, value) },
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Copy $label",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.ContentCopy,
+                contentDescription = "Copy $label",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
