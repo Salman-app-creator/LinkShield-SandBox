@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -50,7 +51,8 @@ fun UnblockShieldScreen(
     dnsManager: DnsManager,
     onUrlChanged: (String) -> Unit = {},
     isDarkTheme: Boolean = true,
-    onToggleTheme: () -> Unit = {}
+    onToggleTheme: () -> Unit = {},
+    onShieldStateChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -81,7 +83,9 @@ fun UnblockShieldScreen(
             try {
                 dnsManager.enableDoh(DnsManager.DnsProvider.CLOUDFLARE)
                 isDohEnabled = true
-            } catch (_: Exception) {}
+                onShieldStateChanged(true)
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -139,7 +143,7 @@ fun UnblockShieldScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp, vertical = 2.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -275,7 +279,7 @@ fun UnblockShieldScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
-                            HorizontalDivider()
+                            Divider()
 
                             // Disable option
                             DropdownMenuItem(
@@ -292,6 +296,7 @@ fun UnblockShieldScreen(
                                     dnsManager.disableDoh()
                                     isDohEnabled = false
                                     showDnsMenu = false
+                                    onShieldStateChanged(false)
                                     webView?.reload()
                                 },
                                 leadingIcon = {
@@ -305,7 +310,7 @@ fun UnblockShieldScreen(
                                 }
                             )
 
-                            HorizontalDivider()
+                            Divider()
 
                             // Provider options
                             DnsManager.DnsProvider.entries.forEach { provider ->
@@ -316,8 +321,10 @@ fun UnblockShieldScreen(
                                             dnsManager.enableDoh(provider)
                                             isDohEnabled = true
                                             showDnsMenu = false
+                                            onShieldStateChanged(true)
                                             webView?.reload()
-                                        } catch (_: Exception) {}
+                                        } catch (_: Exception) {
+                                        }
                                     },
                                     leadingIcon = {
                                         if (isDohEnabled && dnsManager.getCurrentProvider() == provider) {
@@ -429,8 +436,3 @@ fun UnblockShieldScreen(
                              * DoH-based ISP unblock:
                              * When Shield is ON, all WebView network requests are routed
                              * through the OkHttp DoH client, bypassing ISP DNS blocks
-                             * and opening restricted sites natively — no VPN required.
-                             */
-                            override fun shouldInterceptRequest(
-                                view: WebView?,
-                                request: WebR
