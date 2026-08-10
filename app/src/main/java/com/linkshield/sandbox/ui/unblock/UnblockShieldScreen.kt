@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,9 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.isDefaultBrowser
-import com.linkshield.sandbox.openDefaultBrowserSettings
-import kotlinx.coroutines.delay
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -48,7 +44,6 @@ fun UnblockShieldScreen(initialUrl: String? = null) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
-    var isDefaultBrowser by remember { mutableStateOf(context.isDefaultBrowser()) }
     val startUrl = initialUrl ?: "https://www.google.com"
     var urlText by remember { mutableStateOf(startUrl) }
     var currentUrl by remember { mutableStateOf(startUrl) }
@@ -62,21 +57,6 @@ fun UnblockShieldScreen(initialUrl: String? = null) {
     var isDohEnabled by remember { mutableStateOf(dnsManager.isDohEnabled()) }
 
     var webView by remember { mutableStateOf<WebView?>(null) }
-
-    // Check default browser status periodically
-    LaunchedEffect(Unit) {
-        while (true) {
-            isDefaultBrowser = context.isDefaultBrowser()
-            delay(2000)
-        }
-    }
-
-    if (!isDefaultBrowser) {
-        DefaultBrowserSetupScreen(
-            onEnable = { context.openDefaultBrowserSettings() }
-        )
-        return
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // WebView fills the entire content area edge-to-edge
@@ -324,90 +304,5 @@ fun UnblockShieldScreen(initialUrl: String? = null) {
 
     BackHandler(enabled = canGoBack) {
         webView?.goBack()
-    }
-}
-
-@Composable
-fun DefaultBrowserSetupScreen(onEnable: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Shield,
-                contentDescription = null,
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                "Enable Protection",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                "LinkShield needs to be your default browser to intercept and protect links from WhatsApp, Email, Telegram, and other apps.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        "Not set as default browser. Links cannot be intercepted until enabled.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onEnable,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Shield, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Set as Default Browser", style = MaterialTheme.typography.labelLarge)
-            }
-        }
     }
 }
