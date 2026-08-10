@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -51,12 +52,34 @@ fun MediaGrabberScreen(
 
     val cobaltApi = remember { CobaltApiService(context, dnsManager) }
 
-    // Auto-paste URL when coming from browser (Shield tab)
+    // Track last auto-fetched URL to prevent duplicate fetches
+    var lastAutoFetchedUrl by remember { mutableStateOf<String?>(null) }
+
+    // Auto-paste + auto-fetch URL when coming from browser (Shield tab)
     LaunchedEffect(sharedUrl) {
-        if (!sharedUrl.isNullOrBlank()) {
+        if (!sharedUrl.isNullOrBlank() && sharedUrl != urlInput) {
             urlInput = sharedUrl
             error = null
             result = null
+
+            // Auto-trigger fetch if valid media link and not already fetched
+            if (isValidMediaUrl(sharedUrl) && sharedUrl != lastAutoFetchedUrl) {
+                lastAutoFetchedUrl = sharedUrl
+                delay(400) // brief delay so user sees the fill
+                performFetch(
+                    targetUrl = sharedUrl,
+                    licenseManager = licenseManager,
+                    isPro = isPro,
+                    cobaltApi = cobaltApi,
+                    scope = scope,
+                    focusManager = focusManager,
+                    onProRequired = onProRequired,
+                    setLoading = { isLoading = it },
+                    setError = { error = it },
+                    setResult = { result = it },
+                    setDownloadCount = { downloadCount = it }
+                )
+            }
         }
     }
 
@@ -193,31 +216,19 @@ fun MediaGrabberScreen(
                     error = "Please enter a URL"
                     return@Button
                 }
-
-                if (!licenseManager.canDownload()) {
-                    onProRequired()
-                    return@Button
-                }
-
-                focusManager.clearFocus()
-                isLoading = true
-                error = null
-                result = null
-
-                scope.launch {
-                    val mediaResult = cobaltApi.fetchMediaUrl(urlInput.trim())
-                    isLoading = false
-
-                    if (mediaResult.success) {
-                        result = mediaResult
-                        if (!isPro) {
-                            licenseManager.incrementDownload()
-                            downloadCount = licenseManager.getDownloadCount()
-                        }
-                    } else {
-                        error = mediaResult.error ?: "Failed to fetch media"
-                    }
-                }
+                performFetch(
+                    targetUrl = urlInput,
+                    licenseManager = licenseManager,
+                    isPro = isPro,
+                    cobaltApi = cobaltApi,
+                    scope = scope,
+                    focusManager = focusManager,
+                    onProRequired = onProRequired,
+                    setLoading = { isLoading = it },
+                    setError = { error = it },
+                    setResult = { result = it },
+                    setDownloadCount = { downloadCount = it }
+                )
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -329,4 +340,60 @@ fun MediaGrabberScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
     }
+}
+
+/**
+ * Shared fetch logic used by both manual button and auto-fetch.
+ */
+private fun performFetch(
+    targetUrl: String,
+    licenseManager: LicenseManager,
+    isPro: Boolean,
+    cobaltApi: CobaltApiService,
+    scope: kotlinx.coroutines.CoroutineScope,
+    focusManager: androidx.compose.ui.focus.FocusManager,
+    onProRequired: () -> Unit,
+    setLoading: (Boolean) -> Unit,
+    setError: (String?) -> Unit,
+    setResult: (CobaltApiService.MediaResult?) -> Unit,
+    setDownloadCount: (Int) -> Unit
+) {
+    if (!licenseManager.canDownload()) {
+        onProRequired()
+        return
+    }
+
+    focusManager.clearFocus()
+    setLoading(true)
+    setError(null)
+    setResult(null)
+
+    scope.launch {
+        val mediaResult = cobaltApi.fetchMediaUrl(targetUrl.trim())
+        setLoading(false)
+
+        if (mediaResult.success) {
+            setResult(mediaResult)
+            if (!isPro) {
+                licenseManager.incrementDownload()
+                setDownloadCount(licenseManager.getDownloadCount())
+            }
+        } else {
+            setError(mediaResult.error ?: "Failed to fetch media")
+        }
+    }
+}
+
+/**
+ * Quick heuristic to detect known media platforms or direct file links.
+ */
+private fun isValidMediaUrl(url: String): Boolean {
+    val lower = url.lowercase()
+    val platforms = listOf(
+        "youtube.com", "youtu.be", "tiktok.com", "instagram.com",
+        "twitter.com", "x.com", "facebook.com", "fb.watch",
+        "reddit.com", "soundcloud.com", "dailymotion.com", "vimeo.com"
+    )
+    val directExts = listOf(".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".mov")
+    return platforms.any { lower.contains(it) } || directExts.any { lower.endsWith(it) }
 }
