@@ -10,11 +10,15 @@ import java.util.concurrent.TimeUnit
 
 class DnsManager(context: Context) {
 
-    enum class DnsProvider(val displayName: String, val url: String) {
-        CLOUDFLARE("Cloudflare", "https://cloudflare-dns.com/dns-query"),
-        ADGUARD("AdGuard", "https://dns.adguard-dns.com/dns-query"),
-        QUAD9("Quad9", "https://dns.quad9.net/dns-query"),
-        GOOGLE("Google", "https://dns.google/dns-query")
+    enum class DnsProvider(
+        val displayName: String,
+        val url: String,
+        val bootstrapIps: List<String>
+    ) {
+        CLOUDFLARE("Cloudflare", "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
+        ADGUARD("AdGuard", "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15")),
+        QUAD9("Quad9", "https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112")),
+        GOOGLE("Google", "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4"))
     }
 
     private val prefs: SharedPreferences =
@@ -63,6 +67,7 @@ class DnsManager(context: Context) {
         dohClient = null
         prefs.edit()
             .putBoolean(KEY_SHIELD_ENABLED, false)
+            .remove(KEY_DNS_PROVIDER)
             .apply()
         return bootstrapClient
     }
@@ -86,13 +91,12 @@ class DnsManager(context: Context) {
         val httpUrl = provider.url.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Invalid DoH URL: ${provider.url}")
 
+        val bootstrapHosts = provider.bootstrapIps.map { InetAddress.getByName(it) }
+
         val dns = DnsOverHttps.Builder()
             .client(bootstrapClient)
             .url(httpUrl)
-            .bootstrapDnsHosts(
-                InetAddress.getByName("1.1.1.1"),
-                InetAddress.getByName("1.0.0.1")
-            )
+            .bootstrapDnsHosts(*bootstrapHosts.toTypedArray())
             .build()
 
         dohClient = bootstrapClient.newBuilder()
