@@ -7,16 +7,16 @@ import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import com.linkshield.sandbox.dns.DnsManager
 
-class CobaltApiService(context: Context) {
+class CobaltApiService(context: Context, dnsManager: DnsManager) {
 
-    private val client = OkHttpClient.Builder()
+    private val client = dnsManager.getClient().newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
