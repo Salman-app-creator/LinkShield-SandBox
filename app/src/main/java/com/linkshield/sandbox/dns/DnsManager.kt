@@ -38,14 +38,12 @@ class DnsManager(context: Context) {
     }
 
     init {
-        // Restore persisted shield state on init
         if (isShieldPersistedOn()) {
             val savedProvider = getSavedProvider()
             try {
                 buildDohClient(savedProvider)
                 currentProvider = savedProvider
             } catch (_: Exception) {
-                // If restore fails, start fresh
                 prefs.edit().putBoolean(KEY_SHIELD_ENABLED, false).apply()
             }
         }
