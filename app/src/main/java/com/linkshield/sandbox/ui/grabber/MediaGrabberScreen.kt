@@ -26,13 +26,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.linkshield.sandbox.api.CobaltApiService
+import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
 import kotlinx.coroutines.launch
 
 @Composable
 fun MediaGrabberScreen(
     licenseManager: LicenseManager,
-    onProRequired: () -> Unit
+    dnsManager: DnsManager,
+    onProRequired: () -> Unit,
+    sharedUrl: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -46,7 +49,16 @@ fun MediaGrabberScreen(
     var downloadCount by remember { mutableIntStateOf(licenseManager.getDownloadCount()) }
     val isPro = licenseManager.isProUser()
 
-    val cobaltApi = remember { CobaltApiService(context) }
+    val cobaltApi = remember { CobaltApiService(context, dnsManager) }
+
+    // Auto-paste URL when coming from browser (Shield tab)
+    LaunchedEffect(sharedUrl) {
+        if (!sharedUrl.isNullOrBlank()) {
+            urlInput = sharedUrl
+            error = null
+            result = null
+        }
+    }
 
     Column(
         modifier = Modifier
