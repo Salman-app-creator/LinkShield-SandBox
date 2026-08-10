@@ -56,8 +56,6 @@ class MainActivity : ComponentActivity() {
         val disclaimerManager = DisclaimerManager(this)
         val licenseManager = LicenseManager(this)
         val themeManager = ThemeManager(this)
-
-        // FIX: LinkInterceptorActivity puts extra as "url", not "intercepted_url"
         val interceptedUrl = intent?.getStringExtra("url")
 
         setContent {
@@ -210,7 +208,6 @@ fun BottomNavBar(
         Screen.Grabber to Icons.Default.Download
     )
 
-    // Compact bottom nav — 64dp instead of default 80dp
     NavigationBar(
         modifier = Modifier.height(64.dp),
         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
@@ -220,7 +217,6 @@ fun BottomNavBar(
             val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
             val isShieldScreen = screen.route == Screen.Unblock.route
 
-            // Shield tab shows ACTIVE color when DoH is ON, otherwise standard selection colors
             val tint = when {
                 isShieldScreen && isShieldActive -> MaterialTheme.colorScheme.primary
                 isSelected -> MaterialTheme.colorScheme.onSurface
