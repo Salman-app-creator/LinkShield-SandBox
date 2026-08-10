@@ -98,7 +98,7 @@ fun ProUpgradeDialog(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "+92 3XX-XXXXXXX",
+                                "923136176616",          // <-- EDIT 1: Apna WhatsApp number
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
@@ -111,18 +111,40 @@ fun ProUpgradeDialog(
                             Divider()
                             Spacer(modifier = Modifier.height(12.dp))
 
+                            // Easypaisa Section
                             Text(
-                                "Easypaisa / JazzCash",
+                                "Easypaisa",
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "03XX-XXXXXXX",
+                                "03136176616",              // <-- EDIT 2: Apna Easypaisa number
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
-                                "Account Title: Your Name",
+                                "Account Title: Your Name",   // <-- EDIT 3: Apna Easypaisa account title
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Divider()
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // JazzCash Section
+                            Text(
+                                "JazzCash",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "03061934345",              // <-- EDIT 4: Apna JazzCash number
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "Account Title: Your Name",   // <-- EDIT 5: Apna JazzCash account title
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -138,7 +160,7 @@ fun ProUpgradeDialog(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "TX...your...wallet...address...here",
+                                "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub",  // <-- EDIT 6: Apna USDT TRC20 address
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Text(
@@ -149,7 +171,7 @@ fun ProUpgradeDialog(
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "Price: 500 PKR  or  2 USDT",
+                                "Price: 500 PKR  or  2 USDT",  // <-- EDIT 7: Apni price
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -161,7 +183,7 @@ fun ProUpgradeDialog(
 
                     OutlinedButton(
                         onClick = {
-                            val waNumber = "923XXXXXXXXX"
+                            val waNumber = "923136176616"   // <-- EDIT 8: Apna WhatsApp number (92XXXXXXXXXX format mein, bina + ke)
                             val message = "Hi, I want to buy LinkShield Pro License. I have made the payment."
                             val intent = android.content.Intent(
                                 android.content.Intent.ACTION_VIEW,
