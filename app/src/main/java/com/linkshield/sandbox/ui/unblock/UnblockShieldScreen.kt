@@ -66,18 +66,15 @@ fun UnblockShieldScreen(
     var canGoForward by remember { mutableStateOf(false) }
     var showDnsMenu by remember { mutableStateOf(false) }
 
-    // Shield toggle — restored from persisted state
     var isDohEnabled by remember { mutableStateOf(dnsManager.isDohEnabled()) }
     var webView by remember { mutableStateOf<WebView?>(null) }
 
-    // Animated shield icon tint
     val shieldColor by animateColorAsState(
         targetValue = if (isDohEnabled) Color(0xFF00F0FF) else Color(0xFF90A4AE),
         animationSpec = tween(durationMillis = 300),
         label = "shieldColor"
     )
 
-    // Restore DoH on first compose if it was persisted ON
     LaunchedEffect(Unit) {
         if (dnsManager.isShieldPersistedOn() && !dnsManager.isDohEnabled()) {
             try {
@@ -89,21 +86,17 @@ fun UnblockShieldScreen(
         }
     }
 
-    // Notify parent of URL changes for Grabber auto-fill
     LaunchedEffect(currentUrl) {
         onUrlChanged(currentUrl)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-
-        // ── TOP TOOLBAR ────────────────────────────────────────────────────────
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 3.dp
         ) {
             Column {
-                // Shield status indicator strip
                 if (isDohEnabled) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -148,7 +141,6 @@ fun UnblockShieldScreen(
                     }
                 }
 
-                // Main toolbar row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -157,7 +149,6 @@ fun UnblockShieldScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    // Back
                     IconButton(
                         onClick = { webView?.goBack() },
                         enabled = canGoBack,
@@ -172,7 +163,6 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // Forward
                     IconButton(
                         onClick = { webView?.goForward() },
                         enabled = canGoForward,
@@ -187,7 +177,6 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // Refresh / Stop
                     IconButton(
                         onClick = { webView?.reload() },
                         modifier = Modifier.size(40.dp)
@@ -199,7 +188,6 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // URL Omnibox
                     OutlinedTextField(
                         value = urlText,
                         onValueChange = { urlText = it },
@@ -255,7 +243,6 @@ fun UnblockShieldScreen(
                         )
                     )
 
-                    // ── Shield Toggle Button ─────────────────────────────────
                     Box {
                         IconButton(
                             onClick = { showDnsMenu = true },
@@ -281,7 +268,6 @@ fun UnblockShieldScreen(
                             )
                             Divider()
 
-                            // Disable option
                             DropdownMenuItem(
                                 text = {
                                     Text(
@@ -312,7 +298,6 @@ fun UnblockShieldScreen(
 
                             Divider()
 
-                            // Provider options
                             DnsManager.DnsProvider.entries.forEach { provider ->
                                 DropdownMenuItem(
                                     text = { Text(provider.displayName) },
@@ -340,7 +325,6 @@ fun UnblockShieldScreen(
                         }
                     }
 
-                    // Light/Dark theme toggle
                     IconButton(
                         onClick = onToggleTheme,
                         modifier = Modifier.size(40.dp)
@@ -354,7 +338,6 @@ fun UnblockShieldScreen(
                     }
                 }
 
-                // Loading progress bar — compact 2dp strip
                 AnimatedVisibility(visible = isLoading) {
                     LinearProgressIndicator(
                         progress = { loadingProgress },
@@ -368,8 +351,7 @@ fun UnblockShieldScreen(
             }
         }
 
-        // ── WEBVIEW — fills ALL remaining space, zero extra padding ──────────
-        Box(
+                Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -432,7 +414,70 @@ fun UnblockShieldScreen(
                                 canGoForward = view?.canGoForward() ?: false
                             }
 
-                            /**
-                             * DoH-based ISP unblock:
-                             * When Shield is ON, all WebView network requests are routed
-                             * through the OkHttp DoH client, bypassing ISP DNS blocks
+                            override fun shouldInterceptRequest(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): WebResourceResponse? {
+                                if (!dnsManager.isDohEnabled()) return null
+
+                                val url = request?.url?.toString() ?: return null
+                                if (!url.startsWith("http")) return null
+
+                                val skipExtensions = listOf(
+                                    ".mp4", ".mp3", ".webm", ".m3u8",
+                                    ".ts", ".jpg", ".jpeg", ".png", ".gif",
+                                    ".webp", ".svg", ".ico", ".woff", ".woff2"
+                                )
+                                if (skipExtensions.any { url.lowercase().contains(it) }) return null
+
+                                return try {
+                                    val reqBuilder = Request.Builder().url(url)
+                                    request.requestHeaders.forEach { (key, value) ->
+                                        if (key.equals("host", ignoreCase = true)) return@forEach
+                                        try { reqBuilder.addHeader(key, value) } catch (_: Exception) { }
+                                    }
+
+                                    val response = dnsManager.getClient()
+                                        .newCall(reqBuilder.build())
+                                        .execute()
+
+                                    if (!response.isSuccessful) return null
+
+                                    val contentType = response.body?.contentType()
+                                    val mimeType = if (contentType != null)
+                                        "${contentType.type}/${contentType.subtype}"
+                                    else "text/html"
+                                    val charset = contentType?.charset()?.name()
+
+                                    val responseHeaders = mutableMapOf<String, String>()
+                                    response.headers.forEach { (k, v) ->
+                                        responseHeaders[k] = v
+                                    }
+
+                                    WebResourceResponse(
+                                        mimeType,
+                                        charset,
+                                        response.code,
+                                        response.message.ifEmpty { "OK" },
+                                        responseHeaders,
+                                        response.body?.byteStream()
+                                    )
+                                } catch (_: Exception) {
+                                    null
+                                }
+                            }
+                        }
+
+                        loadUrl(currentUrl)
+                        webView = this
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+
+    BackHandler(enabled = canGoBack) {
+        webView?.goBack()
+    }
+}
