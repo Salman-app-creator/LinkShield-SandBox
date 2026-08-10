@@ -18,7 +18,6 @@ class LicenseManager(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    // Device fingerprint for anti-piracy single-device binding
     private val deviceId: String =
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
 
@@ -32,12 +31,6 @@ class LicenseManager(context: Context) {
     }
 
     init {
-        // FIX: Fresh install must always start at 0/20, not carry over bad state.
-        // We use a separate "initialized" flag so we only reset once per fresh install.
-        // EncryptedSharedPreferences on a clean install returns the defaults we specify,
-        // so getInt(KEY_DOWNLOAD_COUNT, 0) is already correct — but we guard against
-        // any edge-case where the pref file exists from a partially-uninstalled state
-        // with a stale value by writing 0 if KEY_INITIALIZED is absent.
         if (!prefs.getBoolean(KEY_INITIALIZED, false)) {
             prefs.edit()
                 .putInt(KEY_DOWNLOAD_COUNT, 0)
@@ -60,16 +53,6 @@ class LicenseManager(context: Context) {
         return true
     }
 
-    /**
-     * Validates the license key and binds it to this device.
-     *
-     * Anti-piracy logic:
-     * - When a key is validated, the current device ID is stored alongside it.
-     * - On subsequent attempts, if a key is already bound to a DIFFERENT device ID,
-     *   validation fails — preventing key sharing across devices.
-     * - For a full cloud-based check, replace [isKeyAlreadyBoundToOtherDevice] with
-     *   an API call that stores the binding server-side.
-     */
     fun validateKey(key: String): Boolean {
         val clean = key.uppercase().replace("-", "").trim()
         if (clean.length != 16) return false
@@ -81,14 +64,11 @@ class LicenseManager(context: Context) {
 
         if (providedChecksum != expectedChecksum) return false
 
-        // Anti-piracy: check if this key is already bound to a different device
         val boundDevice = prefs.getString("${KEY_BOUND_DEVICE}_$clean", null)
         if (boundDevice != null && boundDevice != deviceId) {
-            // Key is registered to another device — reject
             return false
         }
 
-        // Bind this key to the current device and activate Pro
         prefs.edit()
             .putBoolean(KEY_IS_PRO, true)
             .putString("${KEY_BOUND_DEVICE}_$clean", deviceId)
