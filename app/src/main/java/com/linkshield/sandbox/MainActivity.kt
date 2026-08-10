@@ -8,18 +8,24 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -37,6 +43,7 @@ import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.license.ProUpgradeDialog
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,6 +56,43 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LinkShieldTheme {
+                val context = LocalContext.current
+                var isDefaultBrowser by remember { mutableStateOf(context.isDefaultBrowser()) }
+
+                // Activity result launcher for RoleManager default browser request
+                val roleRequestLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) {
+                    isDefaultBrowser = context.isDefaultBrowser()
+                }
+
+                // Periodic fallback check every 2 seconds
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        isDefaultBrowser = context.isDefaultBrowser()
+                        delay(2000)
+                    }
+                }
+
+                // FULL APP LOCK: If not default browser, show lock screen and block everything
+                if (!isDefaultBrowser) {
+                    DefaultBrowserLockScreen(
+                        onEnable = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+                                if (roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER) && !roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
+                                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+                                    roleRequestLauncher.launch(intent)
+                                }
+                            } else {
+                                val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
+                    return@LinkShieldTheme
+                }
+
                 val navController = rememberNavController()
                 var showDisclaimer by remember { mutableStateOf(!disclaimerManager.hasAccepted()) }
                 var showProDialog by remember { mutableStateOf(false) }
@@ -216,6 +260,91 @@ fun MainNavHost(
 sealed class Screen(val route: String, val title: String) {
     object Unblock : Screen("unblock", "Shield")
     object Grabber : Screen("grabber", "Grabber")
+}
+
+@Composable
+fun DefaultBrowserLockScreen(onEnable: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.mipmap.ic_launcher),
+                contentDescription = null,
+                modifier = Modifier.size(100.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                "Enable Protection",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                "LinkShield needs to be your default browser to intercept and protect links from WhatsApp, Email, Telegram, and other apps.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "Not set as default browser. Links cannot be intercepted until enabled.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onEnable,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Shield, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Set as Default Browser", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
 }
 
 fun Context.openDefaultBrowserSettings() {
