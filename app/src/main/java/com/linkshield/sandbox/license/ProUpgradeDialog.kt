@@ -32,12 +32,12 @@ import com.linkshield.sandbox.license.LicenseManager
 // ─────────────────────────────────────────────────────────────────────────────
 private const val WHATSAPP_NUMBER   = "923136176616"          // 92XXXXXXXXXX format, no +
 private const val EASYPAISA_NUMBER  = "03136176616"
-private const val EASYPAISA_TITLE   = "Your Name"            // Apna Easypaisa account title
+private const val EASYPAISA_TITLE   = "Salman Latif"            // Apna Easypaisa account title
 private const val JAZZCASH_NUMBER   = "03061934345"
-private const val JAZZCASH_TITLE    = "Your Name"            // Apna JazzCash account title
+private const val JAZZCASH_TITLE    = "Salman Latif"            // Apna JazzCash account title
 private const val USDT_ADDRESS      = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"  // TRC20 wallet
-private const val PRICE_PKR         = "500"
-private const val PRICE_USDT        = "2"
+private const val PRICE_PKR         = "350"
+private const val PRICE_USDT        = "1.5"
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -78,7 +78,7 @@ fun ProUpgradeDialog(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Pro Unlocked! 🎉",
+                        "Pro Unlocked!",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -156,7 +156,7 @@ fun ProUpgradeDialog(
                                 context = context
                             )
 
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+                            Divider(modifier = Modifier.padding(vertical = 10.dp))
 
                             // ── JazzCash ──────────────────────────────────────
                             PaymentRow(
@@ -166,7 +166,7 @@ fun ProUpgradeDialog(
                                 context = context
                             )
 
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+                            Divider(modifier = Modifier.padding(vertical = 10.dp))
 
                             // ── USDT TRC20 ────────────────────────────────────
                             Text(
@@ -202,7 +202,7 @@ fun ProUpgradeDialog(
                                 }
                             }
                             Text(
-                                "⚠ Only send USDT on TRC20 network",
+                                "Only send USDT on TRC20 network",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -226,7 +226,7 @@ fun ProUpgradeDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("💬 Chat on WhatsApp", style = MaterialTheme.typography.labelLarge)
+                        Text("Chat on WhatsApp", style = MaterialTheme.typography.labelLarge)
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
