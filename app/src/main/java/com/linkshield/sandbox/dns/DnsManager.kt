@@ -3,28 +3,28 @@ package com.linkshield.sandbox.dns
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import okhttp3.ConnectionPool
+import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.SocketAddress
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import javax.net.SocketFactory
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DnsManager.kt
-//
-// Responsibilities:
-//   1. Build and manage OkHttp clients with DNS-over-HTTPS (DoH) resolvers.
-//   2. Support multiple DoH providers with per-provider bootstrap IPs.
-//   3. Provide a Cloudflare WARP-style fallback resolver when primary DoH fails.
-//   4. Persist shield state and selected provider across app restarts.
-//   5. Expose pro/trial state checks so callers can gate shield features.
-//   6. Allow callers to query remaining free trial downloads.
 // ─────────────────────────────────────────────────────────────────────────────
 
 private const val TAG = "DnsManager"
 
-// SharedPreferences keys — must match PreferencesManager constants exactly
+// SharedPreferences keys
 private const val PREFS_NAME            = "shield_prefs"
 private const val KEY_SHIELD_ENABLED    = "shield_enabled"
 private const val KEY_DNS_PROVIDER      = "dns_provider"
@@ -33,8 +33,6 @@ private const val KEY_DOWNLOAD_COUNT    = "download_count"
 private const val KEY_INITIALIZED       = "initialized"
 private const val FREE_DOWNLOAD_LIMIT   = 20
 
-// Cloudflare WARP DoH endpoint (WARP uses 1.1.1.1 with /dns-query, same as Cloudflare DoH,
-// but we separate it as a fallback so callers know which resolver is currently active)
 private const val WARP_DOH_URL = "https://1.1.1.1/dns-query"
 
 class DnsManager(private val context: Context) {
@@ -76,9 +74,6 @@ class DnsManager(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // Plain bootstrap client — no custom DNS, used to reach DoH endpoints.
-    // Also returned when shield is OFF so the rest of the app always gets a
-    // valid OkHttpClient regardless of shield state.
     private val bootstrapClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10,  TimeUnit.SECONDS)
@@ -86,20 +81,24 @@ class DnsManager(private val context: Context) {
         .retryOnConnectionFailure(true)
         .build()
 
-    // Active DoH client — null when shield is disabled
+    private val standardSocketFactory: SocketFactory = SocketFactory.getDefault()
+    private val fragmentingSocketFactory: TlsFragmentingSocketFactory = TlsFragmentingSocketFactory()
+
+    @Volatile
     private var activeDohClient: OkHttpClient? = null
 
-    // Currently selected provider (relevant only when shield is ON)
+    @Volatile
     private var activeProvider: DnsProvider = DnsProvider.CLOUDFLARE
 
-    // ── Initialisation — restore persisted state ──────────────────────────────
+    private val stateLock = Any()
+
     init {
         ensureDownloadCountInitialized()
 
         if (isShieldPersistedOn()) {
             val saved = getSavedProvider()
             try {
-                buildAndSetDohClient(saved)
+                enableDoh(saved)
                 Log.d(TAG, "Restored DoH shield: ${saved.displayName}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to restore DoH on init, disabling shield: ${e.message}")
@@ -112,114 +111,83 @@ class DnsManager(private val context: Context) {
     // PUBLIC API
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Returns the active DoH OkHttpClient when shield is ON,
-     * or the plain bootstrap client when shield is OFF.
-     * Callers should always use this — never cache the result.
-     */
     fun getClient(): OkHttpClient = activeDohClient ?: bootstrapClient
 
-    /**
-     * Enables DoH with the given provider.
-     * Automatically falls back to CLOUDFLARE_WARP if the primary provider
-     * fails to build a valid resolver.
-     *
-     * @param provider  The desired DoH provider.
-     * @return          The newly built DoH OkHttpClient.
-     * @throws IllegalStateException if even the WARP fallback fails.
-     */
-    fun enableDoh(provider: DnsProvider = DnsProvider.CLOUDFLARE): OkHttpClient {
-        return try {
-            buildAndSetDohClient(provider)
+    fun enableDoh(provider: DnsProvider = DnsProvider.CLOUDFLARE): OkHttpClient = synchronized(stateLock) {
+        // Strategy 1 — standard TLS, primary provider
+        try {
+            val client = buildAndTestDohClient(provider, useFragmentation = false)
+            setActiveClient(client, provider)
             persistShieldState(enabled = true, provider = provider)
-            Log.d(TAG, "DoH enabled: ${provider.displayName}")
-            activeDohClient!!
-        } catch (primary: Exception) {
-            Log.w(TAG, "Primary DoH failed (${provider.displayName}), trying WARP fallback: ${primary.message}")
-            try {
-                buildAndSetDohClient(DnsProvider.CLOUDFLARE_WARP)
-                persistShieldState(enabled = true, provider = DnsProvider.CLOUDFLARE_WARP)
-                Log.d(TAG, "DoH fallback active: CLOUDFLARE_WARP")
-                activeDohClient!!
-            } catch (fallback: Exception) {
-                Log.e(TAG, "WARP fallback also failed: ${fallback.message}")
-                throw IllegalStateException(
-                    "DoH unavailable — primary: ${primary.message}, WARP: ${fallback.message}"
-                )
-            }
+            Log.d(TAG, "DoH enabled (standard): ${provider.displayName}")
+            return client
+        } catch (primaryStd: Exception) {
+            Log.w(TAG, "Standard TLS blocked for ${provider.displayName}: ${primaryStd.message}")
+        }
+
+        // Strategy 2 — fragmented TLS, primary provider
+        try {
+            val client = buildAndTestDohClient(provider, useFragmentation = true)
+            setActiveClient(client, provider)
+            persistShieldState(enabled = true, provider = provider)
+            Log.d(TAG, "DoH enabled (fragmented): ${provider.displayName}")
+            return client
+        } catch (primaryFrag: Exception) {
+            Log.w(TAG, "Fragmented TLS failed for ${provider.displayName}: ${primaryFrag.message}")
+        }
+
+        // Strategy 3 — standard TLS, WARP fallback
+        try {
+            val client = buildAndTestDohClient(DnsProvider.CLOUDFLARE_WARP, useFragmentation = false)
+            setActiveClient(client, DnsProvider.CLOUDFLARE_WARP)
+            persistShieldState(enabled = true, provider = DnsProvider.CLOUDFLARE_WARP)
+            Log.d(TAG, "DoH fallback active (standard): CLOUDFLARE_WARP")
+            return client
+        } catch (warpStd: Exception) {
+            Log.w(TAG, "WARP standard TLS failed: ${warpStd.message}")
+        }
+
+        // Strategy 4 — fragmented TLS, WARP fallback
+        try {
+            val client = buildAndTestDohClient(DnsProvider.CLOUDFLARE_WARP, useFragmentation = true)
+            setActiveClient(client, DnsProvider.CLOUDFLARE_WARP)
+            persistShieldState(enabled = true, provider = DnsProvider.CLOUDFLARE_WARP)
+            Log.d(TAG, "DoH fallback active (fragmented): CLOUDFLARE_WARP")
+            return client
+        } catch (warpFrag: Exception) {
+            Log.e(TAG, "WARP fragmented TLS also failed: ${warpFrag.message}")
+            throw IllegalStateException(
+                "DoH unavailable — all strategies exhausted. " +
+                "Primary standard: ${warpFrag.message}"
+            )
         }
     }
 
-    /**
-     * Disables DoH. All subsequent [getClient] calls return the plain client.
-     */
-    fun disableDoh() {
+    fun disableDoh() = synchronized(stateLock) {
+        activeDohClient?.connectionPool?.evictAll()
         activeDohClient = null
+        activeProvider = DnsProvider.CLOUDFLARE
         prefs.edit()
             .putBoolean(KEY_SHIELD_ENABLED, false)
             .remove(KEY_DNS_PROVIDER)
             .apply()
-        Log.d(TAG, "DoH disabled")
+        Log.d(TAG, "DoH disabled, connection pool evicted")
     }
 
-    /** True when the DoH client is built and active. */
     fun isDohEnabled(): Boolean = activeDohClient != null
-
-    /** The provider whose resolver is currently active. */
     fun getCurrentProvider(): DnsProvider = activeProvider
+    fun isShieldPersistedOn(): Boolean = prefs.getBoolean(KEY_SHIELD_ENABLED, false)
 
-    /** True when the shield was persisted ON in SharedPreferences. */
-    fun isShieldPersistedOn(): Boolean =
-        prefs.getBoolean(KEY_SHIELD_ENABLED, false)
+    fun isProUser(): Boolean = prefs.getBoolean(KEY_IS_PRO, false)
+    fun getDownloadCount(): Int = prefs.getInt(KEY_DOWNLOAD_COUNT, 0)
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PRO / TRIAL STATE  (read-only — writes go through PreferencesManager /
-    //                     LicenseManager; DnsManager only reads to gate access)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Returns true if the user has an active Pro licence.
-     * Pro users get unlimited shield usage and unlimited downloads.
-     */
-    fun isProUser(): Boolean =
-        prefs.getBoolean(KEY_IS_PRO, false)
-
-    /**
-     * Returns the number of free downloads the user has consumed so far.
-     * Range: 0 … FREE_DOWNLOAD_LIMIT (20).
-     */
-    fun getDownloadCount(): Int =
-        prefs.getInt(KEY_DOWNLOAD_COUNT, 0)
-
-    /**
-     * Returns the number of free downloads still available.
-     * Always returns Int.MAX_VALUE for pro users.
-     */
     fun getRemainingDownloads(): Int =
         if (isProUser()) Int.MAX_VALUE
         else maxOf(0, FREE_DOWNLOAD_LIMIT - getDownloadCount())
 
-    /**
-     * Returns true if the user is allowed to trigger another download
-     * (either Pro, or still within the free 20-download trial).
-     */
-    fun canDownload(): Boolean =
-        isProUser() || getDownloadCount() < FREE_DOWNLOAD_LIMIT
-
-    /**
-     * Returns true if the shield DoH bypass feature is accessible.
-     * Pro users always get access; trial users get access while downloads remain.
-     * Note: the shield UI toggle itself is always visible — this gates the
-     * actual DoH interception being applied inside shouldInterceptRequest.
-     */
+    fun canDownload(): Boolean = isProUser() || getDownloadCount() < FREE_DOWNLOAD_LIMIT
     fun isShieldAccessible(): Boolean = canDownload()
 
-    /**
-     * Resolves a hostname to a list of InetAddresses using the active DoH
-     * client. Falls back to the system resolver if DoH is not enabled or fails.
-     *
-     * Useful for callers that need manual DNS resolution (e.g. prefetch checks).
-     */
     fun resolveHostname(hostname: String): List<InetAddress> {
         if (!isDohEnabled()) {
             return try {
@@ -230,8 +198,7 @@ class DnsManager(private val context: Context) {
             }
         }
         return try {
-            // OkHttp's DnsOverHttps implements okhttp3.Dns — we can call it directly
-            val dnsResolver = buildDnsResolver(activeProvider)
+            val dnsResolver = buildDnsResolver(activeProvider, useFragmentation = false)
             dnsResolver.lookup(hostname)
         } catch (e: Exception) {
             Log.e(TAG, "DoH resolution failed for $hostname: ${e.message}")
@@ -241,37 +208,55 @@ class DnsManager(private val context: Context) {
                 emptyList()
             }
         }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
+    }    // ─────────────────────────────────────────────────────────────────────────
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Builds a [DnsOverHttps] resolver for the given provider and attaches it
-     * to a new OkHttpClient, storing both in [activeDohClient] and
-     * [activeProvider].
-     */
-    private fun buildAndSetDohClient(provider: DnsProvider) {
-        val dns = buildDnsResolver(provider)
-
-        activeDohClient = bootstrapClient.newBuilder()
-            .dns(dns)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20,  TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .build()
-
-        activeProvider = provider
+    private fun buildAndTestDohClient(
+        provider: DnsProvider,
+        useFragmentation: Boolean
+    ): OkHttpClient {
+        val client = buildDohClient(provider, useFragmentation)
+        val probeOk = testDohConnection(client, provider)
+        if (!probeOk) {
+            client.connectionPool.evictAll()
+            throw IllegalStateException("DoH probe failed for ${provider.displayName} (fragment=$useFragmentation)")
+        }
+        return client
     }
 
-    /**
-     * Constructs a [DnsOverHttps] instance for [provider] using its
-     * hardcoded bootstrap IP addresses so the DoH endpoint itself can be
-     * reached without relying on the system resolver (which may be blocked).
-     */
-    private fun buildDnsResolver(provider: DnsProvider): DnsOverHttps {
+    private fun setActiveClient(client: OkHttpClient, provider: DnsProvider) {
+        val old = activeDohClient
+        activeDohClient = client
+        activeProvider = provider
+        old?.connectionPool?.evictAll()
+    }
+
+    private fun buildDohClient(
+        provider: DnsProvider,
+        useFragmentation: Boolean
+    ): OkHttpClient {
+        val dns = buildDnsResolver(provider, useFragmentation)
+
+        val builder = bootstrapClient.newBuilder()
+            .dns(dns)
+            .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+
+        if (useFragmentation) {
+            builder.socketFactory(fragmentingSocketFactory)
+        }
+
+        return builder.build()
+    }
+
+    private fun buildDnsResolver(
+        provider: DnsProvider,
+        useFragmentation: Boolean
+    ): DnsOverHttps {
         val httpUrl = provider.dohUrl.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Invalid DoH URL: ${provider.dohUrl}")
 
@@ -279,18 +264,39 @@ class DnsManager(private val context: Context) {
             .map { InetAddress.getByName(it) }
             .toTypedArray()
 
+        val bootstrap = if (useFragmentation) {
+            bootstrapClient.newBuilder()
+                .socketFactory(fragmentingSocketFactory)
+                .build()
+        } else {
+            bootstrapClient
+        }
+
         return DnsOverHttps.Builder()
-            .client(bootstrapClient)
+            .client(bootstrap)
             .url(httpUrl)
             .bootstrapDnsHosts(*bootstrapHosts)
             .includeIPv6(true)
-            .post(true)             // use POST for privacy (query not in URL)
+            .post(true)
             .build()
     }
 
-    /**
-     * Writes shield enabled state and selected provider to SharedPreferences.
-     */
+    private fun testDohConnection(client: OkHttpClient, provider: DnsProvider): Boolean {
+        return try {
+            val request = okhttp3.Request.Builder()
+                .url(provider.dohUrl)
+                .head()
+                .build()
+            client.newCall(request).execute().use { response ->
+                Log.d(TAG, "DoH probe for ${provider.displayName}: HTTP ${response.code}")
+                true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "DoH probe failed for ${provider.displayName}: ${e.javaClass.simpleName} ${e.message}")
+            false
+        }
+    }
+
     private fun persistShieldState(enabled: Boolean, provider: DnsProvider) {
         prefs.edit()
             .putBoolean(KEY_SHIELD_ENABLED, enabled)
@@ -298,9 +304,6 @@ class DnsManager(private val context: Context) {
             .apply()
     }
 
-    /**
-     * Reads back the last persisted [DnsProvider], defaulting to CLOUDFLARE.
-     */
     private fun getSavedProvider(): DnsProvider {
         val saved = prefs.getString(KEY_DNS_PROVIDER, DnsProvider.CLOUDFLARE.name)
         return try {
@@ -310,12 +313,6 @@ class DnsManager(private val context: Context) {
         }
     }
 
-    /**
-     * Guarantees that the download counter starts at 0 on a fresh install.
-     * Uses a separate boolean flag (KEY_INITIALIZED) so we only reset once —
-     * if the prefs file somehow survives a reinstall with a stale counter,
-     * the absence of KEY_INITIALIZED triggers a clean reset.
-     */
     private fun ensureDownloadCountInitialized() {
         if (!prefs.getBoolean(KEY_INITIALIZED, false)) {
             prefs.edit()
@@ -325,4 +322,123 @@ class DnsManager(private val context: Context) {
             Log.d(TAG, "Download counter initialized to 0 (fresh install)")
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TLS SNI FRAGMENTATION  (DPI / connection-reset evasion)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private inner class TlsFragmentingSocketFactory : SocketFactory() {
+
+        private val delegate: SocketFactory = SocketFactory.getDefault()
+
+        override fun createSocket(): Socket =
+            FragmentingSocket(delegate.createSocket())
+
+        override fun createSocket(host: String?, port: Int): Socket =
+            FragmentingSocket(delegate.createSocket(host, port))
+
+        override fun createSocket(
+            host: String?, port: Int,
+            localHost: InetAddress?, localPort: Int
+        ): Socket = FragmentingSocket(delegate.createSocket(host, port, localHost, localPort))
+
+        override fun createSocket(host: InetAddress?, port: Int): Socket =
+            FragmentingSocket(delegate.createSocket(host, port))
+
+        override fun createSocket(
+            address: InetAddress?, port: Int,
+            localAddress: InetAddress?, localPort: Int
+        ): Socket = FragmentingSocket(delegate.createSocket(address, port, localAddress, localPort))
+
+        private inner class FragmentingSocket(private val delegate: Socket) : Socket() {
+
+            private var outputWrapper: FragmentingOutputStream? = null
+
+            override fun getOutputStream(): OutputStream {
+                if (outputWrapper == null) {
+                    outputWrapper = FragmentingOutputStream(delegate.outputStream)
+                }
+                return outputWrapper!!
+            }
+
+            override fun getInputStream(): InputStream = delegate.inputStream
+            override fun connect(endpoint: SocketAddress?) = delegate.connect(endpoint)
+            override fun connect(endpoint: SocketAddress?, timeout: Int) = delegate.connect(endpoint, timeout)
+            override fun bind(bindpoint: SocketAddress?) = delegate.bind(bindpoint)
+            override fun getInetAddress(): InetAddress = delegate.inetAddress
+            override fun getLocalAddress(): InetAddress = delegate.localAddress
+            override fun getPort(): Int = delegate.port
+            override fun getLocalPort(): Int = delegate.localPort
+            override fun getRemoteSocketAddress(): SocketAddress = delegate.remoteSocketAddress
+            override fun getLocalSocketAddress(): SocketAddress = delegate.localSocketAddress
+            override fun getChannel() = delegate.channel
+            override fun setTcpNoDelay(on: Boolean) = delegate.setTcpNoDelay(on)
+            override fun getTcpNoDelay(): Boolean = delegate.tcpNoDelay
+            override fun setSoLinger(on: Boolean, linger: Int) = delegate.setSoLinger(on, linger)
+            override fun getSoLinger(): Int = delegate.soLinger
+            override fun sendUrgentData(data: Int) = delegate.sendUrgentData(data)
+            override fun setOOBInline(on: Boolean) = delegate.setOOBInline(on)
+            override fun getOOBInline(): Boolean = delegate.oobInline
+            override fun setSoTimeout(timeout: Int) = delegate.setSoTimeout(timeout)
+            override fun getSoTimeout(): Int = delegate.soTimeout
+            override fun setSendBufferSize(size: Int) = delegate.setSendBufferSize(size)
+            override fun getSendBufferSize(): Int = delegate.sendBufferSize
+            override fun setReceiveBufferSize(size: Int) = delegate.setReceiveBufferSize(size)
+            override fun getReceiveBufferSize(): Int = delegate.receiveBufferSize
+            override fun setKeepAlive(on: Boolean) = delegate.setKeepAlive(on)
+            override fun getKeepAlive(): Boolean = delegate.keepAlive
+            override fun setTrafficClass(tc: Int) = delegate.setTrafficClass(tc)
+            override fun getTrafficClass(): Int = delegate.trafficClass
+            override fun setReuseAddress(on: Boolean) = delegate.setReuseAddress(on)
+            override fun getReuseAddress(): Boolean = delegate.reuseAddress
+            override fun close() = delegate.close()
+            override fun isClosed(): Boolean = delegate.isClosed
+            override fun isConnected(): Boolean = delegate.isConnected
+            override fun isBound(): Boolean = delegate.isBound
+            override fun isInputShutdown(): Boolean = delegate.isInputShutdown
+            override fun isOutputShutdown(): Boolean = delegate.isOutputShutdown
+            override fun shutdownInput() = delegate.shutdownInput()
+            override fun shutdownOutput() = delegate.shutdownOutput()
+            override fun toString(): String = delegate.toString()
+        }
+
+        private inner class FragmentingOutputStream(
+            private val delegate: OutputStream
+        ) : OutputStream() {
+
+            private var firstWrite = true
+
+            override fun write(b: Int) {
+                if (firstWrite) {
+                    firstWrite = false
+                    delegate.write(b)
+                    delegate.flush()
+                    Thread.sleep(5)
+                } else {
+                    delegate.write(b)
+                }
+            }
+
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                if (!firstWrite || len < 80) {
+                    delegate.write(b, off, len)
+                    return
+                }
+
+                firstWrite = false
+                val splitAt = 50.coerceAtMost(len - 1)
+
+                delegate.write(b, off, splitAt)
+                delegate.flush()
+                Thread.sleep(10)
+
+                delegate.write(b, off + splitAt, len - splitAt)
+            }
+
+            override fun flush() = delegate.flush()
+            override fun close() = delegate.close()
+        }
+    }
 }
+
+    
