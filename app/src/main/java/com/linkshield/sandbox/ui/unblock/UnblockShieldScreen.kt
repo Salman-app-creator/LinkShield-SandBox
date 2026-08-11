@@ -200,10 +200,8 @@ private fun createWebView(
                 "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
         }
 
-        CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(this@apply, true)
-        }
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
         webViewClient = ShieldWebViewClient(
             dnsManager = dnsManager,
@@ -559,7 +557,7 @@ private fun GrabberTab(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
-                        onClick = { /* Navigate or load stream */ }
+                        onClick = { /* TODO: start download */ }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
