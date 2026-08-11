@@ -1,836 +1,643 @@
-package com.linkshield.sandbox.ui.unblock
+package com.linkshield.sandbox.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
-import android.os.Bundle
-import android.util.Log
+import android.net.Uri
+import android.os.Build
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.dns.DnsManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Request
+import java.net.URLDecoder
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Chrome Mobile User-Agent — avoids reCAPTCHA and Error 400 responses.
-// Matches a real mid-2024 Chrome on Android device fingerprint.
+// UnblockShieldScreen.kt
+//
+// Responsibilities:
+//   1. TAB SWITCHING & BROWSER STATE RETENTION
+//      WebView instances are hoisted into UnblockShieldViewModel and keyed
+//      by tab index.  When the user switches bottom tabs the Browser WebView
+//      is simply detached / re-attached; it is never destroyed or reloaded.
+//   2. AUTOMATIC ACTIVE MEDIA PASS-THROUGH
+//      A @JavascriptInterface bridge ("LinkShieldBridge") is injected on every
+//      page finish.  A MutationObserver watches for <video> nodes, reads
+//      currentSrc/src, and forwards exact stream URLs to the Grabber tab.
+//   3. TIKTOK & CUSTOM DEEP-LINK INTERCEPTION
+//      shouldOverrideUrlLoading catches non-http(s) schemes (snssdk://,
+//      intent://, fb://, tiktok://, etc.).  intent:// URLs are parsed for
+//      S.browser_fallback_url; everything else is swallowed so the WebView
+//      never surfaces net::ERR_UNKNOWN_URL_SCHEME.
+//   4. PREVENT RECAPTCHA / BOT DETECTION
+//      Realistic Chrome Mobile UA, DOM storage, database storage, persistent
+//      third-party cookies, and mixed-content tolerance are all enabled.
+//   5. DNS SHIELD INTEGRATION
+//      shouldInterceptRequest routes every GET/HEAD subresource through
+//      DnsManager.getClient() so the DoH / TLS-fragmentation pipeline
+//      protects the entire browsing session.  Set-Cookie headers are synced
+//      back into CookieManager so login state is preserved.
 // ─────────────────────────────────────────────────────────────────────────────
-private const val CHROME_MOBILE_UA =
-    "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
-    "AppleWebKit/537.36 (KHTML, like Gecko) " +
-    "Chrome/124.0.0.0 Mobile Safari/537.36"
 
-private const val TAG = "UnblockShieldScreen"
+// ── ViewModel (hoists WebViews so they survive tab switches & config changes) ─
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Streaming — hosts and path fragments that MUST bypass DoH interception.
-// Intercepting these causes "Playback ID" / bot-detection errors on YouTube.
-// ─────────────────────────────────────────────────────────────────────────────
-private val STREAM_HOST_BYPASS = listOf(
-    "googlevideo.com",
-    "manifest.googlevideo.com",
-    "youtubei.googleapis.com",
-    "videoplayback",
-    "googlevideo",
-    "c.youtube.com",
-    "i.ytimg.com"
-)
+class UnblockShieldViewModel : ViewModel() {
 
-private val STREAM_EXTENSION_BYPASS = listOf(
-    ".m3u8", ".ts", ".mp4", ".mp3", ".webm",
-    ".m4s", ".aac", ".ogg", ".flac", ".opus", ".m4v"
-)
+    private val _webViews = mutableStateMapOf<Int, WebView>()
+    val webViews: Map<Int, WebView> = _webViews
 
-private val STATIC_ASSET_BYPASS = listOf(
-    ".jpg", ".jpeg", ".png", ".gif", ".webp",
-    ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot"
-)
+    var selectedTabIndex by mutableIntStateOf(0)
+        private set
 
-// ─────────────────────────────────────────────────────────────────────────────
-// JavaScript injected after every page load.
-// Extracts the first <video> src and posts it back via the VideoExtractor
-// JavascriptInterface so MediaGrabberScreen can use it as a fallback URL.
-// ─────────────────────────────────────────────────────────────────────────────
-private const val JS_HTML5_EXTRACTOR = """
-(function() {
-    try {
-        var video = document.querySelector('video');
-        if (!video) return;
-        var src = video.src || '';
-        if (!src || src === '') {
-            var source = video.querySelector('source');
-            if (source) src = source.src || '';
-        }
-        if (!src || src === '') {
-            var sources = document.querySelectorAll('source');
-            for (var i = 0; i < sources.length; i++) {
-                if (sources[i].src && sources[i].src.startsWith('http')) {
-                    src = sources[i].src;
-                    break;
-                }
-            }
-        }
-        if (src && src.startsWith('http')) {
-            VideoExtractor.onVideoFound(src);
-        }
-    } catch(e) {}
-})();
-"""
+    var currentUrl by mutableStateOf("https://www.google.com")
+        private set
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WebViewState — holds the WebView instance across recompositions/tab switches.
-// Keeping the instance in a remember{} block outside AndroidView prevents
-// the blank-screen problem caused by AndroidView recreating the view on
-// every recomposition or navigation graph back-stack change.
-// ─────────────────────────────────────────────────────────────────────────────
-class WebViewState(val initialUrl: String) {
-    var webView: WebView?           = null
-    var savedBundle: Bundle?        = null
-    var currentUrl:  String         = initialUrl
-    var canGoBack:   Boolean        = false
-    var canGoForward: Boolean       = false
-}
+    var isLoading by mutableStateOf(false)
+        private set
 
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-fun UnblockShieldScreen(
-    initialUrl:           String?   = null,
-    dnsManager:           DnsManager,
-    onUrlChanged:         (String) -> Unit  = {},
-    onVideoExtracted:     (String) -> Unit  = {},
-    isDarkTheme:          Boolean   = true,
-    onToggleTheme:        () -> Unit        = {},
-    onShieldStateChanged: (Boolean) -> Unit = {}
-) {
-    val context      = LocalContext.current
-    val focusManager = LocalFocusManager.current
-    val startUrl     = initialUrl ?: "https://www.google.com"
+    var canGoBack by mutableStateOf(false)
+        private set
 
-    // ── Persistent WebView state — survives tab switches ──────────────────────
-    // rememberSaveable keeps the WebViewState object alive across recompositions
-    // within the same NavBackStackEntry lifetime (i.e. tab switches).
-    val webViewState = remember { WebViewState(startUrl) }
+    var canGoForward by mutableStateOf(false)
+        private set
 
-    // ── UI state (updated by WebViewClient callbacks) ─────────────────────────
-    var urlBarText      by rememberSaveable { mutableStateOf(startUrl) }
-    var isLoading       by remember { mutableStateOf(false) }
-    var loadingProgress by remember { mutableStateOf(0f) }
-    var canGoBack       by remember { mutableStateOf(false) }
-    var canGoForward    by remember { mutableStateOf(false) }
+    private val _mediaUrls = MutableStateFlow<List<MediaItem>>(emptyList())
+    val mediaUrls: StateFlow<List<MediaItem>> = _mediaUrls.asStateFlow()
 
-    // ── Shield / DNS state ────────────────────────────────────────────────────
-    var isDohEnabled by remember { mutableStateOf(dnsManager.isDohEnabled()) }
-    var showDnsMenu  by remember { mutableStateOf(false) }
-
-    val shieldTint by animateColorAsState(
-        targetValue   = if (isDohEnabled) Color(0xFF00F0FF) else Color(0xFF9E9E9E),
-        animationSpec = tween(durationMillis = 350),
-        label         = "shieldTint"
+    data class MediaItem(
+        val url: String,
+        val title: String,
+        val pageUrl: String,
+        val timestamp: Long = System.currentTimeMillis()
     )
 
-    // ── Restore shield from persisted prefs on first composition ──────────────
-    LaunchedEffect(Unit) {
-        if (dnsManager.isShieldPersistedOn() && !dnsManager.isDohEnabled()) {
-            try {
-                dnsManager.enableDoh(DnsManager.DnsProvider.CLOUDFLARE)
-                isDohEnabled = true
-                onShieldStateChanged(true)
-                Log.d(TAG, "Shield restored from prefs")
-            } catch (e: Exception) {
-                Log.e(TAG, "Shield restore failed: ${e.message}")
-            }
-        } else if (dnsManager.isDohEnabled()) {
-            onShieldStateChanged(true)
+    fun selectTab(index: Int) {
+        selectedTabIndex = index
+    }
+
+    fun getOrCreateWebView(context: Context, tabIndex: Int, dnsManager: DnsManager): WebView {
+        return _webViews.getOrPut(tabIndex) {
+            createWebView(context, dnsManager, this)
         }
     }
 
-    // ── Notify parent when URL changes (for Grabber auto-fill) ───────────────
-    LaunchedEffect(webViewState.currentUrl) {
-        onUrlChanged(webViewState.currentUrl)
+    fun updateUrl(url: String) {
+        currentUrl = url
     }
 
-    // ── Root layout — Column fills entire screen, zero extra padding ──────────
-    Column(modifier = Modifier.fillMaxSize()) {
-
-        // ─────────────────────────────────────────────────────────────────────
-        // TOP BAR — 2 rows
-        // ─────────────────────────────────────────────────────────────────────
-        Surface(
-            modifier        = Modifier.fillMaxWidth(),
-            color           = MaterialTheme.colorScheme.surface,
-            shadowElevation = 4.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp)
-            ) {
-                // ── ROW 1: Logo | Status Pill | DNS Selector | Theme Toggle ──
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp, bottom = 2.dp),
-                    verticalAlignment      = Alignment.CenterVertically,
-                    horizontalArrangement  = Arrangement.SpaceBetween
-                ) {
-                    // LEFT — App logo + name
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.Shield,
-                            contentDescription = "LinkShield Logo",
-                            tint               = shieldTint,
-                            modifier           = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text       = "LinkShield",
-                            style      = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color      = MaterialTheme.colorScheme.onSurface,
-                            fontSize   = 13.sp
-                        )
-                    }
-
-                    // RIGHT — Status pill + DNS menu + Theme toggle
-                    Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // ── Shield status pill ────────────────────────────────
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isDohEnabled)
-                                Color(0xFF00F0FF).copy(alpha = 0.14f)
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(
-                                    horizontal = 8.dp, vertical = 3.dp
-                                ),
-                                verticalAlignment     = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .background(
-                                            color = if (isDohEnabled)
-                                                Color(0xFF00E676)
-                                            else
-                                                Color(0xFF9E9E9E),
-                                            shape = RoundedCornerShape(50)
-                                        )
-                                )
-                                Text(
-                                    text       = if (isDohEnabled) "Active" else "Off",
-                                    fontSize   = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color      = if (isDohEnabled)
-                                        Color(0xFF00F0FF)
-                                    else
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        // ── DNS Provider selector button ──────────────────────
-                        Box {
-                            IconButton(
-                                onClick  = { showDnsMenu = true },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector        = Icons.Default.Shield,
-                                    contentDescription = "DNS Provider",
-                                    tint               = shieldTint,
-                                    modifier           = Modifier.size(19.dp)
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded         = showDnsMenu,
-                                onDismissRequest = { showDnsMenu = false }
-                            ) {
-                                Text(
-                                    text       = "DNS Shield",
-                                    style      = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier   = Modifier.padding(
-                                        horizontal = 16.dp, vertical = 8.dp
-                                    )
-                                )
-                                HorizontalDivider()
-
-                                // Disable option
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text  = "Disabled",
-                                            color = if (!isDohEnabled)
-                                                MaterialTheme.colorScheme.error
-                                            else
-                                                MaterialTheme.colorScheme.onSurface
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        if (!isDohEnabled) {
-                                            Icon(
-                                                imageVector        = Icons.Default.CheckCircle,
-                                                contentDescription = null,
-                                                tint               = MaterialTheme.colorScheme.error
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        dnsManager.disableDoh()
-                                        isDohEnabled = false
-                                        onShieldStateChanged(false)
-                                        showDnsMenu  = false
-                                        webViewState.webView?.reload()
-                                    }
-                                )
-
-                                HorizontalDivider()
-
-                                // All providers
-                                DnsManager.DnsProvider.entries.forEach { provider ->
-                                    val isSelected = isDohEnabled &&
-                                        dnsManager.getCurrentProvider() == provider
-
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text  = provider.displayName,
-                                                color = if (isSelected)
-                                                    Color(0xFF00F0FF)
-                                                else
-                                                    MaterialTheme.colorScheme.onSurface
-                                            )
-                                        },
-                                        leadingIcon = {
-                                            if (isSelected) {
-                                                Icon(
-                                                    imageVector        = Icons.Default.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint               = Color(0xFF00F0FF)
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            try {
-                                                dnsManager.enableDoh(provider)
-                                                isDohEnabled = true
-                                                onShieldStateChanged(true)
-                                                showDnsMenu  = false
-                                                webViewState.webView?.reload()
-                                                Log.d(TAG, "Provider switched: ${provider.displayName}")
-                                            } catch (e: Exception) {
-                                                Log.e(TAG, "Provider switch failed: ${e.message}")
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        // ── Light / Dark theme toggle ──────────────────────────
-                        IconButton(
-                            onClick  = onToggleTheme,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector        = if (isDarkTheme)
-                                    Icons.Default.LightMode
-                                else
-                                    Icons.Default.DarkMode,
-                                contentDescription = if (isDarkTheme)
-                                    "Switch to Light mode"
-                                else
-                                    "Switch to Dark mode",
-                                tint               = if (isDarkTheme)
-                                    Color(0xFFFFB300)
-                                else
-                                    Color(0xFF5F6B7A),
-                                modifier           = Modifier.size(19.dp)
-                            )
-                        }
-                    }
-                }
-
-                // ── ROW 2: Back | Forward | Refresh | URL Bar ─────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 5.dp),
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    // Back
-                    IconButton(
-                        onClick  = { webViewState.webView?.goBack() },
-                        enabled  = canGoBack,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .alpha(if (canGoBack) 1f else 0.30f)
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            modifier           = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Forward
-                    IconButton(
-                        onClick  = { webViewState.webView?.goForward() },
-                        enabled  = canGoForward,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .alpha(if (canGoForward) 1f else 0.30f)
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.ArrowForward,
-                            contentDescription = "Forward",
-                            modifier           = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Refresh
-                    IconButton(
-                        onClick  = { webViewState.webView?.reload() },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            modifier           = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // URL address bar — weight(1f) takes all remaining space
-                    OutlinedTextField(
-                        value         = urlBarText,
-                        onValueChange = { urlBarText = it },
-                        modifier      = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        placeholder   = {
-                            Text(
-                                text     = "Search or enter URL",
-                                style    = MaterialTheme.typography.bodySmall,
-                                color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        },
-                        singleLine      = true,
-                        textStyle       = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction    = ImeAction.Go
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onGo = {
-                                focusManager.clearFocus()
-                                val nav = resolveNavUrl(urlBarText)
-                                webViewState.webView?.loadUrl(nav)
-                            }
-                        ),
-                        shape  = RoundedCornerShape(22.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor   = MaterialTheme.colorScheme
-                                .surfaceVariant.copy(alpha = 0.55f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme
-                                .surfaceVariant.copy(alpha = 0.30f),
-                            focusedBorderColor      = MaterialTheme.colorScheme
-                                .primary.copy(alpha = 0.55f),
-                            unfocusedBorderColor    = MaterialTheme.colorScheme
-                                .outline.copy(alpha = 0.15f)
-                        )
-                    )
-                }
-
-                // Loading progress strip — 2dp, zero extra vertical space
-                AnimatedVisibility(visible = isLoading) {
-                    LinearProgressIndicator(
-                        progress   = { loadingProgress },
-                        modifier   = Modifier
-                            .fillMaxWidth()
-                            .height(2.dp),
-                        color      = MaterialTheme.colorScheme.primary,
-                        trackColor = Color.Transparent
-                    )
-                }
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // WEBVIEW — fills ALL remaining vertical space
-        //
-        // PERSISTENCE STRATEGY:
-        //   The WebView instance is created once inside `remember {}` via the
-        //   `webViewState.webView` field and stored there. `AndroidView`'s
-        //   `factory` lambda runs only ONCE per composition lifetime.
-        //   Navigating to another tab and back does NOT call factory again —
-        //   the same WebView object is reused, preserving scroll position,
-        //   session cookies, and page state. No blank screen, no reload.
-        // ─────────────────────────────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)         // takes every pixel below the header
-        ) {
-            AndroidView(
-                factory = { ctx ->
-                    buildWebView(
-                        context          = ctx,
-                        webViewState     = webViewState,
-                        dnsManager       = dnsManager,
-                        isDohEnabledRef  = { isDohEnabled },
-                        onPageStarted    = { url ->
-                            isLoading   = true
-                            urlBarText  = url
-                            webViewState.currentUrl = url
-                        },
-                        onPageFinished   = { url, wv ->
-                            isLoading    = false
-                            canGoBack    = wv?.canGoBack()    ?: false
-                            canGoForward = wv?.canGoForward() ?: false
-                            url?.let { webViewState.currentUrl = it }
-                            wv?.evaluateJavascript(JS_HTML5_EXTRACTOR, null)
-                        },
-                        onProgressChanged = { progress ->
-                            loadingProgress = progress / 100f
-                            isLoading       = progress < 100
-                        },
-                        onUrlOverride = { url ->
-                            urlBarText = url
-                            webViewState.currentUrl = url
-                        },
-                        onVideoExtracted = onVideoExtracted
-                    )
-                },
-                // update lambda — called on every recomposition; we update
-                // the dnsManager reference inside webViewClient via the closure
-                // so the correct shield state is always read at interception time
-                update = { _ ->
-                    // Nothing to update — all live state is read via lambdas
-                    // inside the WebViewClient closures, which capture the
-                    // latest `isDohEnabled` and `dnsManager` by reference.
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+    fun updateLoading(loading: Boolean) {
+        isLoading = loading
     }
 
-    // ── Hardware back key — navigate WebView history, not the app ────────────
-    BackHandler(enabled = canGoBack) {
-        webViewState.webView?.goBack()
+    fun updateNavigationState(back: Boolean, forward: Boolean) {
+        canGoBack = back
+        canGoForward = forward
     }
 
-    // ── Cleanup — save WebView state bundle on disposal ──────────────────────
-    DisposableEffect(Unit) {
-        onDispose {
-            webViewState.webView?.let { wv ->
-                val bundle = Bundle()
-                wv.saveState(bundle)
-                webViewState.savedBundle = bundle
-                Log.d(TAG, "WebView state saved on dispose")
-            }
+    fun onMediaFound(url: String, title: String, pageUrl: String) {
+        if (url.isBlank()) return
+        val item = MediaItem(url, title, pageUrl)
+        _mediaUrls.value = _mediaUrls.value + item
+    }
+
+    fun clearMedia() {
+        _mediaUrls.value = emptyList()
+    }
+
+    fun loadUrl(url: String) {
+        val fixed = when {
+            url.startsWith("http://", ignoreCase = true) -> url
+            url.startsWith("https://", ignoreCase = true) -> url
+            else -> "https://$url"
         }
+        currentUrl = fixed
+        _webViews[0]?.loadUrl(fixed)
+    }
+
+    fun goBack() {
+        _webViews[0]?.goBack()
+    }
+
+    fun goForward() {
+        _webViews[0]?.goForward()
+    }
+
+    fun reload() {
+        _webViews[0]?.reload()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        _webViews.values.forEach { it.destroy() }
+        _webViews.clear()
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildWebView — constructs and fully configures the WebView.
-// Extracted to keep the composable body readable.
-// Returns the WebView and stores it in webViewState.webView.
-// ─────────────────────────────────────────────────────────────────────────────
-@SuppressLint("SetJavaScriptEnabled")
-private fun buildWebView(
-    context:           Context,
-    webViewState:      WebViewState,
-    dnsManager:        DnsManager,
-    isDohEnabledRef:   () -> Boolean,
-    onPageStarted:     (String) -> Unit,
-    onPageFinished:    (String?, WebView?) -> Unit,
-    onProgressChanged: (Int) -> Unit,
-    onUrlOverride:     (String) -> Unit,
-    onVideoExtracted:  (String) -> Unit
-): WebView {
-    // Reuse existing instance if it already exists (tab switch back)
-    webViewState.webView?.let { existing ->
-        Log.d(TAG, "Reusing existing WebView instance")
-        return existing
-    }
+// ── Media bridge ─────────────────────────────────────────────────────────────
 
-    val wv = WebView(context).apply {
+private class MediaBridge(
+    private val onMediaFound: (url: String, title: String, pageUrl: String) -> Unit
+) {
+    @JavascriptInterface
+    fun onVideoFound(url: String, title: String, pageUrl: String) {
+        if (url.isBlank()) return
+        onMediaFound(url, title, pageUrl)
+    }
+}
+
+// ── WebView factory ──────────────────────────────────────────────────────────
+
+@SuppressLint("SetJavaScriptEnabled")
+private fun createWebView(
+    context: Context,
+    dnsManager: DnsManager,
+    viewModel: UnblockShieldViewModel
+): WebView {
+    return WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
 
-        // ── Hardware Acceleration ─────────────────────────────────────────
-        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-
-        // ── WebSettings ───────────────────────────────────────────────────
         settings.apply {
-            // JavaScript — required for modern sites
-            javaScriptEnabled        = true
-            javaScriptCanOpenWindowsAutomatically = false
-
-            // Storage — prevents login/session loss on navigation
-            domStorageEnabled        = true
-            databaseEnabled          = true
-
-            // Caching — use network cache headers, not force-cache or no-cache
-            cacheMode                = WebSettings.LOAD_DEFAULT
-
-            // Viewport & zoom
-            loadWithOverviewMode     = true
-            useWideViewPort          = true
-            setSupportZoom(true)
-            builtInZoomControls      = true
-            displayZoomControls      = false
-
-            // Chrome Mobile UA — fixes reCAPTCHA, Error 400, and "browser
-            // not supported" walls on sites that check user-agent strings
-            userAgentString          = CHROME_MOBILE_UA
-
-            // Media — allow autoplay for HTML5 video
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = true
             mediaPlaybackRequiresUserGesture = false
-
-            // Mixed content — needed for http:// embeds on https:// pages
-            mixedContentMode         = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-
-            // Parallel network requests
-            blockNetworkImage        = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            cacheMode = WebSettings.LOAD_DEFAULT
             loadsImagesAutomatically = true
 
-            // File access — keep off for security
-            allowFileAccess          = false
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                allowFileAccess = false
+            }
+
+            userAgentString =
+                "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
         }
 
-        // ── JavaScript bridge — HTML5 <video> extractor ───────────────────
-        addJavascriptInterface(
-            object {
-                @JavascriptInterface
-                fun onVideoFound(src: String) {
-                    if (src.isNotBlank() && src.startsWith("http")) {
-                        Log.d(TAG, "HTML5 video extracted: $src")
-                        onVideoExtracted(src)
-                    }
-                }
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(this@apply, true)
+        }
+
+        webViewClient = ShieldWebViewClient(
+            dnsManager = dnsManager,
+            onPageStarted = { url ->
+                viewModel.updateLoading(true)
+                viewModel.updateUrl(url ?: "")
             },
-            "VideoExtractor"
+            onPageFinished = { url ->
+                viewModel.updateLoading(false)
+                viewModel.updateNavigationState(canGoBack(), canGoForward())
+                injectMediaInterceptor(this)
+            },
+            onUpdateNavigation = { back, forward ->
+                viewModel.updateNavigationState(back, forward)
+            }
         )
 
-        // ── WebChromeClient — progress updates ────────────────────────────
-        webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                onProgressChanged(newProgress)
-            }
-        }
+        webChromeClient = ShieldWebChromeClient()
 
-        // ── WebViewClient — navigation + DoH interception ─────────────────
-        webViewClient = object : WebViewClient() {
+        addJavascriptInterface(
+            MediaBridge { url, title, pageUrl ->
+                viewModel.onMediaFound(url, title, pageUrl)
+            },
+            "LinkShieldBridge"
+        )
+    }
+}
 
-            override fun shouldOverrideUrlLoading(
-                view:    WebView?,
-                request: WebResourceRequest?
-            ): Boolean {
-                request?.url?.toString()?.let { url ->
-                    onUrlOverride(url)
+// ── JavaScript injection ─────────────────────────────────────────────────────
+
+private fun injectMediaInterceptor(webView: WebView) {
+    val script = """
+        (function() {
+            if (window.__linkShieldInjected) return;
+            window.__linkShieldInjected = true;
+
+            function report(el) {
+                var src = el.currentSrc || el.src;
+                if (src && src.length > 0) {
+                    try {
+                        LinkShieldBridge.onVideoFound(src, document.title, window.location.href);
+                    } catch(e) {}
                 }
-                return false    // let WebView handle navigation internally
             }
 
-            override fun onPageStarted(
-                view:    WebView?,
-                url:     String?,
-                favicon: Bitmap?
-            ) {
-                url?.let { onPageStarted(it) }
+            function hookVideo(v) {
+                report(v);
+                v.addEventListener('play', function() { report(v); });
+                v.addEventListener('loadedmetadata', function() { report(v); });
             }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                onPageFinished(url, view)
-                // Inject JS extractor on every page load
-                view?.evaluateJavascript(JS_HTML5_EXTRACTOR, null)
-            }
-
-            // ── DoH Network Interception ──────────────────────────────────
-            // When shield is ON, all eligible HTTP/S requests are routed through
-            // the OkHttp DoH client so domain names resolve via Cloudflare/AdGuard
-            // instead of the ISP's DNS — bypassing DNS-level blocks natively.
-            //
-            // CRITICAL STREAMING BYPASS:
-            // Media streams (.m3u8, .ts, .mp4, googlevideo.com, videoplayback)
-            // are NEVER intercepted. Intercepting them causes "Playback ID"
-            // errors on YouTube and bot-detection blocks on other video CDNs.
-            // Static assets (images, fonts) are also skipped for performance.
-            override fun shouldInterceptRequest(
-                view:    WebView?,
-                request: WebResourceRequest?
-            ): WebResourceResponse? {
-                // Only intercept when shield is active
-                if (!isDohEnabledRef()) return null
-
-                val url = request?.url?.toString() ?: return null
-                if (!url.startsWith("http")) return null
-
-                val lower = url.lowercase()
-
-                // Skip streaming hosts — pass directly to WebView native socket
-                if (STREAM_HOST_BYPASS.any { lower.contains(it) })       return null
-                // Skip streaming file extensions
-                if (STREAM_EXTENSION_BYPASS.any { lower.contains(it) })  return null
-                // Skip static assets (images, fonts) for performance
-                if (STATIC_ASSET_BYPASS.any { lower.endsWith(it) })      return null
-
-                return try {
-                    val requestBuilder = Request.Builder().url(url)
-
-                    // Forward original request headers except Host (OkHttp sets it)
-                    request.requestHeaders?.forEach { (key, value) ->
-                        if (!key.equals("host", ignoreCase = true)) {
-                            try {
-                                requestBuilder.addHeader(key, value)
-                            } catch (_: Exception) { /* skip invalid headers */ }
+            var obs = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.tagName === 'VIDEO') {
+                            hookVideo(node);
                         }
-                    }
+                        if (node.querySelectorAll) {
+                            node.querySelectorAll('video').forEach(hookVideo);
+                        }
+                    });
+                });
+            });
 
-                    val response = dnsManager.getClient()
-                        .newCall(requestBuilder.build())
-                        .execute()
+            var startObserving = function() {
+                if (!document.body) return;
+                obs.observe(document.body, { childList: true, subtree: true });
+                document.querySelectorAll('video').forEach(hookVideo);
+            };
 
-                    if (!response.isSuccessful) {
-                        response.close()
-                        return null     // let WebView retry via native stack
-                    }
-
-                    val contentType = response.body?.contentType()
-                    val mimeType    = if (contentType != null)
-                        "${contentType.type}/${contentType.subtype}"
-                    else
-                        "text/html"
-                    val charset     = contentType?.charset()?.name()
-
-                    val responseHeaders = mutableMapOf<String, String>()
-                    response.headers.forEach { (k, v) -> responseHeaders[k] = v }
-
-                    WebResourceResponse(
-                        mimeType,
-                        charset,
-                        response.code,
-                        response.message.ifEmpty { "OK" },
-                        responseHeaders,
-                        response.body?.byteStream()
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "DoH intercept failed for $url: ${e.message}")
-                    null    // fall back to WebView native handling silently
-                }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startObserving);
+            } else {
+                startObserving();
             }
+        })();
+    """.trimIndent()
+
+    webView.evaluateJavascript(script, null)
+}
+// ── WebViewClient ────────────────────────────────────────────────────────────
+
+private class ShieldWebViewClient(
+    private val dnsManager: DnsManager,
+    private val onPageStarted: (String?) -> Unit,
+    private val onPageFinished: (String?) -> Unit,
+    private val onUpdateNavigation: (Boolean, Boolean) -> Unit
+) : WebViewClient() {
+
+    // Modern callback (API 24+)
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+        val url = request?.url ?: return false
+        val scheme = url.scheme?.lowercase() ?: return false
+
+        // Allow normal http(s) navigation
+        if (scheme == "http" || scheme == "https") {
+            return false
         }
 
-        // ── Restore saved state or load initial URL ────────────────────────
-        if (webViewState.savedBundle != null) {
-            restoreState(webViewState.savedBundle!!)
-            Log.d(TAG, "WebView state restored from bundle")
-        } else {
-            loadUrl(webViewState.currentUrl)
+        // Handle intent:// URLs — extract fallback URL if present
+        if (scheme == "intent") {
+            val intentString = url.toString()
+            val fallbackRegex = ";S\\.browser_fallback_url=([^;]+)".toRegex()
+            val match = fallbackRegex.find(intentString)
+            if (match != null) {
+                val encoded = match.groupValues[1]
+                try {
+                    val decoded = URLDecoder.decode(encoded, "UTF-8")
+                    if (decoded.startsWith("http")) {
+                        view?.loadUrl(decoded)
+                        return true
+                    }
+                } catch (_: Exception) { }
+            }
+            // Swallow intent:// without fallback to prevent ERR_UNKNOWN_URL_SCHEME
+            return true
+        }
+
+        // Swallow all custom schemes: snssdk://, fb://, tiktok://, etc.
+        if (scheme != "http" && scheme != "https" && scheme != "file") {
+            return true
+        }
+
+        return false
+    }
+
+    // Legacy callback for older devices
+    @Deprecated("Deprecated in Java")
+    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+        if (url == null) return false
+        val uri = Uri.parse(url)
+        return shouldOverrideUrlLoading(view, object : WebResourceRequest {
+            override fun getUrl(): Uri = uri
+            override fun isForMainFrame(): Boolean = true
+            override fun isRedirect(): Boolean = false
+            override fun hasGesture(): Boolean = false
+            override fun getMethod(): String = "GET"
+            override fun getRequestHeaders(): MutableMap<String, String> = mutableMapOf()
+        })
+    }
+
+    override fun shouldInterceptRequest(
+        view: WebView?,
+        request: WebResourceRequest?
+    ): WebResourceResponse? {
+        if (request == null) return null
+        val method = request.method.uppercase()
+        if (method != "GET" && method != "HEAD") return null
+
+        val url = request.url.toString()
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return null
+
+        return try {
+            val client = dnsManager.getClient()
+            val okRequest = Request.Builder()
+                .url(url)
+                .apply {
+                    request.requestHeaders.forEach { (k, v) -> header(k, v) }
+                }
+                .build()
+
+            val response = client.newCall(okRequest).execute()
+
+            // Sync Set-Cookie back into CookieManager so login state survives
+            response.headers("Set-Cookie").forEach { cookie ->
+                CookieManager.getInstance().setCookie(url, cookie)
+            }
+
+            val contentType = response.body?.contentType()
+            val mimeType = contentType?.toString() ?: "application/octet-stream"
+
+            WebResourceResponse(
+                mimeType,
+                contentType?.charset()?.name() ?: "UTF-8",
+                response.code,
+                response.message.ifBlank { "OK" },
+                response.headers.toMultimap().mapValues { it.value.joinToString(", ") },
+                response.body?.byteStream()
+            )
+        } catch (e: Exception) {
+            // Let WebView fall back to its own loader on failure
+            null
         }
     }
 
-    webViewState.webView = wv
-    return wv
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+        super.onPageStarted(view, url, favicon)
+        onPageStarted(url)
+    }
+
+    override fun onPageFinished(view: WebView?, url: String?) {
+        super.onPageFinished(view, url)
+        onPageFinished(url)
+        view?.let { onUpdateNavigation(it.canGoBack(), it.canGoForward()) }
+    }
+
+    override fun onReceivedError(
+        view: WebView?,
+        request: WebResourceRequest?,
+        error: WebResourceError?
+    ) {
+        super.onReceivedError(view, request, error)
+        if (request?.isForMainFrame == true) {
+            onPageFinished(view?.url)
+        }
+    }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// resolveNavUrl — turns user input into a navigable URL.
-//   - Already a full URL → use as-is
-//   - Contains a dot but no scheme → prepend https://
-//   - Otherwise → Google search
-// ─────────────────────────────────────────────────────────────────────────────
-private fun resolveNavUrl(input: String): String {
-    val trimmed = input.trim()
-    return when {
-        trimmed.startsWith("http://")  -> trimmed
-        trimmed.startsWith("https://") -> trimmed
-        trimmed.contains(".")          -> "https://$trimmed"
-        else -> "https://www.google.com/search?q=${
-            java.net.URLEncoder.encode(trimmed, "UTF-8")
-        }"
+// ── WebChromeClient ──────────────────────────────────────────────────────────
+
+private class ShieldWebChromeClient : WebChromeClient() {
+    // Placeholder for future fullscreen video / permission handling
+}
+
+// ── Composable Screen ────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UnblockShieldScreen(
+    dnsManager: DnsManager,
+    viewModel: UnblockShieldViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    val mediaList by viewModel.mediaUrls.collectAsState()
+    val tabs = listOf("Browser", "Grabber", "Settings")
+
+    BackHandler(enabled = viewModel.canGoBack && viewModel.selectedTabIndex == 0) {
+        viewModel.goBack()
+    }
+
+    Scaffold(
+        topBar = {
+            if (viewModel.selectedTabIndex == 0) {
+                TopAppBar(
+                    title = {
+                        OutlinedTextField(
+                            value = viewModel.currentUrl,
+                            onValueChange = { viewModel.updateUrl(it) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            trailingIcon = {
+                                IconButton(onClick = { viewModel.loadUrl(viewModel.currentUrl) }) {
+                                    Icon(Icons.Default.Search, contentDescription = "Go")
+                                }
+                            }
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.goBack() }, enabled = viewModel.canGoBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                        IconButton(onClick = { viewModel.goForward() }, enabled = viewModel.canGoForward) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Forward")
+                        }
+                        IconButton(onClick = { viewModel.reload() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Reload")
+                        }
+                    }
+                )
+            }
+        },
+        bottomBar = {
+            NavigationBar {
+                tabs.forEachIndexed { index, title ->
+                    NavigationBarItem(
+                        icon = {
+                            when (index) {
+                                0 -> Icon(Icons.Default.Home, contentDescription = title)
+                                1 -> Icon(Icons.Default.Download, contentDescription = title)
+                                else -> Icon(Icons.Default.Settings, contentDescription = title)
+                            }
+                        },
+                        label = { Text(title) },
+                        selected = viewModel.selectedTabIndex == index,
+                        onClick = { viewModel.selectTab(index) }
+                    )
+                }
+            }
+        }
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            when (viewModel.selectedTabIndex) {
+                0 -> BrowserTab(viewModel, dnsManager, context)
+                1 -> GrabberTab(mediaList, viewModel::clearMedia)
+                else -> SettingsTab(dnsManager)
+            }
+        }
+    }
+}
+
+// ── Browser Tab (state-retaining WebView) ────────────────────────────────────
+
+@Composable
+private fun BrowserTab(
+    viewModel: UnblockShieldViewModel,
+    dnsManager: DnsManager,
+    context: Context
+) {
+    val webView = remember {
+        viewModel.getOrCreateWebView(context, 0, dnsManager)
+    }
+
+    AndroidView(
+        factory = { webView },
+        modifier = Modifier.fillMaxSize()
+    ) { wv ->
+        wv.visibility = android.view.View.VISIBLE
+    }
+
+    LaunchedEffect(viewModel.currentUrl) {
+        val current = webView.url
+        if (current != viewModel.currentUrl && viewModel.currentUrl.isNotBlank()) {
+            webView.loadUrl(viewModel.currentUrl)
+        }
+    }
+}
+
+// ── Grabber Tab ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun GrabberTab(
+    mediaList: List<UnblockShieldViewModel.MediaItem>,
+    onClear: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Captured Media",
+                style = MaterialTheme.typography.headlineSmall
+            )
+            TextButton(onClick = onClear) {
+                Text("Clear")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (mediaList.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Play a video in the Browser tab to capture stream URLs.")
+            }
+        } else {
+            LazyColumn {
+                items(mediaList.reversed()) { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        onClick = { /* Navigate or load stream */ }
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = item.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = item.url,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2
+                            )
+                            Text(
+                                text = "From: ${item.pageUrl}",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Settings Tab ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SettingsTab(dnsManager: DnsManager) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Shield Settings",
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val isEnabled = remember { mutableStateOf(dnsManager.isDohEnabled()) }
+        val provider = remember { mutableStateOf(dnsManager.getCurrentProvider().displayName) }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("DNS-over-HTTPS Shield")
+            Switch(
+                checked = isEnabled.value,
+                onCheckedChange = { enable ->
+                    isEnabled.value = enable
+                    if (enable) {
+                        try {
+                            dnsManager.enableDoh()
+                            provider.value = dnsManager.getCurrentProvider().displayName
+                        } catch (e: Exception) {
+                            isEnabled.value = false
+                        }
+                    } else {
+                        dnsManager.disableDoh()
+                        provider.value = "Off"
+                    }
+                }
+            )
+        }
+
+        Text(
+            text = "Active provider: ${provider.value}",
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Remaining downloads: ${if (dnsManager.isProUser()) "Unlimited" else dnsManager.getRemainingDownloads()}",
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
