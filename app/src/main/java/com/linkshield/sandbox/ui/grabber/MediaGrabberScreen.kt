@@ -65,6 +65,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -201,10 +202,20 @@ fun MediaGrabberScreen(
     }
 
     // ── Trial / Pro state — read from SharedPreferences ───────────────────────
-    var isPro             by remember { mutableStateOf(prefs.getBoolean(KEY_IS_PRO, false)) }
-    var downloadCount     by remember { mutableIntStateOf(prefs.getInt(KEY_DOWNLOAD_COUNT, 0)) }
-    val remainingDownloads get() = if (isPro) Int.MAX_VALUE else maxOf(0, FREE_LIMIT - downloadCount)
-    val canDownload       get() = isPro || downloadCount < FREE_LIMIT
+    var isPro         by remember { mutableStateOf(prefs.getBoolean(KEY_IS_PRO, false)) }
+    var downloadCount by remember { mutableIntStateOf(prefs.getInt(KEY_DOWNLOAD_COUNT, 0)) }
+
+    // Derived state — recomputed automatically whenever isPro or downloadCount changes.
+    // Using derivedStateOf avoids unnecessary recompositions: Compose only re-reads
+    // these values when their inputs actually change.
+    val remainingDownloads by remember {
+        derivedStateOf {
+            if (isPro) Int.MAX_VALUE else maxOf(0, FREE_LIMIT - downloadCount)
+        }
+    }
+    val canDownload by remember {
+        derivedStateOf { isPro || downloadCount < FREE_LIMIT }
+    }
 
     // ── UI state ──────────────────────────────────────────────────────────────
     var urlInput         by rememberSaveable { mutableStateOf("") }
