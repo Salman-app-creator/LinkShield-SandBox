@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +40,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,11 +49,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,325 +62,328 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.dns.DohProvider
 import com.linkshield.sandbox.dns.DnsManager
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UnblockShieldScreen.kt
-//
-// This composable is ALWAYS kept in the composition tree by MainActivity —
-// never removed on tab switch. When isVisible = false, alpha = 0f hides it
-// from the user while keeping the WebView instance alive in the ViewModel,
-// so active pages NEVER reload or lose state on tab switches.
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 fun UnblockShieldScreen(
     dnsManager:    DnsManager,
     viewModel:     UnblockShieldViewModel,
     isVisible:     Boolean,
-    isDarkTheme:   Boolean  = true,
+    isDarkTheme:   Boolean = true,
     onToggleTheme: () -> Unit = {}
 ) {
-    val context      = LocalContext.current
     val focusManager = LocalFocusManager.current
 
-    // Local URL bar text — tracks viewModel.currentUrl but allows in-progress edits
-    var urlBarText   by remember { mutableStateOf(viewModel.currentUrl) }
-    var showDnsMenu  by remember { mutableStateOf(false) }
-    var isDohOn      by remember { mutableStateOf(dnsManager.isDohEnabled()) }
+    // ── TextFieldValue state for robust cursor & composition handling ──
+    var urlBarValue by remember { mutableStateOf(TextFieldValue(viewModel.currentUrl)) }
+    var isEditing   by remember { mutableStateOf(false) }
+    var showDnsMenu by remember { mutableStateOf(false) }
+    var isDohOn     by remember { mutableStateOf(dnsManager.isDohEnabled()) }
+
+    // Sync from ViewModel ONLY when user is NOT actively editing
+    val currentUrl = viewModel.currentUrl
+    LaunchedEffect(currentUrl) {
+        if (!isEditing && urlBarValue.text != currentUrl) {
+            urlBarValue = TextFieldValue(
+                text = currentUrl,
+                selection = TextRange(currentUrl.length)
+            )
+        }
+    }
 
     val shieldTint by animateColorAsState(
-        targetValue   = if (isDohOn) Color(0xFF00F0FF) else Color(0xFF90A4AE),
+        targetValue   = if (isDohOn) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = tween(300),
         label         = "shieldTint"
     )
 
-    // Sync URL bar when viewModel.currentUrl changes from WebView navigation
-    val currentUrl = viewModel.currentUrl
-    if (!urlBarText.equals(currentUrl, ignoreCase = true) && !viewModel.isLoading) {
-        urlBarText = currentUrl
-    }
-
-    // Hardware back → WebView history (only when this tab is visible)
     BackHandler(enabled = isVisible && viewModel.canGoBack) {
         viewModel.goBack()
     }
 
-    // ── Root column — alpha controls visibility without destroying WebView ─────
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .alpha(if (isVisible) 1f else 0f)
+        modifier = Modifier.fillMaxSize().alpha(if (isVisible) 1f else 0f)
     ) {
-
-        // ── TOP BAR ───────────────────────────────────────────────────────────
         Surface(
-            modifier        = Modifier.fillMaxWidth(),
-            color           = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 4.dp
         ) {
             Column {
-                // Shield status strip
-                if (isDohOn) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color    = Color(0xFF00F0FF).copy(alpha = 0.10f)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector        = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint               = Color(0xFF00F0FF),
-                                modifier           = Modifier.size(10.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text      = "SHIELD ACTIVE — ${dnsManager.getCurrentProvider().displayName}",
-                                fontSize  = 9.sp,
-                                color     = Color(0xFF00F0FF),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                } else {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color    = Color(0xFF90A4AE).copy(alpha = 0.07f)
-                    ) {
-                        Text(
-                            text      = "SHIELD INACTIVE",
-                            fontSize  = 9.sp,
-                            color     = Color(0xFF90A4AE),
-                            modifier  = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 2.dp),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-
-                // Main controls row
+                // ═══════════════════════════════════════════════════════════════
+                // ROW 1: Logo | Shield Status Pill | Theme Toggle
+                // ═══════════════════════════════════════════════════════════════
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 4.dp, vertical = 3.dp),
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Back
-                    IconButton(
-                        onClick  = { viewModel.goBack() },
-                        enabled  = viewModel.canGoBack && isVisible,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .alpha(if (viewModel.canGoBack) 1f else 0.30f)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", Modifier.size(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = "LinkShield",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "LinkShield",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
 
-                    // Forward
-                    IconButton(
-                        onClick  = { viewModel.goForward() },
-                        enabled  = viewModel.canGoForward && isVisible,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .alpha(if (viewModel.canGoForward) 1f else 0.30f)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isDohOn)
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        else
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.10f)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Forward", Modifier.size(20.dp))
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                tint = if (isDohOn) shieldTint else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isDohOn) "SHIELD ACTIVE" else "SHIELD INACTIVE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isDohOn) shieldTint else MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
 
-                    // Refresh
                     IconButton(
-                        onClick  = { viewModel.reload() },
-                        enabled  = isVisible,
+                        onClick = onToggleTheme,
+                        enabled = isVisible,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Toggle theme",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════════════
+                // ROW 2: Nav Controls | Address Bar | Shield Dropdown
+                // ═══════════════════════════════════════════════════════════════
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 4.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    IconButton(
+                        onClick = { viewModel.goBack() },
+                        enabled = viewModel.canGoBack && isVisible,
+                        modifier = Modifier.size(38.dp).alpha(if (viewModel.canGoBack) 1f else 0.30f)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack, "Back",
+                            Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.goForward() },
+                        enabled = viewModel.canGoForward && isVisible,
+                        modifier = Modifier.size(38.dp).alpha(if (viewModel.canGoForward) 1f else 0.30f)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward, "Forward",
+                            Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.reload() },
+                        enabled = isVisible,
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, "Refresh", Modifier.size(20.dp))
+                        Icon(
+                            Icons.Default.Refresh, "Refresh",
+                            Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
 
-                    // URL bar — weight(1f) takes all remaining horizontal space
                     OutlinedTextField(
-                        value         = urlBarText,
-                        onValueChange = { urlBarText = it },
-                        modifier      = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        placeholder   = {
+                        value = urlBarValue,
+                        onValueChange = { newValue ->
+                            isEditing = true
+                            urlBarValue = newValue
+                        },
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        placeholder = {
                             Text(
                                 "Search or enter URL",
-                                style    = MaterialTheme.typography.bodySmall,
-                                color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
                             )
                         },
-                        trailingIcon  = {
-                            if (urlBarText.isNotEmpty()) {
+                        trailingIcon = {
+                            if (urlBarValue.text.isNotEmpty()) {
                                 IconButton(
-                                    onClick  = { urlBarText = "" },
+                                    onClick = {
+                                        urlBarValue = TextFieldValue(text = "", selection = TextRange(0))
+                                        viewModel.updateUrl("")
+                                    },
                                     modifier = Modifier.size(26.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, "Clear", Modifier.size(14.dp))
+                                    Icon(
+                                        Icons.Default.Close, "Clear",
+                                        Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         },
-                        singleLine      = true,
-                        textStyle       = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
-                            imeAction    = ImeAction.Go
+                            imeAction = ImeAction.Go
                         ),
                         keyboardActions = KeyboardActions(
                             onGo = {
+                                isEditing = false
                                 focusManager.clearFocus()
-                                viewModel.loadUrl(urlBarText)
+                                val url = urlBarValue.text
+                                if (url.isNotBlank()) viewModel.loadUrl(url)
                             }
                         ),
-                        shape  = RoundedCornerShape(22.dp),
+                        shape = RoundedCornerShape(22.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor   = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
-                            focusedBorderColor      = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                            unfocusedBorderColor    = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                         )
                     )
 
-                    // Shield / DNS provider dropdown
                     Box {
                         IconButton(
-                            onClick  = { if (isVisible) showDnsMenu = true },
-                            enabled  = isVisible,
+                            onClick = { if (isVisible) showDnsMenu = true },
+                            enabled = isVisible,
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                imageVector        = Icons.Default.Shield,
+                                imageVector = Icons.Default.Shield,
                                 contentDescription = if (isDohOn) "Shield ON" else "Shield OFF",
-                                tint               = shieldTint,
-                                modifier           = Modifier.size(20.dp)
+                                tint = shieldTint,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
                         DropdownMenu(
-                            expanded         = showDnsMenu,
+                            expanded = showDnsMenu,
                             onDismissRequest = { showDnsMenu = false }
                         ) {
                             Text(
                                 "DNS Shield",
-                                style      = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
-                                modifier   = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                             HorizontalDivider()
 
-                            // Disabled option
                             DropdownMenuItem(
                                 text = {
                                     Text(
                                         "Disabled",
-                                        color = if (!isDohOn)
-                                            MaterialTheme.colorScheme.error
-                                        else
-                                            MaterialTheme.colorScheme.onSurface
+                                        color = if (!isDohOn) MaterialTheme.colorScheme.error
+                                                else MaterialTheme.colorScheme.onSurface
                                     )
                                 },
                                 leadingIcon = {
                                     if (!isDohOn) Icon(
-                                        Icons.Default.CheckCircle,
-                                        contentDescription = null,
+                                        Icons.Default.CheckCircle, null,
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                 },
                                 onClick = {
                                     dnsManager.disableDoh()
-                                    isDohOn     = false
+                                    isDohOn = false
                                     showDnsMenu = false
                                 }
                             )
 
                             HorizontalDivider()
 
-                            // All providers
                             DohProvider.entries.forEach { provider ->
-                                val isSelected = isDohOn &&
-                                    dnsManager.getCurrentProvider() == provider
+                                val isSelected = isDohOn && dnsManager.getCurrentProvider() == provider
                                 DropdownMenuItem(
                                     text = {
                                         Text(
                                             provider.displayName,
-                                            color = if (isSelected) Color(0xFF00F0FF)
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary
                                                     else MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     leadingIcon = {
                                         if (isSelected) Icon(
-                                            Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = Color(0xFF00F0FF)
+                                            Icons.Default.CheckCircle, null,
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
                                     },
                                     onClick = {
                                         runCatching { dnsManager.enableDoh(provider) }
-                                        isDohOn     = true
+                                        isDohOn = true
                                         showDnsMenu = false
                                     }
                                 )
                             }
                         }
                     }
-
-                    // Light / Dark theme toggle
-                    IconButton(
-                        onClick  = onToggleTheme,
-                        enabled  = isVisible,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector        = if (isDarkTheme) Icons.Default.LightMode
-                                                 else Icons.Default.DarkMode,
-                            contentDescription = "Toggle theme",
-                            tint               = if (isDarkTheme) Color(0xFFFFB300)
-                                                 else Color(0xFF5F6B7A),
-                            modifier           = Modifier.size(19.dp)
-                        )
-                    }
                 }
 
-                // Loading progress strip — 2dp, zero extra vertical space
                 AnimatedVisibility(visible = viewModel.isLoading) {
                     LinearProgressIndicator(
-                        modifier   = Modifier
-                            .fillMaxWidth()
-                            .height(2.dp),
-                        color      = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
                         trackColor = Color.Transparent
                     )
                 }
             }
         }
 
-        // ── WEBVIEW — fills all remaining space ───────────────────────────────
-        // getOrCreateWebView returns the cached instance from the ViewModel,
-        // never recreating it on recomposition or tab switch.
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+            modifier = Modifier.fillMaxWidth().weight(1f)
         ) {
             AndroidView(
                 factory = { ctx ->
                     viewModel.getOrCreateWebView(
-                        context    = ctx,
-                        tabIndex   = 0,
+                        context = ctx,
+                        tabIndex = 0,
                         dnsManager = dnsManager
                     )
                 },
-                update  = { _ ->
-                    // All live state is captured via ViewModel — no update needed here
-                },
+                update = { _ -> },
                 modifier = Modifier.fillMaxSize()
             )
         }
