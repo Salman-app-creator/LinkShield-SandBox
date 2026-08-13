@@ -270,7 +270,6 @@ private class ShieldWebViewClient(
         val url = request.url?.toString() ?: return null
         if (!url.startsWith("http://") && !url.startsWith("https://")) return null
 
-        // Skip actual streaming media blobs — proxy everything else
         val lower = url.lowercase()
         val skipExts = listOf(".m3u8", ".ts", ".mp4", ".mp3", ".webm", ".m4s", ".mpd")
         if (skipExts.any { lower.endsWith(it) }) return null
