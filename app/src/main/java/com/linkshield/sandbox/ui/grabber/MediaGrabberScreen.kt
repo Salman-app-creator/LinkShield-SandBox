@@ -90,8 +90,6 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
-// ── Constants ──
-
 private const val CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
 private val TRACKING_PARAMS = setOf(
@@ -121,14 +119,6 @@ private val DIRECT_MEDIA_EXTS = listOf(
     ".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".mov", ".flv", ".m3u8", ".ogg", ".ts"
 )
 
-data class CapturedMediaItem(
-    val url: String,
-    val type: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
-
-// ── Helpers ──
-
 private fun cleanUrl(raw: String): String {
     return try {
         val uri = Uri.parse(raw.trim())
@@ -145,11 +135,9 @@ private fun cleanUrl(raw: String): String {
     }
 }
 
-/** Convert youtu.be, Shorts, and Music URLs to canonical watch?v= form. */
 private fun normalizeYouTubeUrl(url: String): String {
     val uri = Uri.parse(url)
     val host = uri.host?.lowercase() ?: return url
-
     return when {
         host == "youtu.be" -> {
             val videoId = uri.lastPathSegment ?: return url
@@ -270,76 +258,78 @@ fun MediaGrabberScreen(
     onProRequired: () -> Unit
 ) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-    val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val focusManager = LocalFocusManager.current
 
-    var inputUrl by remember { mutableStateOf("") }
-    var selectedQuality by remember { mutableStateOf(VideoQuality.Q720) }
-    var isAudioOnly by remember { mutableStateOf(false) }
-    var useCobaltEngine by remember { mutableStateOf(true) }
-    var qualityMenuExpanded by remember { mutableStateOf(false) }
-
+    var urlInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    var statusMessage by remember { mutableStateOf<String?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var result by remember { mutableStateOf<CobaltApiService.MediaResult?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var downloadCount by remember { mutableIntStateOf(licenseManager.getDownloadCount()) }
 
-    val remainingDownloads by remember { derivedStateOf { licenseManager.getRemainingDownloads() } }
-    val isPro by remember { derivedStateOf { licenseManager.isPro() } }
+    val isPro = licenseManager.isProUser()
+    val remaining by remember {
+        derivedStateOf {
+            if (isPro) Int.MAX_VALUE else (20 - downloadCount).coerceAtLeast(0)
+        }
+    }
+    val canDownload by remember { derivedStateOf { isPro || downloadCount < 20 } }
 
-    val scrollState = rememberScrollState()
+    var selectedQuality by remember { mutableStateOf(VideoQuality.Q720) }
+    var audioOnly by remember { mutableStateOf(false) }
+    var showQualityMenu by remember { mutableStateOf(false) }
+    var useCobalt by remember { mutableStateOf(true) }
 
-    fun triggerDownload(targetUrl: String) {
+    LaunchedEffect(capturedMedia) {
+        if (capturedMedia.isNotEmpty() && urlInput.isBlank()) {
+            urlInput = cleanUrl(capturedMedia.last().url)
+        }
+    }
+
+    fun executeDownload() {
         focusManager.clearFocus()
-        if (!licenseManager.canDownload()) {
+        if (!canDownload) {
             onProRequired()
-            Toast.makeText(context, "Free downloads limit reached. Upgrade to Pro!", Toast.LENGTH_LONG).show()
             return
         }
 
-        val cleaned = cleanUrl(normalizeYouTubeUrl(targetUrl))
-        if (cleaned.isBlank()) {
-            errorMessage = "Please enter a valid URL."
+        val targetUrl = normalizeYouTubeUrl(cleanUrl(urlInput))
+        if (targetUrl.isBlank()) {
+            error = "Please enter a valid media URL"
             return
         }
 
         isLoading = true
-        statusMessage = "Processing request..."
-        errorMessage = null
+        error = null
+        result = null
 
         scope.launch {
-            try {
-                if (useCobaltEngine && isCobaltSupported(cleaned)) {
-                    val res = cobaltFetch(dnsManager.okHttpClient, cleaned, selectedQuality.apiValue, isAudioOnly)
-                    if (res.success && !res.url.isNullOrBlank()) {
-                        val finalFilename = if (res.filename.isNotBlank()) res.filename else buildFilename(cleaned, if (isAudioOnly) ".mp3" else ".mp4", isAudioOnly)
-                        enqueueDirectDownload(context, res.url, finalFilename)
-                        licenseManager.consumeDownload()
-                        statusMessage = "Download started: $finalFilename"
-                        Toast.makeText(context, "Download started!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        // Fallback logic
-                        if (isDirectMedia(cleaned)) {
-                            val filename = buildFilename(cleaned, if (isAudioOnly) ".mp3" else ".mp4", isAudioOnly)
-                            enqueueDirectDownload(context, cleaned, filename)
-                            licenseManager.consumeDownload()
-                            statusMessage = "Direct download started."
-                        } else {
-                            errorMessage = res.error ?: "Could not extract media. Try pasting a direct video file URL (.mp4, .m3u8, .mp3 etc.)"
-                        }
-                    }
-                } else if (isDirectMedia(cleaned)) {
-                    val filename = buildFilename(cleaned, if (isAudioOnly) ".mp3" else ".mp4", isAudioOnly)
-                    enqueueDirectDownload(context, cleaned, filename)
-                    licenseManager.consumeDownload()
-                    statusMessage = "Direct download started."
-                } else {
-                    errorMessage = "Unsupported link or engine disabled. Paste direct file links (.mp4, .mp3, .m3u8)."
-                }
-            } catch (e: Exception) {
-                errorMessage = "Error: ${e.message}"
-            } finally {
+            if (isDirectMedia(targetUrl) || !useCobalt) {
+                val ext = if (audioOnly) ".mp3" else ".mp4"
+                val fname = buildFilename(targetUrl, ext, audioOnly)
+                enqueueDirectDownload(context, targetUrl, fname)
+                licenseManager.incrementDownloadCount()
+                downloadCount = licenseManager.getDownloadCount()
                 isLoading = false
+                Toast.makeText(context, "Download started in background", Toast.LENGTH_LONG).show()
+            } else {
+                val client = dnsManager.getOkHttpClient()
+                val res = cobaltFetch(client, targetUrl, selectedQuality.apiValue, audioOnly)
+                isLoading = false
+                if (res.success && !res.url.isNullOrEmpty()) {
+                    result = res
+                    enqueueDirectDownload(
+                        context,
+                        res.url,
+                        res.filename ?: buildFilename(targetUrl, if (audioOnly) ".mp3" else ".mp4", audioOnly)
+                    )
+                    licenseManager.incrementDownloadCount()
+                    downloadCount = licenseManager.getDownloadCount()
+                    Toast.makeText(context, "Download started!", Toast.LENGTH_SHORT).show()
+                } else {
+                    error = res.error ?: "Extraction failed. Try direct download mode below."
+                }
             }
         }
     }
@@ -347,287 +337,288 @@ fun MediaGrabberScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(scrollState),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Top Banner / Remaining Info
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Remaining free downloads",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = if (isPro) "Unlimited (Pro)" else "$remainingDownloads / 20",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                if (!isPro) {
-                    TextButton(onClick = onProRequired) {
-                        Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Upgrade")
-                    }
-                }
-            }
-        }
-
-        // URL Input Section
-        OutlinedTextField(
-            value = inputUrl,
-            onValueChange = { inputUrl = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Paste or captured URL") },
-            placeholder = { Text("https://...") },
-            singleLine = true,
-            leadingIcon = {
-                Icon(Icons.Default.Link, contentDescription = null)
-            },
-            trailingIcon = {
-                Row {
-                    if (inputUrl.isNotEmpty()) {
-                        IconButton(onClick = { inputUrl = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
-                        }
-                    }
-                    IconButton(onClick = {
-                        clipboardManager.getText()?.text?.let { inputUrl = it }
-                    }) {
-                        Icon(Icons.Default.ContentPaste, contentDescription = "Paste")
-                    }
-                }
-            },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { triggerDownload(inputUrl) }
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
             )
-        )
-
-        // Engine Toggle
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Cloud,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text("Engine", style = MaterialTheme.typography.labelSmall)
-                        Text(
-                            "Cobalt API (recommended)",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                        )
-                    }
-                }
-                Switch(
-                    checked = useCobaltEngine,
-                    onCheckedChange = { useCobaltEngine = it }
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    "Green Hole HD Grabber",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "YouTube · TikTok · Instagram · Twitter/X · Direct files\nActive browser links auto-captured below.",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        // Quality & Audio Controls
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { qualityMenuExpanded = true },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.HighQuality, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text("Video Quality", style = MaterialTheme.typography.labelSmall)
-                            Text(selectedQuality.label, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    isPro -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f)
+                    remaining > 5 -> MaterialTheme.colorScheme.surfaceVariant
+                    remaining > 0 -> Color(0xFFFF6F00).copy(alpha = 0.15f)
+                    else -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.30f)
                 }
-
-                DropdownMenu(
-                    expanded = qualityMenuExpanded,
-                    onDismissRequest = { qualityMenuExpanded = false }
-                ) {
-                    VideoQuality.values().forEach { q ->
-                        DropdownMenuItem(
-                            text = { Text(q.label) },
-                            onClick = {
-                                selectedQuality = q
-                                qualityMenuExpanded = false
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (isPro) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Star, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "PRO — Unlimited Downloads",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    Column {
+                        Text("Remaining free downloads", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "$remaining / 20",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = when {
+                                remaining > 5 -> MaterialTheme.colorScheme.primary
+                                remaining > 0 -> Color(0xFFFF6F00)
+                                else -> MaterialTheme.colorScheme.error
                             }
                         )
                     }
-                }
-            }
-
-            OutlinedCard(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { isAudioOnly = !isAudioOnly },
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        if (isAudioOnly) Icons.Default.MusicNote else Icons.Default.VideoFile,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("Format", style = MaterialTheme.typography.labelSmall)
-                        Text(if (isAudioOnly) "Audio Only (.mp3)" else "Video + Audio", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = onProRequired) {
+                        Icon(Icons.Default.Star, null, Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Upgrade", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
 
-        // Fetch & Download Button
+        AnimatedVisibility(
+            visible = capturedMedia.isNotEmpty(),
+            enter = fadeIn(tween(200)) + expandVertically(),
+            exit = fadeOut(tween(150)) + shrinkVertically()
+        ) {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.30f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Auto-Captured Streams (${capturedMedia.size})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        TextButton(onClick = onClearCaptured) {
+                            Icon(Icons.Default.Clear, null, Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Clear", fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    capturedMedia.takeLast(5).forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    urlInput = cleanUrl(item.url)
+                                    result = null
+                                    error = null
+                                }
+                                .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (item.url.lowercase().contains(".mp3") || item.url.lowercase().contains(".m4a"))
+                                    Icons.Default.AudioFile else Icons.Default.VideoFile,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    item.title.ifBlank { "Media stream" },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    cleanUrl(item.url).let { if (it.length > 55) it.take(55) + "…" else it },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Use URL",
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = urlInput,
+            onValueChange = { urlInput = it; result = null; error = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Paste Video or Media Link") },
+            placeholder = { Text("https://www.youtube.com/watch?v=...") },
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Default.Link, null) },
+            trailingIcon = {
+                Row {
+                    if (urlInput.isNotEmpty()) {
+                        IconButton(onClick = { urlInput = ""; result = null; error = null }) {
+                            Icon(Icons.Default.Clear, "Clear")
+                        }
+                    }
+                    IconButton(onClick = {
+                        clipboard.getText()?.text?.let {
+                            urlInput = cleanUrl(it)
+                            result = null
+                            error = null
+                        }
+                    }) {
+                        Icon(Icons.Default.ContentPaste, "Paste")
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { executeDownload() })
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.HighQuality, null, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Quality:", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.width(6.dp))
+                Box {
+                    TextButton(onClick = { showQualityMenu = true }, enabled = !audioOnly) {
+                        Text(if (audioOnly) "MP3 Audio" else selectedQuality.label, fontWeight = FontWeight.Bold)
+                    }
+                    DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
+                        VideoQuality.values().forEach { q ->
+                            DropdownMenuItem(
+                                text = { Text(q.label) },
+                                onClick = { selectedQuality = q; showQualityMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.MusicNote, null, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Audio Only", style = MaterialTheme.typography.bodySmall)
+                Switch(
+                    checked = audioOnly,
+                    onCheckedChange = { audioOnly = it }
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Cloud, null, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Cobalt API Engine", style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(
+                checked = useCobalt,
+                onCheckedChange = { useCobalt = it }
+            )
+        }
+
         Button(
-            onClick = { triggerDownload(inputUrl) },
+            onClick = { executeDownload() },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
-            enabled = !isLoading && inputUrl.isNotBlank(),
+            enabled = urlInput.isNotBlank() && !isLoading,
             shape = RoundedCornerShape(12.dp)
         ) {
             if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Icon(Icons.Default.Download, contentDescription = null)
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Fetch & Download")
+                Text("Extracting Stream...")
+            } else {
+                Icon(Icons.Default.Download, null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Download Media", style = MaterialTheme.typography.titleMedium)
             }
         }
 
-        // Status & Error Banners
-        if (statusMessage != null) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(statusMessage!!, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-
-        if (errorMessage != null) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(errorMessage!!, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                }
-            }
-        }
-
-        // Captured Media List (If available)
-        if (capturedMedia.isNotEmpty()) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Row(
+        error?.let { errText ->
+            OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f))
             ) {
-                Text(
-                    "Captured Media (${capturedMedia.size})",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                TextButton(onClick = onClearCaptured) {
-                    Text("Clear List")
-                }
-            }
-
-            capturedMedia.forEach { item ->
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            inputUrl = item.url
-                            triggerDownload(item.url)
-                        },
-                    shape = RoundedCornerShape(8.dp)
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            if (item.type.contains("audio")) Icons.Default.AudioFile else Icons.Default.VideoFile,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                item.url,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                item.type,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
-                        IconButton(onClick = {
-                            inputUrl = item.url
-                        }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Use URL")
-                        }
-                    }
+                    Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error)
+                    Text(errText, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
