@@ -72,13 +72,11 @@ fun UnblockShieldScreen(
 ) {
     val focusManager = LocalFocusManager.current
 
-    // ── TextFieldValue state for robust cursor & composition handling ──
     var urlBarValue by remember { mutableStateOf(TextFieldValue(viewModel.currentUrl)) }
     var isEditing   by remember { mutableStateOf(false) }
     var showDnsMenu by remember { mutableStateOf(false) }
     var isDohOn     by remember { mutableStateOf(dnsManager.isDohEnabled()) }
 
-    // Sync from ViewModel ONLY when user is NOT actively editing
     val currentUrl = viewModel.currentUrl
     LaunchedEffect(currentUrl) {
         if (!isEditing && urlBarValue.text != currentUrl) {
@@ -109,9 +107,7 @@ fun UnblockShieldScreen(
             shadowElevation = 4.dp
         ) {
             Column {
-                // ═══════════════════════════════════════════════════════════════
-                // ROW 1: Logo | Shield Status Pill | Theme Toggle
-                // ═══════════════════════════════════════════════════════════════
+                // ROW 1: Logo | Shield Status | Theme Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -179,9 +175,7 @@ fun UnblockShieldScreen(
                     }
                 }
 
-                // ═══════════════════════════════════════════════════════════════
                 // ROW 2: Nav Controls | Address Bar | Shield Dropdown
-                // ═══════════════════════════════════════════════════════════════
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
