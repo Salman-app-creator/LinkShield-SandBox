@@ -236,9 +236,10 @@ class UnblockShieldViewModel : ViewModel() {
 
             // Enable persistent cookies (prevents reCAPTCHA re-triggers)
             CookieManager.getInstance().apply {
-                setAcceptCookie(true)
-                setAcceptThirdPartyCookies(this@apply, true)
+    setAcceptCookie(true)
+    setAcceptThirdPartyCookies(this@apply, true)
             }
+            
 
             // JS media bridge
             addJavascriptInterface(
