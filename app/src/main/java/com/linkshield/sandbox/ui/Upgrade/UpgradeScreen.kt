@@ -68,7 +68,7 @@ fun UpgradeScreen(
     var isPro by remember { mutableStateOf(licenseManager.isProUser()) }
     var keyError by remember { mutableStateOf<String?>(null) }
 
-        fun verifyKey() {
+    fun verifyKey() {
         focusManager.clearFocus()
         val key = licenseKeyInput.trim()
         if (key.isBlank()) {
@@ -87,18 +87,6 @@ fun UpgradeScreen(
         }
     }
 
-
-        // License manager verification check
-        val success = licenseManager.validateKey(key)
-            isPro = true
-            keyError = null
-            Toast.makeText(context, "Pro features successfully unlocked!", Toast.LENGTH_LONG).show()
-            onBackOrDone()
-        } else {
-            keyError = "Invalid key. Dobara check karein."
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -107,7 +95,6 @@ fun UpgradeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Header Section
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
@@ -156,7 +143,6 @@ fun UpgradeScreen(
             }
         }
 
-        // Features Comparison List
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
@@ -197,7 +183,6 @@ fun UpgradeScreen(
             }
         }
 
-        // License Key Input Box (Agar pehle se active nahi hai)
         if (!isPro) {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -259,7 +244,6 @@ fun UpgradeScreen(
                 }
             }
         } else {
-            // Success Status Display
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
