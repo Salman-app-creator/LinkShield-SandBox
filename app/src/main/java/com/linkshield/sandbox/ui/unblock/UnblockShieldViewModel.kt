@@ -234,11 +234,10 @@ class UnblockShieldViewModel : ViewModel() {
                 }
             }
 
-            // Enable persistent cookies (prevents reCAPTCHA re-triggers)
-            CookieManager.getInstance().apply {
-    setAcceptCookie(true)
-    setAcceptThirdPartyCookies(this@apply, true)
-            }
+            // Enable persistent cookies
+CookieManager.getInstance().setAcceptCookie(true)
+CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
             
 
             // JS media bridge
