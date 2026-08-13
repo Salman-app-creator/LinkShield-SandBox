@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -117,7 +118,7 @@ private fun LinkShieldApp(
         }
     }
 
-    var selectedTab    by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     BackHandler(enabled = selectedTab != 0 || unblockViewModel.canGoBack) {
         when {
@@ -176,7 +177,7 @@ private fun LinkShieldApp(
                     dnsManager     = dnsManager,
                     isDark         = isDark,
                     onToggleTheme  = onToggleTheme,
-                    onUnlocked     = { /* refresh UI state */ }
+                    onUnlocked     = { }
                 )
             }
         }
