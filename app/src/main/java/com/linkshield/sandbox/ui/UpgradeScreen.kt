@@ -1,4 +1,4 @@
-package com.linkshield.sandbox.ui
+package com.linkshield.sandbox.ui.upgrade
 
 import android.widget.Toast
 import androidx.compose.foundation.background
