@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Request
+import java.io.ByteArrayInputStream
 import java.net.URLDecoder
 
 internal const val CHROME_UA =
@@ -263,6 +265,22 @@ private class ShieldWebViewClient(
         view?.evaluateJavascript(JS_MEDIA_INTERCEPTOR, null)
     }
 
+    override fun onReceivedError(
+        view: WebView?,
+        request: WebResourceRequest?,
+        error: WebResourceError?
+    ) {
+        super.onReceivedError(view, request, error)
+        // If ISP resets connection, attempt DoH fallback reload for main frame
+        if (request?.isForMainFrame == true) {
+            val url = request.url.toString()
+            if (dnsManager.isDohEnabled() && !url.contains("retry=true")) {
+                val retryUrl = if (url.contains("?")) "$url&retry=true" else "$url?retry=true"
+                view?.post { view.loadUrl(retryUrl) }
+            }
+        }
+    }
+
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         if (!dnsManager.isDohEnabled()) return null
         val method = request?.method?.uppercase() ?: return null
@@ -271,14 +289,15 @@ private class ShieldWebViewClient(
         if (!url.startsWith("http://") && !url.startsWith("https://")) return null
 
         val lower = url.lowercase()
-        val skipExts = listOf(".m3u8", ".ts", ".mp4", ".mp3", ".webm", ".m4s", ".mpd")
+        // Skip streaming media segments to allow direct native playback without buffering stalls
+        val skipExts = listOf(".m3u8", ".ts", ".mp4", ".mp3", ".webm", ".m4s", ".mpd", ".key")
         if (skipExts.any { lower.endsWith(it) }) return null
-        if (lower.contains("googlevideo.com") || lower.contains("videoplayback")) return null
+        if (lower.contains("googlevideo.com") || lower.contains("videoplayback") || lower.contains("blob:")) return null
 
         return runCatching {
             val reqBuilder = Request.Builder().url(url)
             request.requestHeaders?.forEach { (k, v) ->
-                if (!k.equals("host", ignoreCase = true)) {
+                if (!k.equals("host", ignoreCase = true) && !k.equals("Accept-Encoding", ignoreCase = true)) {
                     runCatching { reqBuilder.addHeader(k, v) }
                 }
             }
@@ -288,22 +307,33 @@ private class ShieldWebViewClient(
 
             val response = dnsManager.getClient().newCall(reqBuilder.build()).execute()
 
+            if (!response.isSuccessful && response.code == 503) {
+                return null // Pass control back to WebView native stack on server overload
+            }
+
             response.headers("Set-Cookie").forEach { cookie ->
                 CookieManager.getInstance().setCookie(url, cookie)
             }
 
             val ct = response.body?.contentType()
             val mime = if (ct != null) "${ct.type}/${ct.subtype}" else "text/html"
-            val charset = ct?.charset()?.name()
+            val charset = ct?.charset()?.name() ?: "UTF-8"
             val headers = mutableMapOf<String, String>()
+            
             response.headers.forEach { (k, v) -> headers[k] = v }
+            
+            // Allow cross-origin requests for media elements
+            headers["Access-Control-Allow-Origin"] = "*"
 
             WebResourceResponse(
                 mime, charset,
                 response.code, response.message.ifEmpty { "OK" },
                 headers, response.body?.byteStream()
             )
-        }.getOrNull()
+        }.getOrElse {
+            // Fallback gracefully on Network/SSL error
+            null
+        }
     }
 }
 
