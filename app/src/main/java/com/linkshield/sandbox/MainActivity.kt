@@ -18,12 +18,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.ui.UnblockShieldScreen
@@ -36,7 +36,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Trial period initialization (30 Days)
         initTrialPeriod(this)
 
         setContent {
@@ -71,9 +70,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Security & Trial Check Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 fun isDefaultBrowser(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = context.getSystemService(RoleManager::class.java)
@@ -89,15 +85,10 @@ fun isTrialExpired(context: Context): Boolean {
     val thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000
     val isProActivated = prefs.getBoolean("is_pro_activated", false)
     
-    // Pro users bypass trial expiry check
     if (isProActivated) return false
-    
     return (System.currentTimeMillis() - installTime) > thirtyDaysInMillis
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Root Container Handling Default Check, Active URL & Tab Navigation
-// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun MainAppContent(
     onRequestDefaultBrowser: () -> Unit
@@ -109,12 +100,10 @@ fun MainAppContent(
     var expired by remember { mutableStateOf(isTrialExpired(context)) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     
-    // Active Shared State for Auto-Fill Link
     var activeBrowserUrl by rememberSaveable { mutableStateOf("") }
     
     val dnsManager = remember { DnsManager(context) }
     val unblockViewModel: UnblockShieldViewModel = viewModel()
-    val mediaList by unblockViewModel.mediaUrls.collectAsState()
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -164,9 +153,7 @@ fun MainAppContent(
                     )
                     1 -> MediaGrabberScreen(
                         dnsManager = dnsManager,
-                        activeUrl = activeBrowserUrl,
-                        capturedMedia = mediaList,
-                        onClearCaptured = { unblockViewModel.clearMedia() }
+                        activeUrl = activeBrowserUrl
                     )
                 }
             }
@@ -174,9 +161,6 @@ fun MainAppContent(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mandatory Blocking & Expiry Overlay Screens
-// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun MandatoryDefaultBrowserScreen(onSetDefaultClick: () -> Unit) {
     Surface(
@@ -253,7 +237,7 @@ fun TrialExpiredScreen() {
             )
             Spacer(modifier = Modifier.height(32.dp))
             Button(
-                onClick = { /* Handle Upgrade Action */ },
+                onClick = { },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
