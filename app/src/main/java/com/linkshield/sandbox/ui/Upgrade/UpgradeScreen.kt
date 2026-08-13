@@ -54,11 +54,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
 
 @Composable
 fun UpgradeScreen(
     licenseManager: LicenseManager,
+    dnsManager: DnsManager? = null,
+    isDark: Boolean = false,
+    onToggleTheme: (() -> Unit)? = null,
+    onUnlocked: (() -> Unit)? = null,
     onBackOrDone: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -81,6 +86,7 @@ fun UpgradeScreen(
             isPro = true
             keyError = null
             Toast.makeText(context, "Pro features successfully unlocked!", Toast.LENGTH_LONG).show()
+            onUnlocked?.invoke()
             onBackOrDone()
         } else {
             keyError = "Invalid key. Dobara check karein."
