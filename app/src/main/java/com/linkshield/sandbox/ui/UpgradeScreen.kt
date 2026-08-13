@@ -77,8 +77,7 @@ fun UpgradeScreen(
         }
 
         // License manager verification check
-        val success = licenseManager.verifyAndSaveKey(key)
-        if (success) {
+        val success = licenseManager.validateKey(key)
             isPro = true
             keyError = null
             Toast.makeText(context, "Pro features successfully unlocked!", Toast.LENGTH_LONG).show()
