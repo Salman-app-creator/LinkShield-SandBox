@@ -90,8 +90,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
-private const val CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-
+private const val GRABBER_CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 private val TRACKING_PARAMS = setOf(
     "igsh", "si", "utm_source", "utm_medium", "utm_campaign", "utm_content",
     "utm_term", "utm_id", "fbclid", "gclid", "ttclid", "ref", "spm",
@@ -186,7 +185,7 @@ private fun enqueueDirectDownload(context: Context, url: String, filename: Strin
         .setDescription("Downloading via LinkShield")
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$filename")
-        .addRequestHeader("User-Agent", CHROME_UA)
+        .addRequestHeader("User-Agent", GRABBER_CHROME_UA)
         .setAllowedOverMetered(true)
         .setAllowedOverRoaming(true)
     return dm.enqueue(req)
