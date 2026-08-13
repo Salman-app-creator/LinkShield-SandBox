@@ -34,7 +34,7 @@ import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.CapturedMediaItem
-import com.linkshield.sandbox.ui.MediaGrabberScreen
+import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.UnblockShieldScreen
 import com.linkshield.sandbox.ui.UnblockShieldViewModel
 import com.linkshield.sandbox.ui.disclaimer.FirstLaunchDisclaimerDialog
