@@ -68,7 +68,8 @@ fun UnblockShieldScreen(
     viewModel:     UnblockShieldViewModel,
     isVisible:     Boolean,
     isDarkTheme:   Boolean = true,
-    onToggleTheme: () -> Unit = {}
+    onToggleTheme: () -> Unit = {},
+    onUrlCaptured: (String) -> Unit = {} // <--- Active Browser Link Auto-Capture Callback
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -78,12 +79,17 @@ fun UnblockShieldScreen(
     var isDohOn     by remember { mutableStateOf(dnsManager.isDohEnabled()) }
 
     val currentUrl = viewModel.currentUrl
+    
+    // Auto-Catch Active Page Link for Grabber Tab
     LaunchedEffect(currentUrl) {
         if (!isEditing && urlBarValue.text != currentUrl) {
             urlBarValue = TextFieldValue(
                 text = currentUrl,
                 selection = TextRange(currentUrl.length)
             )
+        }
+        if (currentUrl.isNotBlank() && currentUrl.startsWith("http")) {
+            onUrlCaptured(currentUrl)
         }
     }
 
