@@ -61,6 +61,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import com.linkshield.sandbox.ui.CapturedMediaItem
 
 private const val GRABBER_CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
@@ -75,8 +76,12 @@ data class MediaOption(
 fun MediaGrabberScreen(
     dnsManager: DnsManager,
     licenseManager: LicenseManager,
+    capturedMedia: List<CapturedMediaItem> = emptyList(),
+    onClearCaptured: () -> Unit = {},
+    onProRequired: () -> Unit = {},
     onNavigateToUpgrade: () -> Unit = {}
 ) {
+
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
