@@ -12,12 +12,9 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import com.linkshield.sandbox.dns.DohProvider
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,30 +22,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Request
 import java.net.URLDecoder
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UnblockShieldViewModel
-//
-// Single source of truth for:
-//  • WebView instances keyed by tab index — never destroyed on tab switch
-//  • URL, loading, navigation (back/forward) state observable by Compose
-//  • Media URLs captured by the JS bridge — emitted to MediaGrabberScreen
-//
-// Lifecycle: scoped to the Activity (via viewModel() in MainActivity) so the
-// same instance — and its cached WebViews — survive any number of tab changes.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Chrome Mobile UA — avoids reCAPTCHA / Error 400 / "browser not supported"
 internal const val CHROME_UA =
     "Mozilla/5.0 (Linux; Android 14; SM-S918B) " +
     "AppleWebKit/537.36 (KHTML, like Gecko) " +
     "Chrome/126.0.0.0 Mobile Safari/537.36"
 
-// JS injected after every page load — reports media URLs via LinkShieldBridge
 internal const val JS_MEDIA_INTERCEPTOR = """
 (function() {
     if (window.__linkShieldInjected) return;
     window.__linkShieldInjected = true;
-
     function isMedia(u) {
         if (!u || typeof u !== 'string') return false;
         var l = u.toLowerCase();
@@ -58,7 +40,6 @@ internal const val JS_MEDIA_INTERCEPTOR = """
                l.includes('manifest') || l.includes('videoplayback') ||
                l.includes('blob:');
     }
-
     function report(url, title, pageUrl) {
         try {
             if (url && window.LinkShieldBridge) {
@@ -66,37 +47,32 @@ internal const val JS_MEDIA_INTERCEPTOR = """
             }
         } catch(e) {}
     }
-
     var origXHROpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(m, url) {
         if (isMedia(url)) report(url, document.title, location.href);
         return origXHROpen.apply(this, arguments);
     };
-
     var origFetch = window.fetch;
     window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
         if (isMedia(url)) report(url, document.title, location.href);
         return origFetch.apply(this, arguments);
     };
-
     function hookVideo(v) {
         function tryReport() {
             var s = v.currentSrc || v.src;
             if (s) report(s, document.title, location.href);
         }
         tryReport();
-        v.addEventListener('play',          tryReport);
+        v.addEventListener('play', tryReport);
         v.addEventListener('loadedmetadata', tryReport);
     }
-
     function scanAll() {
         document.querySelectorAll('video').forEach(hookVideo);
         document.querySelectorAll('audio').forEach(function(a) {
             if (a.src) report(a.src, document.title, location.href);
         });
     }
-
     var obs = new MutationObserver(function(mutations) {
         mutations.forEach(function(m) {
             m.addedNodes.forEach(function(n) {
@@ -105,18 +81,15 @@ internal const val JS_MEDIA_INTERCEPTOR = """
             });
         });
     });
-
     function startObs() {
         if (document.body) obs.observe(document.body, { childList: true, subtree: true });
         scanAll();
     }
-
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', startObs);
     } else {
         startObs();
     }
-
     setInterval(scanAll, 3000);
     window.addEventListener('load', scanAll);
 })();
@@ -124,11 +97,9 @@ internal const val JS_MEDIA_INTERCEPTOR = """
 
 class UnblockShieldViewModel : ViewModel() {
 
-    // ── WebView cache ─────────────────────────────────────────────────────────
-    private val _webViews = mutableStateMapOf<Int, WebView>()
+    private val _webViews = mutableMapOf<Int, WebView>()
     val webViews: Map<Int, WebView> = _webViews
 
-    // ── Observable browser state ──────────────────────────────────────────────
     var currentUrl   by mutableStateOf("https://www.google.com")
         private set
     var isLoading    by mutableStateOf(false)
@@ -140,43 +111,29 @@ class UnblockShieldViewModel : ViewModel() {
     var pageTitle    by mutableStateOf("")
         private set
 
-    // ── Media stream ──────────────────────────────────────────────────────────
     private val _mediaUrls = MutableStateFlow<List<MediaItem>>(emptyList())
     val mediaUrls: StateFlow<List<MediaItem>> = _mediaUrls.asStateFlow()
 
     data class MediaItem(
-        val url:       String,
-        val title:     String,
-        val pageUrl:   String,
+        val url: String,
+        val title: String,
+        val pageUrl: String,
         val timestamp: Long = System.currentTimeMillis()
     )
 
-    // ── Public API — called from MainActivity / UnblockShieldScreen ───────────
+    fun getOrCreateWebView(context: Context, tabIndex: Int, dnsManager: DnsManager): WebView =
+        _webViews.getOrPut(tabIndex) { buildWebView(context, dnsManager) }
 
-    /**
-     * Returns an existing WebView for [tabIndex] or creates a new one.
-     * The WebView is fully configured with Chrome UA, DOM storage, cookies,
-     * media bridge, and DoH interceptor before being returned.
-     */
-    fun getOrCreateWebView(
-        context:    Context,
-        tabIndex:   Int,
-        dnsManager: DnsManager
-    ): WebView = _webViews.getOrPut(tabIndex) {
-        buildWebView(context, dnsManager)
-    }
-
-    fun updateUrl(url: String)                        { currentUrl   = url  }
-    fun updateLoading(loading: Boolean)               { isLoading    = loading }
+    fun updateUrl(url: String) { currentUrl = url }
+    fun updateLoading(loading: Boolean) { isLoading = loading }
     fun updateNavigationState(back: Boolean, fwd: Boolean) {
-        canGoBack    = back
+        canGoBack = back
         canGoForward = fwd
     }
-    fun updatePageTitle(title: String)                { pageTitle    = title }
+    fun updatePageTitle(title: String) { pageTitle = title }
 
     fun onMediaFound(url: String, title: String, pageUrl: String) {
         if (url.isBlank()) return
-        // Deduplicate by URL
         val existing = _mediaUrls.value
         if (existing.any { it.url == url }) return
         _mediaUrls.value = existing + MediaItem(url, title, pageUrl)
@@ -184,24 +141,21 @@ class UnblockShieldViewModel : ViewModel() {
 
     fun clearMedia() { _mediaUrls.value = emptyList() }
 
-    /** Load a URL in the primary (Browser tab) WebView. */
     fun loadUrl(url: String) {
         val fixed = normalizeUrl(url)
         currentUrl = fixed
         _webViews[0]?.loadUrl(fixed)
     }
 
-    fun goBack()    { _webViews[0]?.goBack()    }
+    fun goBack()    { _webViews[0]?.goBack() }
     fun goForward() { _webViews[0]?.goForward() }
-    fun reload()    { _webViews[0]?.reload()    }
+    fun reload()    { _webViews[0]?.reload() }
 
     override fun onCleared() {
         super.onCleared()
         _webViews.values.forEach { it.destroy() }
         _webViews.clear()
     }
-
-    // ── WebView factory ───────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildWebView(context: Context, dnsManager: DnsManager): WebView {
@@ -210,37 +164,30 @@ class UnblockShieldViewModel : ViewModel() {
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
             )
-
-            // Hardware acceleration
             setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
             settings.apply {
-                javaScriptEnabled                     = true
-                domStorageEnabled                     = true
-                databaseEnabled                       = true
-                loadWithOverviewMode                  = true
-                useWideViewPort                       = true
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                loadWithOverviewMode = true
+                useWideViewPort = true
                 setSupportMultipleWindows(true)
                 javaScriptCanOpenWindowsAutomatically = true
-                mediaPlaybackRequiresUserGesture      = false
-                mixedContentMode                      = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                cacheMode                             = WebSettings.LOAD_DEFAULT
-                loadsImagesAutomatically              = true
-                userAgentString                       = CHROME_UA
-
+                mediaPlaybackRequiresUserGesture = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                cacheMode = WebSettings.LOAD_DEFAULT
+                loadsImagesAutomatically = true
+                userAgentString = CHROME_UA
                 @Suppress("DEPRECATION")
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
                     allowFileAccess = false
                 }
             }
 
-            // Enable persistent cookies
-CookieManager.getInstance().setAcceptCookie(true)
-CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
-            
-
-            // JS media bridge
             addJavascriptInterface(
                 object {
                     @JavascriptInterface
@@ -261,32 +208,21 @@ CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             }
 
             webViewClient = ShieldWebViewClient(dnsManager, this@UnblockShieldViewModel)
-
             loadUrl(currentUrl)
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ShieldWebViewClient
-// Handles: deep-link suppression, back-state updates, DoH interception
-// ─────────────────────────────────────────────────────────────────────────────
 private class ShieldWebViewClient(
     private val dnsManager: DnsManager,
-    private val vm:         UnblockShieldViewModel
+    private val vm: UnblockShieldViewModel
 ) : WebViewClient() {
 
-    override fun shouldOverrideUrlLoading(
-        view: WebView?,
-        request: WebResourceRequest?
-    ): Boolean {
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
         val url = request?.url ?: return false
         val scheme = url.scheme?.lowercase() ?: return false
-
-        // Normal http(s) — let WebView handle
         if (scheme == "http" || scheme == "https") return false
 
-        // intent:// — extract S.browser_fallback_url if present
         if (scheme == "intent") {
             val intentStr = url.toString()
             val match = ";S\\.browser_fallback_url=([^;]+)".toRegex().find(intentStr)
@@ -296,10 +232,8 @@ private class ShieldWebViewClient(
                     if (decoded.startsWith("http")) { view?.loadUrl(decoded); return true }
                 }
             }
-            return true // swallow — prevents ERR_UNKNOWN_URL_SCHEME
+            return true
         }
-
-        // All other custom schemes (snssdk://, fb://, tiktok://) — swallow silently
         return true
     }
 
@@ -308,11 +242,11 @@ private class ShieldWebViewClient(
         if (url == null) return false
         val uri = Uri.parse(url)
         return shouldOverrideUrlLoading(view, object : WebResourceRequest {
-            override fun getUrl()            = uri
-            override fun isForMainFrame()    = true
-            override fun isRedirect()        = false
-            override fun hasGesture()        = false
-            override fun getMethod()         = "GET"
+            override fun getUrl() = uri
+            override fun isForMainFrame() = true
+            override fun isRedirect() = false
+            override fun hasGesture() = false
+            override fun getMethod() = "GET"
             override fun getRequestHeaders() = mutableMapOf<String, String>()
         })
     }
@@ -326,28 +260,20 @@ private class ShieldWebViewClient(
         vm.updateLoading(false)
         vm.updateNavigationState(view?.canGoBack() == true, view?.canGoForward() == true)
         url?.let { vm.updateUrl(it) }
-        // Inject JS media interceptor
         view?.evaluateJavascript(JS_MEDIA_INTERCEPTOR, null)
     }
 
-    override fun shouldInterceptRequest(
-        view:    WebView?,
-        request: WebResourceRequest?
-    ): WebResourceResponse? {
+    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         if (!dnsManager.isDohEnabled()) return null
         val method = request?.method?.uppercase() ?: return null
         if (method != "GET" && method != "HEAD") return null
         val url = request.url?.toString() ?: return null
         if (!url.startsWith("http://") && !url.startsWith("https://")) return null
 
-        // Never intercept streaming media — causes YouTube playback errors
+        // Skip actual streaming media blobs — proxy everything else
         val lower = url.lowercase()
-        val skipExts = listOf(
-            ".m3u8", ".ts", ".mp4", ".mp3", ".webm", ".m4s",
-            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
-            ".ico", ".woff", ".woff2", ".ttf", ".eot"
-        )
-        if (skipExts.any { lower.contains(it) }) return null
+        val skipExts = listOf(".m3u8", ".ts", ".mp4", ".mp3", ".webm", ".m4s", ".mpd")
+        if (skipExts.any { lower.endsWith(it) }) return null
         if (lower.contains("googlevideo.com") || lower.contains("videoplayback")) return null
 
         return runCatching {
@@ -357,17 +283,22 @@ private class ShieldWebViewClient(
                     runCatching { reqBuilder.addHeader(k, v) }
                 }
             }
+            if (request.requestHeaders?.containsKey("User-Agent") != true) {
+                reqBuilder.addHeader("User-Agent", CHROME_UA)
+            }
+
             val response = dnsManager.getClient().newCall(reqBuilder.build()).execute()
-            // Sync Set-Cookie back into CookieManager so login sessions persist
+
             response.headers("Set-Cookie").forEach { cookie ->
                 CookieManager.getInstance().setCookie(url, cookie)
             }
-            if (!response.isSuccessful) return null
-            val ct      = response.body?.contentType()
-            val mime    = if (ct != null) "${ct.type}/${ct.subtype}" else "text/html"
+
+            val ct = response.body?.contentType()
+            val mime = if (ct != null) "${ct.type}/${ct.subtype}" else "text/html"
             val charset = ct?.charset()?.name()
             val headers = mutableMapOf<String, String>()
             response.headers.forEach { (k, v) -> headers[k] = v }
+
             WebResourceResponse(
                 mime, charset,
                 response.code, response.message.ifEmpty { "OK" },
@@ -377,14 +308,12 @@ private class ShieldWebViewClient(
     }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 internal fun normalizeUrl(raw: String): String {
     val t = raw.trim()
     return when {
-        t.startsWith("http://", ignoreCase = true)  -> t
+        t.startsWith("http://", ignoreCase = true) -> t
         t.startsWith("https://", ignoreCase = true) -> t
-        t.contains(".")                             -> "https://$t"
+        t.contains(".") -> "https://$t"
         else -> "https://www.google.com/search?q=${java.net.URLEncoder.encode(t, "UTF-8")}"
     }
 }
