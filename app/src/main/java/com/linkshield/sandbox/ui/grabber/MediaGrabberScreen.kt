@@ -1,585 +1,799 @@
 package com.linkshield.sandbox.ui
 
 import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Environment
-import android.webkit.MimeTypeMap
-import androidx.compose.foundation.layout.*
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.VideoFile
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
+import com.linkshield.sandbox.license.LicenseManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.Request
-import okio.buffer
-import okio.sink
-import java.io.File
-import java.io.IOException
-import java.net.URLDecoder
-import java.util.UUID
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MediaGrabberScreen.kt
-//
-// Responsibilities:
-//   1. INTEGRATE WITH DnsManager — all network probes and OkHttp downloads
-//      route through DnsManager.getClient() so DoH + TLS fragmentation
-//      protects every byte.
-//   2. DUAL-ENGINE DOWNLOAD PIPELINE — primary OkHttp (streaming with
-//      progress) and fallback Android DownloadManager for large files or
-//      when OkHttp stalls.
-//   3. CAPTURED MEDIA SELECTION — accept stream URLs pushed from the Browser
-//      tab, display them in a tappable list, and allow manual pasting.
-//   4. DOWNLOAD COUNTER INTEGRATION — gate every download behind
-//      DnsManager.canDownload(). Respect the 20-download free ceiling and
-//      bypass limits for Pro users. Counter is backed by the same
-//      SharedPreferences store that DnsManager uses.
+// Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-private const val PREFS_NAME          = "shield_prefs"
-private const val KEY_DOWNLOAD_COUNT  = "download_count"
-private const val KEY_IS_PRO          = "is_pro"
-private const val FREE_DOWNLOAD_LIMIT = 20
-
-/** Lightweight snapshot of a media item captured by the Browser tab. */
-data class CapturedMediaItem(
-    val url: String,
-    val title: String,
-    val pageUrl: String,
-    val timestamp: Long = System.currentTimeMillis()
+private val TRACKING_PARAMS = setOf(
+    "igsh", "si", "utm_source", "utm_medium", "utm_campaign", "utm_content",
+    "utm_term", "utm_id", "fbclid", "gclid", "ttclid", "ref", "spm",
+    "tracking_id", "aff_id", "feature", "app", "src"
 )
 
-/** Result of a HEAD probe against a candidate URL. */
-data class LinkAnalysisResult(
-    val url: String,
-    val contentType: String,
-    val contentLength: Long,
-    val isStream: Boolean,
-    val fileName: String
-)
-
-sealed class DownloadState {
-    object Idle : DownloadState()
-    object Analyzing : DownloadState()
-    data class AnalyzingError(val message: String) : DownloadState()
-    data class Ready(val info: LinkAnalysisResult) : DownloadState()
-    data class Downloading(val progress: Float) : DownloadState()
-    data class Success(val file: File) : DownloadState()
-    data class Error(val message: String) : DownloadState()
-    object QuotaExceeded : DownloadState()
+enum class VideoQuality(val label: String, val apiValue: String) {
+    BEST("Best / 4K", "max"),
+    Q1080("1080p HD", "1080"),
+    Q720("720p", "720"),
+    Q480("480p", "480"),
+    Q360("360p", "360")
 }
 
-enum class DownloadEngine { OKHTTP, DOWNLOAD_MANAGER }
+private val COBALT_SUPPORTED = listOf(
+    "youtube.com", "youtu.be", "tiktok.com", "instagram.com",
+    "twitter.com", "x.com", "facebook.com", "fb.watch",
+    "reddit.com", "soundcloud.com", "dailymotion.com", "vimeo.com",
+    "tumblr.com", "bilibili.com", "streamable.com", "twitch.tv"
+)
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ViewModel
-// ═══════════════════════════════════════════════════════════════════════════
+private val DIRECT_MEDIA_EXTS = listOf(
+    ".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".mov", ".flv", ".m3u8", ".ogg", ".ts"
+)
 
-class MediaGrabberViewModel(
-    private val dnsManager: DnsManager,
-    private val appContext: Context
-) : ViewModel() {
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-    private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
-
-    private val _activeDmIds = MutableStateFlow<Set<Long>>(emptySet())
-    val activeDmIds: StateFlow<Set<Long>> = _activeDmIds.asStateFlow()
-
-    private val downloadManager =
-        appContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-
-    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    private val downloadReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
-            if (id != -1L) {
-                _activeDmIds.value = _activeDmIds.value - id
+private fun cleanUrl(raw: String): String {
+    return try {
+        val uri     = Uri.parse(raw.trim())
+        val builder = uri.buildUpon().clearQuery()
+        uri.queryParameterNames.forEach { name ->
+            if (name.lowercase() !in TRACKING_PARAMS) {
+                uri.getQueryParameter(name)?.let { builder.appendQueryParameter(name, it) }
             }
         }
+        builder.build().toString()
+    } catch (_: Exception) {
+        raw.trim()
     }
+}
 
-    init {
-        appContext.registerReceiver(
-            downloadReceiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+private fun isCobaltSupported(url: String): Boolean =
+    COBALT_SUPPORTED.any { url.lowercase().contains(it) }
+
+private fun isDirectMedia(url: String): Boolean {
+    val lower = url.lowercase()
+    return DIRECT_MEDIA_EXTS.any { lower.contains(it) }
+}
+
+private fun mimeFor(filename: String): String {
+    val l = filename.lowercase()
+    return when {
+        l.endsWith(".mp3") || l.endsWith(".m4a") || l.endsWith(".ogg") -> "audio/mpeg"
+        l.endsWith(".webm")                                            -> "video/webm"
+        l.endsWith(".mkv")                                             -> "video/x-matroska"
+        l.endsWith(".m3u8")                                            -> "application/x-mpegURL"
+        l.endsWith(".ts")                                              -> "video/mp2t"
+        else                                                           -> "video/mp4"
+    }
+}
+
+private fun buildFilename(url: String, ext: String, audioOnly: Boolean): String {
+    val ts   = System.currentTimeMillis()
+    val host = try { Uri.parse(url).host?.replace("www.", "")?.replace(".", "_") ?: "media" }
+               catch (_: Exception) { "media" }
+    val tag  = if (audioOnly) "audio" else "video"
+    return "linkshield_${host}_${tag}_$ts$ext"
+}
+
+private fun enqueueDirectDownload(context: Context, url: String, filename: String): Long {
+    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    val req = DownloadManager.Request(Uri.parse(url))
+        .setTitle(filename)
+        .setDescription("Downloading via LinkShield")
+        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$filename")
+        .addRequestHeader(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile"
         )
-    }
+        .setAllowedOverMetered(true)
+        .setAllowedOverRoaming(true)
+    return dm.enqueue(req)
+}
 
-    /** Probe the URL through the DoH-shielded client to learn metadata. */
-    fun analyzeLink(url: String) {
-        viewModelScope.launch {
-            _downloadState.value = DownloadState.Analyzing
-            try {
-                val client = dnsManager.getClient()
-                val request = Request.Builder()
-                    .url(url)
-                    .head()
-                    .build()
+// ─────────────────────────────────────────────────────────────────────────────
+// Cobalt API fetch — quality + audio-only support
+// ─────────────────────────────────────────────────────────────────────────────
+private suspend fun cobaltFetch(
+    client:    okhttp3.OkHttpClient,
+    url:       String,
+    quality:   String,
+    audioOnly: Boolean
+): CobaltApiService.MediaResult = withContext(Dispatchers.IO) {
+    try {
+        val body = JSONObject().apply {
+            put("url",               url)
+            put("vQuality",          quality)
+            put("isAudioOnly",       audioOnly)
+            put("aFormat",           if (audioOnly) "mp3" else "mp3")
+            put("isNoTTWatermark",   true)
+            put("isTTFullAudio",     false)
+            put("filenameStyle",     "classic")
+            put("downloadMode",      "auto")
+        }.toString().toRequestBody("application/json".toMediaTypeOrNull())
 
-                val response = withContext(Dispatchers.IO) {
-                    client.newCall(request).execute()
-                }
+        val req = okhttp3.Request.Builder()
+            .url("${CobaltApiService.API_BASE}/api/json")
+            .addHeader("Accept",       "application/json")
+            .addHeader("Content-Type", "application/json")
+            .post(body)
+            .build()
 
-                if (!response.isSuccessful) {
-                    _downloadState.value = DownloadState.AnalyzingError("HTTP ${response.code}")
-                    return@launch
-                }
+        val resp     = client.newCall(req).execute()
+        val respBody = resp.body?.string()
 
-                val contentType = response.header("Content-Type") ?: "application/octet-stream"
-                val contentLength = response.header("Content-Length")?.toLongOrNull() ?: -1L
-                val isStream = contentType.contains("mpegurl", ignoreCase = true) ||
-                        contentType.contains("dash", ignoreCase = true) ||
-                        contentType.contains("video", ignoreCase = true) ||
-                        contentType.contains("audio", ignoreCase = true) ||
-                        contentType.contains("octet-stream", ignoreCase = true)
+        if (!resp.isSuccessful || respBody == null) {
+            return@withContext CobaltApiService.MediaResult(false, error = "HTTP ${resp.code}")
+        }
 
-                val disposition = response.header("Content-Disposition")
-                val fileName = extractFileName(url, disposition, contentType)
+        val json   = JSONObject(respBody)
+        val status = json.optString("status")
 
-                _downloadState.value = DownloadState.Ready(
-                    LinkAnalysisResult(url, contentType, contentLength, isStream, fileName)
+        when (status) {
+            "stream", "redirect", "tunnel" -> {
+                CobaltApiService.MediaResult(
+                    success          = true,
+                    url              = json.optString("url"),
+                    filename         = json.optString("filename", "download"),
+                    isDirectDownload = status == "tunnel"
                 )
-            } catch (e: Exception) {
-                _downloadState.value = DownloadState.AnalyzingError(
-                    e.message ?: "Failed to analyze link"
-                )
+            }
+            "error" -> CobaltApiService.MediaResult(false, error = json.optString("text", "Unknown error"))
+            else    -> {
+                val resultUrl = json.optString("url")
+                if (resultUrl.isNotEmpty())
+                    CobaltApiService.MediaResult(true, url = resultUrl, filename = "download")
+                else
+                    CobaltApiService.MediaResult(false, error = "Unexpected response: $status")
             }
         }
-    }
-
-    /** Entry point for every user-initiated download. */
-    fun startDownload(info: LinkAnalysisResult, engine: DownloadEngine) {
-        if (!dnsManager.canDownload()) {
-            _downloadState.value = DownloadState.QuotaExceeded
-            return
-        }
-
-        viewModelScope.launch {
-            when (engine) {
-                DownloadEngine.OKHTTP       -> downloadViaOkHttp(info)
-                DownloadEngine.DOWNLOAD_MANAGER -> downloadViaDownloadManager(info)
-            }
-        }
-    }
-
-    /** Primary engine — streams through the shielded OkHttp client with progress. */
-    private suspend fun downloadViaOkHttp(info: LinkAnalysisResult) {
-        _downloadState.value = DownloadState.Downloading(0f)
-        try {
-            val client = dnsManager.getClient()
-            val request = Request.Builder().url(info.url).build()
-
-            withContext(Dispatchers.IO) {
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-
-                val destDir = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                    ?: appContext.filesDir
-                val destFile = File(destDir, info.fileName)
-
-                val body = response.body ?: throw IOException("Empty response body")
-                val total = body.contentLength()
-                var read = 0L
-
-                body.source().use { source ->
-                    destFile.sink().buffer().use { sink ->
-                        val buffer = okio.Buffer()
-                        while (true) {
-                            val byteCount = source.read(buffer, 8192)
-                            if (byteCount == -1L) break
-                            sink.write(buffer, byteCount)
-                            read += byteCount
-                            if (total > 0) {
-                                _downloadState.value = DownloadState.Downloading(read.toFloat() / total)
-                            }
-                        }
-                        sink.flush()
-                    }
-                }
-
-                if (!dnsManager.isProUser()) incrementDownloadCount()
-                _downloadState.value = DownloadState.Success(destFile)
-            }
-        } catch (e: Exception) {
-            _downloadState.value = DownloadState.Error(e.message ?: "Download failed")
-        }
-    }
-
-    /** Fallback engine — hands the URL to Android's DownloadManager. */
-    private fun downloadViaDownloadManager(info: LinkAnalysisResult) {
-        val request = DownloadManager.Request(info.url.toUri()).apply {
-            setTitle(info.fileName)
-            setDescription("LinkShield Sandbox")
-            setNotificationVisibility(
-                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-            )
-            setDestinationInExternalFilesDir(
-                appContext,
-                Environment.DIRECTORY_DOWNLOADS,
-                info.fileName
-            )
-            setAllowedOverMetered(true)
-            setAllowedOverRoaming(true)
-        }
-
-        val id = downloadManager.enqueue(request)
-        _activeDmIds.value = _activeDmIds.value + id
-
-        if (!dnsManager.isProUser()) incrementDownloadCount()
-        _downloadState.value = DownloadState.Downloading(-1f)
-    }
-
-    private fun incrementDownloadCount() {
-        val current = prefs.getInt(KEY_DOWNLOAD_COUNT, 0)
-        prefs.edit().putInt(KEY_DOWNLOAD_COUNT, (current + 1).coerceAtLeast(0)).apply()
-    }
-
-    private fun extractFileName(url: String, disposition: String?, contentType: String): String {
-        disposition?.let { disp ->
-            val starRegex = "filename\\*\\s*=\\s*UTF-8''([^;\\s]+)"
-                .toRegex(RegexOption.IGNORE_CASE)
-            starRegex.find(disp)?.groupValues?.get(1)?.let {
-                return URLDecoder.decode(it, "UTF-8")
-            }
-            val plainRegex = "filename\\s*=\\s*[\"']?([^;\\s\"']+)[\"']?"
-                .toRegex(RegexOption.IGNORE_CASE)
-            plainRegex.find(disp)?.groupValues?.get(1)?.let { return it }
-        }
-
-        Uri.parse(url).lastPathSegment?.let {
-            if (it.isNotBlank() && it.contains(".")) return it
-        }
-
-        val ext = MimeTypeMap.getSingleton()
-            .getExtensionFromMimeType(contentType) ?: "bin"
-        return "linkshield_${UUID.randomUUID().toString().take(8)}.$ext"
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        appContext.unregisterReceiver(downloadReceiver)
+    } catch (e: Exception) {
+        CobaltApiService.MediaResult(false, error = e.message ?: "Unknown error")
     }
 }
 
-class MediaGrabberViewModelFactory(
-    private val dnsManager: DnsManager,
-    private val context: Context
-) : androidx.lifecycle.ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return MediaGrabberViewModel(dnsManager, context.applicationContext) as T
-    }
-}
-// ═══════════════════════════════════════════════════════════════════════════
-// Screen
-// ═══════════════════════════════════════════════════════════════════════════
-
-@OptIn(ExperimentalMaterial3Api::class)
+// ─────────────────────────────────────────────────────────────────────────────
+// MediaGrabberScreen
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun MediaGrabberScreen(
-    dnsManager: DnsManager,
-    capturedMedia: List<CapturedMediaItem> = emptyList(),
-    onClearCaptured: () -> Unit = {},
-    viewModel: MediaGrabberViewModel = viewModel(
-        factory = MediaGrabberViewModelFactory(dnsManager, LocalContext.current)
-    )
+    dnsManager:      DnsManager,
+    licenseManager:  LicenseManager,
+    capturedMedia:   List<CapturedMediaItem>,
+    onClearCaptured: () -> Unit,
+    onProRequired:   () -> Unit
 ) {
-    val context = LocalContext.current
-    val downloadState by viewModel.downloadState.collectAsState()
-    var manualUrl by remember { mutableStateOf("") }
-    var selectedEngine by remember { mutableStateOf(DownloadEngine.OKHTTP) }
-    var showQuotaDialog by remember { mutableStateOf(false) }
+    val context          = LocalContext.current
+    val scope            = rememberCoroutineScope()
+    val clipboard        = LocalClipboardManager.current
+    val focusManager     = LocalFocusManager.current
 
-    if (showQuotaDialog) {
-        AlertDialog(
-            onDismissRequest = { showQuotaDialog = false },
-            title = { Text("Download limit reached") },
-            text = {
-                Text(
-                    "You have used all $FREE_DOWNLOAD_LIMIT free downloads. " +
-                    "Upgrade to Pro for unlimited access."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showQuotaDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
+    var urlInput         by remember { mutableStateOf("") }
+    var isLoading        by remember { mutableStateOf(false) }
+    var result           by remember { mutableStateOf<CobaltApiService.MediaResult?>(null) }
+    var error            by remember { mutableStateOf<String?>(null) }
+    var downloadCount    by remember { mutableIntStateOf(licenseManager.getDownloadCount()) }
+
+    val isPro            = licenseManager.isProUser()
+    val remaining by remember {
+        derivedStateOf {
+            if (isPro) Int.MAX_VALUE else (20 - downloadCount).coerceAtLeast(0)
+        }
+    }
+    val canDownload by remember { derivedStateOf { isPro || downloadCount < 20 } }
+
+    var selectedQuality  by remember { mutableStateOf(VideoQuality.Q720) }
+    var audioOnly        by remember { mutableStateOf(false) }
+    var showQualityMenu  by remember { mutableStateOf(false) }
+    var useCobalt        by remember { mutableStateOf(true) }
+
+    // Auto-fill latest captured URL into input when switching to this tab
+    LaunchedEffect(capturedMedia) {
+        if (capturedMedia.isNotEmpty() && urlInput.isBlank()) {
+            urlInput = cleanUrl(capturedMedia.last().url)
+        }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Media Grabber") },
-                actions = {
-                    if (dnsManager.isProUser()) {
-                        Badge(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ) {
-                            Text(
-                                "PRO",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    } else {
+    // ── Outer scrollable layout ───────────────────────────────────────────────
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+
+        // ── Header ────────────────────────────────────────────────────────────
+        Card(
+            shape  = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            )
+        ) {
+            Column(
+                modifier            = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector        = Icons.Default.Download,
+                    contentDescription = null,
+                    modifier           = Modifier.size(44.dp),
+                    tint               = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    "Green Hole HD Grabber",
+                    style      = MaterialTheme.typography.headlineSmall,
+                    color      = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "YouTube · TikTok · Instagram · Twitter/X · Direct files\n" +
+                    "Active browser links auto-captured below.",
+                    style     = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color     = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // ── Quota badge ───────────────────────────────────────────────────────
+        Card(
+            shape  = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    isPro          -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f)
+                    remaining > 5  -> MaterialTheme.colorScheme.surfaceVariant
+                    remaining > 0  -> Color(0xFFFF6F00).copy(alpha = 0.15f)
+                    else           -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.30f)
+                }
+            )
+        ) {
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (isPro) {
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Star, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(
-                            text = "${dnsManager.getRemainingDownloads()} left",
-                            modifier = Modifier.padding(end = 16.dp),
-                            style = MaterialTheme.typography.labelLarge
+                            "PRO — Unlimited Downloads",
+                            style      = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color      = MaterialTheme.colorScheme.primary
                         )
                     }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // ── Manual URL input ─────────────────────────────────────────────
-            OutlinedTextField(
-                value = manualUrl,
-                onValueChange = { manualUrl = it },
-                label = { Text("Paste video or stream URL") },
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    IconButton(
-                        onClick = {
-                            if (manualUrl.isNotBlank()) {
-                                viewModel.analyzeLink(manualUrl)
+                } else {
+                    Column {
+                        Text("Remaining free downloads", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "$remaining / 20",
+                            style      = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color      = when {
+                                remaining > 5 -> MaterialTheme.colorScheme.primary
+                                remaining > 0 -> Color(0xFFFF6F00)
+                                else          -> MaterialTheme.colorScheme.error
                             }
-                        }
-                    ) {
-                        Icon(Icons.Default.Search, contentDescription = "Analyze")
+                        )
+                    }
+                    TextButton(onClick = onProRequired) {
+                        Icon(Icons.Default.Star, null, Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Upgrade", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-            )
+            }
+        }
 
-            // ── Captured media from Browser tab ──────────────────────────────
-            if (capturedMedia.isNotEmpty()) {
-                Text(
-                    text = "Captured from Browser",
-                    style = MaterialTheme.typography.titleMedium
+        // ── Auto-captured media list ───────────────────────────────────────────
+        AnimatedVisibility(
+            visible = capturedMedia.isNotEmpty(),
+            enter   = fadeIn(tween(200)) + expandVertically(),
+            exit    = fadeOut(tween(150)) + shrinkVertically()
+        ) {
+            Card(
+                shape  = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.30f)
                 )
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 220.dp)
-                ) {
-                    items(capturedMedia) { item ->
-                        Card(
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment     = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Auto-Captured Streams (${capturedMedia.size})",
+                            style      = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color      = MaterialTheme.colorScheme.secondary
+                        )
+                        TextButton(onClick = onClearCaptured) {
+                            Icon(Icons.Default.Clear, null, Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Clear", fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    capturedMedia.takeLast(5).forEach { item ->
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            onClick = {
-                                manualUrl = item.url
-                                viewModel.analyzeLink(item.url)
-                            }
+                                .clickable {
+                                    urlInput = cleanUrl(item.url)
+                                    result   = null
+                                    error    = null
+                                }
+                                .padding(vertical = 5.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
+                            Icon(
+                                imageVector = if (item.url.lowercase().contains(".mp3") ||
+                                                  item.url.lowercase().contains(".m4a"))
+                                    Icons.Default.AudioFile else Icons.Default.VideoFile,
+                                contentDescription = null,
+                                tint     = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = item.title.ifBlank { "Untitled" },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1
+                                    item.title.ifBlank { "Media stream" },
+                                    style     = MaterialTheme.typography.labelMedium,
+                                    maxLines  = 1,
+                                    overflow  = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = item.url,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1
+                                    cleanUrl(item.url).let { if (it.length > 55) it.take(55) + "…" else it },
+                                    style  = MaterialTheme.typography.bodySmall,
+                                    color  = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Use URL",
+                                tint     = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
+            }
+        }
 
-                TextButton(
-                    onClick = onClearCaptured,
-                    modifier = Modifier.align(Alignment.End)
+        // ── URL input ─────────────────────────────────────────────────────────
+        OutlinedTextField(
+            value         = urlInput,
+            onValueChange = { urlInput = it; error = null; result = null },
+            modifier      = Modifier.fillMaxWidth(),
+            label         = { Text("Paste or captured URL") },
+            placeholder   = { Text("https://youtube.com/watch?v=...") },
+            leadingIcon   = { Icon(Icons.Default.Link, null) },
+            trailingIcon  = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (urlInput.isNotBlank()) {
+                        IconButton(onClick = { urlInput = ""; error = null; result = null }) {
+                            Icon(Icons.Default.Clear, "Clear", Modifier.size(18.dp))
+                        }
+                    }
+                    IconButton(onClick = {
+                        val clip = clipboard.getText()?.text?.trim() ?: ""
+                        if (clip.isNotBlank()) { urlInput = clip; error = null; result = null }
+                    }) {
+                        Icon(Icons.Default.ContentPaste, "Paste", Modifier.size(18.dp))
+                    }
+                }
+            },
+            singleLine      = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { focusManager.clearFocus() }),
+            shape           = RoundedCornerShape(14.dp)
+        )
+
+        // ── Engine selector ───────────────────────────────────────────────────
+        OutlinedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { useCobalt = !useCobalt },
+            shape    = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Clear captured")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ── Download state machine ───────────────────────────────────────
-            when (val state = downloadState) {
-                is DownloadState.Analyzing -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                    Text(
-                        "Analyzing link…",
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    Icon(
+                        imageVector = if (useCobalt) Icons.Default.Cloud else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint    = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
                     )
-                }
-                is DownloadState.AnalyzingError -> {
-                    Text(
-                        text = "Analysis failed: ${state.message}",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                is DownloadState.Ready -> {
-                    LinkAnalysisCard(
-                        info = state.info,
-                        selectedEngine = selectedEngine,
-                        onEngineChange = { selectedEngine = it },
-                        onDownload = {
-                            if (!dnsManager.canDownload()) {
-                                showQuotaDialog = true
-                            } else {
-                                viewModel.startDownload(state.info, selectedEngine)
-                            }
-                        }
-                    )
-                }
-                is DownloadState.Downloading -> {
-                    if (state.progress >= 0f) {
-                        LinearProgressIndicator(
-                            progress = { state.progress },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    Column {
+                        Text("Engine", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
-                            "${(state.progress * 100).toInt()}%",
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        Text(
-                            "Download in progress via DownloadManager…",
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                            if (useCobalt) "Cobalt API (recommended)" else "Direct / Native Fallback",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
-                is DownloadState.Success -> {
-                    Text(
-                        text = "Saved to:\n${state.file.absolutePath}",
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                is DownloadState.Error -> {
-                    Text(
-                        text = "Error: ${state.message}",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                is DownloadState.QuotaExceeded -> {
-                    LaunchedEffect(Unit) { showQuotaDialog = true }
-                }
-                else -> { }
+                Switch(checked = useCobalt, onCheckedChange = { useCobalt = it })
             }
+        }
 
-            Spacer(modifier = Modifier.weight(1f))
+        // ── Quality & audio picker — only for Cobalt engine ───────────────────
+        AnimatedVisibility(
+            visible = useCobalt,
+            enter   = fadeIn(tween(200)) + expandVertically(),
+            exit    = fadeOut(tween(150)) + shrinkVertically()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Quality dropdown
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showQualityMenu = true },
+                        shape    = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier              = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment     = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.HighQuality, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                                Column {
+                                    Text("Video Quality", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(selectedQuality.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                            Text("▼", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        }
+                    }
+                    DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
+                        VideoQuality.entries.forEach { q ->
+                            DropdownMenuItem(
+                                text = { Text(q.label) },
+                                leadingIcon = {
+                                    if (selectedQuality == q) Icon(
+                                        Icons.Default.CheckCircle, null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = { selectedQuality = q; showQualityMenu = false }
+                            )
+                        }
+                    }
+                }
 
-            // ── Quota footer ─────────────────────────────────────────────────
-            if (!dnsManager.isProUser()) {
-                Surface(
-                    tonalElevation = 2.dp,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth()
+                // Audio only toggle
+                Row(
+                    modifier              = Modifier
+                        .fillMaxWidth()
+                        .clickable { audioOnly = !audioOnly }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            "Free downloads used: " +
-                            "${dnsManager.getDownloadCount()} / $FREE_DOWNLOAD_LIMIT"
-                        )
-                        Button(onClick = { /* Billing Flow */ }) {
-                            Text("Upgrade")
+                        Icon(Icons.Default.MusicNote, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text("Audio Only (.mp3)", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Switch(checked = audioOnly, onCheckedChange = { audioOnly = it })
+                }
+            }
+        }
+
+        // ── Fetch button ──────────────────────────────────────────────────────
+        Button(
+            onClick = {
+                when {
+                    urlInput.isBlank() -> { error = "Please enter or paste a URL."; return@Button }
+                    !canDownload       -> { onProRequired(); return@Button }
+                    else -> {
+                        focusManager.clearFocus()
+                        val clean = cleanUrl(urlInput)
+                        isLoading = true
+                        error     = null
+                        result    = null
+
+                        scope.launch {
+                            val res = fetchMedia(
+                                url        = clean,
+                                useCobalt  = useCobalt,
+                                quality    = selectedQuality.apiValue,
+                                audioOnly  = audioOnly,
+                                client     = dnsManager.getClient()
+                            )
+                            isLoading = false
+                            if (res.success) {
+                                result = res
+                            } else {
+                                error = res.error ?: "Could not extract media. Try the Direct engine or paste a direct file URL."
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape   = RoundedCornerShape(14.dp),
+            enabled = !isLoading,
+            colors  = ButtonDefaults.buttonColors(
+                containerColor = if (!canDownload)
+                    MaterialTheme.colorScheme.surfaceVariant
+                else
+                    MaterialTheme.colorScheme.primary,
+                contentColor = if (!canDownload)
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                else
+                    MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier    = Modifier.size(22.dp),
+                    strokeWidth = 2.5.dp,
+                    color       = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Fetching media…", style = MaterialTheme.typography.labelLarge)
+            } else if (!canDownload) {
+                Icon(Icons.Default.Star, null, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Upgrade to Download", style = MaterialTheme.typography.labelLarge)
+            } else {
+                Icon(Icons.Default.Download, null, Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    if (useCobalt) "Fetch & Download" else "Grab Direct Stream",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+
+        // ── Error card ────────────────────────────────────────────────────────
+        AnimatedVisibility(
+            visible = error != null,
+            enter   = fadeIn(tween(200)) + expandVertically(),
+            exit    = fadeOut(tween(150)) + shrinkVertically()
+        ) {
+            Card(
+                shape  = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                )
+            ) {
+                Row(
+                    modifier              = Modifier.padding(14.dp),
+                    verticalAlignment     = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Default.Warning, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
+                    Text(error ?: "", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+            }
+        }
+
+        // ── Result card ───────────────────────────────────────────────────────
+        AnimatedVisibility(
+            visible = result?.success == true,
+            enter   = fadeIn(tween(250)) + expandVertically(),
+            exit    = fadeOut(tween(150)) + shrinkVertically()
+        ) {
+            result?.let { res ->
+                Card(
+                    shape  = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f)
+                    )
+                ) {
+                    Column(
+                        modifier            = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Ready to Download", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        }
+
+                        if (!res.filename.isNullOrBlank()) {
+                            Text("📁  ${res.filename}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (useCobalt && !audioOnly) {
+                            Text("Quality: ${selectedQuality.label}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        res.url?.let { downloadUrl ->
+                            HorizontalDivider()
+                            Button(
+                                onClick = {
+                                    if (!licenseManager.canDownload()) { onProRequired(); return@Button }
+
+                                    val ext = when {
+                                        audioOnly -> ".mp3"
+                                        downloadUrl.lowercase().endsWith(".webm") -> ".webm"
+                                        else -> ".mp4"
+                                    }
+                                    val filename = res.filename
+                                        ?: buildFilename(downloadUrl, ext, audioOnly)
+
+                                    enqueueDirectDownload(context, downloadUrl, filename)
+
+                                    if (!licenseManager.isProUser()) {
+                                        licenseManager.incrementDownload()
+                                        downloadCount = licenseManager.getDownloadCount()
+                                    }
+                                    Toast.makeText(context, "Download started: $filename", Toast.LENGTH_LONG).show()
+                                    result = null
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape    = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Download, null, Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Start Download")
+                            }
                         }
                     }
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Sub-composables
-// ═══════════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun LinkAnalysisCard(
-    info: LinkAnalysisResult,
-    selectedEngine: DownloadEngine,
-    onEngineChange: (DownloadEngine) -> Unit,
-    onDownload: () -> Unit
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Link Analysis", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("File: ${info.fileName}")
-            Text("Type: ${info.contentType}")
-            Text("Size: ${formatBytes(info.contentLength)}")
-            Text("Stream: ${if (info.isStream) "Yes" else "No"}")
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Engine", style = MaterialTheme.typography.labelLarge)
-
-            Row {
-                DownloadEngine.values().forEach { engine ->
-                    FilterChip(
-                        selected = selectedEngine == engine,
-                        onClick = { onEngineChange(engine) },
-                        label = { Text(engine.name.replace("_", " ")) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = onDownload,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Download, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Start Download")
-            }
-        }
+// ─────────────────────────────────────────────────────────────────────────────
+// Dual-engine fetch
+// Engine 1: Cobalt API — for supported platforms
+// Engine 2: Direct DownloadManager — for direct files / fallback
+// ─────────────────────────────────────────────────────────────────────────────
+private suspend fun fetchMedia(
+    url:       String,
+    useCobalt: Boolean,
+    quality:   String,
+    audioOnly: Boolean,
+    client:    okhttp3.OkHttpClient
+): CobaltApiService.MediaResult {
+    if (useCobalt && isCobaltSupported(url)) {
+        val res = cobaltFetch(client, url, quality, audioOnly)
+        if (res.success) return res
+        // Cobalt failed → fall through to direct
     }
-}
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 0) return "Unknown"
-    val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    var size = bytes.toDouble()
-    var idx = 0
-    while (size >= 1024 && idx < units.lastIndex) {
-        size /= 1024
-        idx++
+    // Direct / native engine
+    return if (isDirectMedia(url)) {
+        val ext  = DIRECT_MEDIA_EXTS.firstOrNull { url.lowercase().contains(it) } ?: ".mp4"
+        val name = buildFilename(url, ext, audioOnly)
+        CobaltApiService.MediaResult(success = true, url = url, filename = name, isDirectDownload = true)
+    } else {
+        CobaltApiService.MediaResult(
+            success = false,
+            error   = "Could not extract media. Try pasting a direct video file URL (.mp4, .m3u8, .mp3 etc.)"
+        )
     }
-    return "%.2f %s".format(size, units[idx])
 }
