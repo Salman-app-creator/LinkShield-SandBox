@@ -1,183 +1,166 @@
 package com.linkshield.sandbox
 
+import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.core.view.WindowCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.linkshield.sandbox.disclaimer.DisclaimerManager
-import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.license.LicenseManager
-import com.linkshield.sandbox.ui.CapturedMediaItem
-import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
-import com.linkshield.sandbox.ui.UnblockShieldScreen
-import com.linkshield.sandbox.ui.UnblockShieldViewModel
-import com.linkshield.sandbox.ui.disclaimer.FirstLaunchDisclaimerDialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
-import com.linkshield.sandbox.ui.theme.ThemeManager
-import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var dnsManager:        DnsManager
-    private lateinit var licenseManager:    LicenseManager
-    private lateinit var disclaimerManager: DisclaimerManager
-    private lateinit var themeManager:      ThemeManager
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        dnsManager        = DnsManager(this)
-        licenseManager    = LicenseManager(this)
-        disclaimerManager = DisclaimerManager(this)
-        themeManager      = ThemeManager(this)
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        enableEdgeToEdge()
-
-        val interceptedUrl: String? = when (intent?.action) {
-            Intent.ACTION_VIEW -> intent?.data?.toString()
-            else               -> intent?.getStringExtra("url")
-        }
-
         setContent {
-            var isDark by rememberSaveable { mutableStateOf(themeManager.isDarkTheme()) }
-
-            LinkShieldTheme(darkTheme = isDark) {
-                LinkShieldApp(
-                    dnsManager        = dnsManager,
-                    licenseManager    = licenseManager,
-                    disclaimerManager = disclaimerManager,
-                    interceptedUrl    = interceptedUrl,
-                    isDark            = isDark,
-                    onToggleTheme     = {
-                        isDark = !isDark
-                        themeManager.setTheme(
-                            if (isDark) ThemeManager.THEME_DARK else ThemeManager.THEME_LIGHT
-                        )
-                    }
+            LinkShieldTheme {
+                MainAppContent(
+                    onRequestDefaultBrowser = { requestDefaultBrowser(this) }
                 )
             }
+        }
+    }
+
+    private fun requestDefaultBrowser(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
+                if (!roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
+                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+                    startActivityForResult(intent, 1001)
+                }
+            }
+        } else {
+            val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+            startActivity(intent)
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility Function to Check Default Browser Status
+// ─────────────────────────────────────────────────────────────────────────────
+fun isDefaultBrowser(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        roleManager?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
+    } else {
+        false
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Root Container Handling Mandatory Default Check & Tab State
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun LinkShieldApp(
-    dnsManager:        DnsManager,
-    licenseManager:    LicenseManager,
-    disclaimerManager: DisclaimerManager,
-    interceptedUrl:    String?,
-    isDark:            Boolean,
-    onToggleTheme:     () -> Unit
+fun MainAppContent(
+    onRequestDefaultBrowser: () -> Unit
 ) {
-    var disclaimerAccepted by rememberSaveable { mutableStateOf(disclaimerManager.hasAccepted()) }
-    if (!disclaimerAccepted) {
-        FirstLaunchDisclaimerDialog(onAccept = {
-            disclaimerManager.accept()
-            disclaimerAccepted = true
-        })
-        return
-    }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isDefault by remember { mutableStateOf(isDefaultBrowser(context)) }
 
-    val unblockViewModel: UnblockShieldViewModel = viewModel()
+    // Active URL shared state for Grabber Tab Auto-Fill
+    var currentActiveUrl by remember { mutableStateOf("") }
 
-    LaunchedEffect(interceptedUrl) {
-        if (!interceptedUrl.isNullOrBlank()) unblockViewModel.loadUrl(interceptedUrl)
-    }
-
-    val mediaItems  by unblockViewModel.mediaUrls.collectAsState(initial = emptyList())
-    val capturedMedia = androidx.compose.runtime.remember(mediaItems) {
-        mediaItems.map {
-            CapturedMediaItem(url = it.url, title = it.title, pageUrl = it.pageUrl, timestamp = it.timestamp)
-        }
-    }
-
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-
-    BackHandler(enabled = selectedTab != 0 || unblockViewModel.canGoBack) {
-        when {
-            selectedTab == 0 && unblockViewModel.canGoBack -> unblockViewModel.goBack()
-            selectedTab != 0                               -> selectedTab = 0
-        }
-    }
-
-    Scaffold(
-        modifier  = Modifier.fillMaxSize(),
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    icon     = { Icon(Icons.Default.Shield, contentDescription = "Shield") },
-                    label    = { Text("Shield") },
-                    selected = selectedTab == 0,
-                    onClick  = { selectedTab = 0 }
-                )
-                NavigationBarItem(
-                    icon     = { Icon(Icons.Default.Download, contentDescription = "Grabber") },
-                    label    = { Text("Grabber") },
-                    selected = selectedTab == 1,
-                    onClick  = { selectedTab = 1 }
-                )
-                NavigationBarItem(
-                    icon     = { Icon(Icons.Default.FlashOn, contentDescription = "Upgrade") },
-                    label    = { Text("Upgrade") },
-                    selected = selectedTab == 2,
-                    onClick  = { selectedTab = 2 }
-                )
+    // Re-check default status when user resumes app after system dialog
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isDefault = isDefaultBrowser(context)
             }
         }
-    ) { inner ->
-        Box(modifier = Modifier.fillMaxSize().padding(inner)) {
-            UnblockShieldScreen(
-                dnsManager    = dnsManager,
-                viewModel     = unblockViewModel,
-                isVisible     = selectedTab == 0,
-                isDarkTheme   = isDark,
-                onToggleTheme = onToggleTheme
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    if (!isDefault) {
+        // 🔒 Mandatory Blocking Overlay
+        MandatoryDefaultBrowserScreen(
+            onSetDefaultClick = onRequestDefaultBrowser
+        )
+    } else {
+        // ✅ Unlocked App Navigation
+        // Pass currentActiveUrl & onUrlChange callback to your Navigation/Tabs setup:
+        // AppNavigation(
+        //     currentActiveUrl = currentActiveUrl,
+        //     onUrlChange = { newUrl -> currentActiveUrl = newUrl }
+        // )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mandatory Blocking Screen Component
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun MandatoryDefaultBrowserScreen(onSetDefaultClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(72.dp)
             )
 
-            if (selectedTab == 1) {
-                MediaGrabberScreen(
-                    dnsManager      = dnsManager,
-                    licenseManager  = licenseManager,
-                    capturedMedia   = capturedMedia,
-                    onClearCaptured = { unblockViewModel.clearMedia() },
-                    onProRequired   = { selectedTab = 2 }
-                )
-            }
+            Spacer(modifier = Modifier.height(24.dp))
 
-            if (selectedTab == 2) {
-                UpgradeScreen(
-                    licenseManager = licenseManager,
-                    dnsManager     = dnsManager,
-                    isDark         = isDark,
-                    onToggleTheme  = onToggleTheme,
-                    onUnlocked     = { }
+            Text(
+                text = "Default Browser Required",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "To protect your browsing and enable full sandbox isolation, LinkShield must be set as your default browser.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = onSetDefaultClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Set as Default Browser",
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }
