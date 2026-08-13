@@ -68,13 +68,25 @@ fun UpgradeScreen(
     var isPro by remember { mutableStateOf(licenseManager.isProUser()) }
     var keyError by remember { mutableStateOf<String?>(null) }
 
-    fun verifyKey() {
+        fun verifyKey() {
         focusManager.clearFocus()
         val key = licenseKeyInput.trim()
         if (key.isBlank()) {
             keyError = "Key khali nahi ho sakti"
             return
         }
+
+        val success = licenseManager.validateKey(key)
+        if (success) {
+            isPro = true
+            keyError = null
+            Toast.makeText(context, "Pro features successfully unlocked!", Toast.LENGTH_LONG).show()
+            onBackOrDone()
+        } else {
+            keyError = "Invalid key. Dobara check karein."
+        }
+    }
+
 
         // License manager verification check
         val success = licenseManager.validateKey(key)
