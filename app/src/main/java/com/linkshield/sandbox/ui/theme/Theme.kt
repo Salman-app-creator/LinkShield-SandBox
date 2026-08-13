@@ -18,13 +18,14 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = SurfaceVariantDark,
     onSurfaceVariant = TextSecondaryDark,
     error = AlertRed,
+    onError = Color.Black,
     outline = NeonCyan.copy(alpha = 0.3f)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF004D40),
+    primary = Color(0xFF00695C),
     onPrimary = Color.White,
-    secondary = Color(0xFF1B5E20),
+    secondary = Color(0xFF2E7D32),
     onSecondary = Color.White,
     background = LightBackground,
     surface = SurfaceLight,
@@ -32,7 +33,8 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = SurfaceVariantLight,
     onSurfaceVariant = TextSecondaryLight,
     error = AlertRed,
-    outline = Color(0xFF004D40).copy(alpha = 0.3f)
+    onError = Color.White,
+    outline = Color(0xFF00695C).copy(alpha = 0.3f)
 )
 
 @Composable
