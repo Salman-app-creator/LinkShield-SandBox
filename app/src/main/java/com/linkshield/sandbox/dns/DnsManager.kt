@@ -48,7 +48,7 @@ enum class DohProvider(val displayName: String, val url: String, val ips: List<S
     ADGUARD("AdGuard", "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15"))
 }
 
-// ── SNI Fragmentation: wrap PLAIN socket BEFORE SSL layers on top ──
+// SNI Fragmentation: wrap PLAIN socket BEFORE SSL layers on top
 private class SniFragmentingSocketFactory(private val base: SSLSocketFactory) : SSLSocketFactory() {
     override fun getDefaultCipherSuites(): Array<String> = base.defaultCipherSuites
     override fun getSupportedCipherSuites(): Array<String> = base.supportedCipherSuites
@@ -100,8 +100,6 @@ private class FragmentingPlainSocket(private val plain: Socket) : Socket() {
     private var firstWrite = true
 
     companion object {
-        // Split after ~55 bytes: TLS Record(5) + Handshake(4) + Version(2) +
-        // Random(32) + SessionIDLen(1) + partial. SNI extension lands in segment 2.
         const val SPLIT_AT = 55
     }
 
