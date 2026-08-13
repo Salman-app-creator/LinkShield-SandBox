@@ -7,37 +7,21 @@ import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
-import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.Socket
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DnsManager.kt
-//
-// Features:
-//  1. DoH (DNS-over-HTTPS) via OkHttp — Cloudflare, WARP, Google, Quad9, AdGuard
-//  2. SNI fragmentation via SniFragmentingSocketFactory — bypasses ISP DPI blocks
-//  3. Google/YouTube bypass — skips fragmentation for Google domains to prevent
-//     reCAPTCHA / 429 triggers
-//  4. Download quota — 20 free downloads tracked in SharedPreferences
-//  5. isShieldPersistedOn() alias — kept for call-site compatibility
-// ─────────────────────────────────────────────────────────────────────────────
-
-private const val TAG                 = "DnsManager"
-private const val PREFS_NAME          = "shield_prefs"
-private const val KEY_DOH_ENABLED     = "doh_enabled"
-private const val KEY_PROVIDER        = "doh_provider"
-private const val KEY_DOWNLOAD_COUNT  = "download_count"
-private const val KEY_IS_PRO          = "is_pro"
-private const val KEY_INITIALIZED     = "initialized"
+private const val TAG = "DnsManager"
+private const val PREFS_NAME = "shield_prefs"
+private const val KEY_DOH_ENABLED = "doh_enabled"
+private const val KEY_PROVIDER = "doh_provider"
+private const val KEY_DOWNLOAD_COUNT = "download_count"
+private const val KEY_IS_PRO = "is_pro"
+private const val KEY_INITIALIZED = "initialized"
 private const val FREE_DOWNLOAD_LIMIT = 20
 
-// ── Google / YouTube — must bypass SNI fragmentation ─────────────────────────
-// Fragmenting TLS ClientHello to Google servers triggers reCAPTCHA / HTTP 429.
 private val GOOGLE_BYPASS_HOSTS = setOf(
     "google.com", "www.google.com", "apis.google.com",
     "googleapis.com", "accounts.google.com", "ssl.google-analytics.com",
@@ -51,162 +35,131 @@ private fun isGoogleHost(host: String): Boolean {
     val h = host.lowercase()
     if (GOOGLE_BYPASS_HOSTS.contains(h)) return true
     if (h.endsWith(".googleapis.com") || h.endsWith(".googlevideo.com") ||
-        h.endsWith(".google.com")     || h.endsWith(".gstatic.com")) return true
-    // google.co.uk, google.de, etc.
+        h.endsWith(".google.com") || h.endsWith(".gstatic.com")) return true
     if (h.matches(Regex("(www\\.)?google\\.[a-z]{2,3}(\\.[a-z]{2})?"))) return true
     return false
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DoH Provider catalogue
-// ─────────────────────────────────────────────────────────────────────────────
-enum class DohProvider(
-    val displayName: String,
-    val url:         String,
-    val ips:         List<String>
-) {
-    CLOUDFLARE(
-        displayName = "Cloudflare (1.1.1.1)",
-        url         = "https://cloudflare-dns.com/dns-query",
-        ips         = listOf("1.1.1.1", "1.0.0.1")
-    ),
-    CLOUDFLARE_WARP(
-        displayName = "Cloudflare WARP",
-        url         = "https://1.1.1.1/dns-query",
-        ips         = listOf("1.1.1.1", "1.0.0.1")
-    ),
-    GOOGLE(
-        displayName = "Google (8.8.8.8)",
-        url         = "https://dns.google/dns-query",
-        ips         = listOf("8.8.8.8", "8.8.4.4")
-    ),
-    QUAD9(
-        displayName = "Quad9 (9.9.9.9)",
-        url         = "https://dns.quad9.net/dns-query",
-        ips         = listOf("9.9.9.9", "149.112.112.112")
-    ),
-    ADGUARD(
-        displayName = "AdGuard",
-        url         = "https://dns.adguard-dns.com/dns-query",
-        ips         = listOf("94.140.14.14", "94.140.15.15")
-    )
+enum class DohProvider(val displayName: String, val url: String, val ips: List<String>) {
+    CLOUDFLARE("Cloudflare (1.1.1.1)", "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
+    CLOUDFLARE_WARP("Cloudflare WARP", "https://1.1.1.1/dns-query", listOf("1.1.1.1", "1.0.0.1")),
+    GOOGLE("Google (8.8.8.8)", "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4")),
+    QUAD9("Quad9 (9.9.9.9)", "https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112")),
+    ADGUARD("AdGuard", "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15"))
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SNI Fragmentation
-//
-// How it works:
-//   ISPs that block sites by SNI read the "server_name" TLS extension from
-//   a single-packet ClientHello. SniFragmentingSocketFactory wraps the SSL
-//   socket's OutputStream so the first write is split: 1 byte first, then the
-//   rest. Single-packet DPI engines cannot reassemble the SNI across two TCP
-//   segments → connection allowed.
-//
-// Google bypass applied in wrap(): Google domains receive the plain socket.
-// ─────────────────────────────────────────────────────────────────────────────
-private class SniFragmentingSocketFactory(
-    private val base: SSLSocketFactory
-) : SSLSocketFactory() {
-    override fun getDefaultCipherSuites(): Array<String>   = base.defaultCipherSuites
+// ── SNI Fragmentation: wrap PLAIN socket BEFORE SSL layers on top ──
+private class SniFragmentingSocketFactory(private val base: SSLSocketFactory) : SSLSocketFactory() {
+    override fun getDefaultCipherSuites(): Array<String> = base.defaultCipherSuites
     override fun getSupportedCipherSuites(): Array<String> = base.supportedCipherSuites
-    override fun createSocket(): Socket                    = base.createSocket()
+    override fun createSocket(): Socket = base.createSocket()
 
-    override fun createSocket(host: String, port: Int): Socket =
-        wrap(base.createSocket(host, port) as SSLSocket, host)
+    override fun createSocket(host: String, port: Int): Socket {
+        if (isGoogleHost(host)) return base.createSocket(host, port)
+        val plain = Socket()
+        plain.connect(java.net.InetSocketAddress(host, port), 15000)
+        return base.createSocket(FragmentingPlainSocket(plain), host, port, true)
+    }
 
-    override fun createSocket(host: String, port: Int, local: InetAddress, localPort: Int): Socket =
-        wrap(base.createSocket(host, port, local, localPort) as SSLSocket, host)
+    override fun createSocket(host: String, port: Int, local: InetAddress, localPort: Int): Socket {
+        if (isGoogleHost(host)) return base.createSocket(host, port, local, localPort)
+        val plain = Socket()
+        plain.bind(java.net.InetSocketAddress(local, localPort))
+        plain.connect(java.net.InetSocketAddress(host, port), 15000)
+        return base.createSocket(FragmentingPlainSocket(plain), host, port, true)
+    }
 
-    override fun createSocket(addr: InetAddress, port: Int): Socket =
-        base.createSocket(addr, port)
+    override fun createSocket(addr: InetAddress, port: Int): Socket {
+        val host = addr.hostName ?: addr.hostAddress ?: ""
+        val plain = Socket()
+        plain.connect(java.net.InetSocketAddress(addr, port), 15000)
+        return if (isGoogleHost(host))
+            base.createSocket(plain, host, port, true)
+        else
+            base.createSocket(FragmentingPlainSocket(plain), host, port, true)
+    }
 
-    override fun createSocket(addr: InetAddress, port: Int, local: InetAddress, localPort: Int): Socket =
-        base.createSocket(addr, port, local, localPort)
+    override fun createSocket(addr: InetAddress, port: Int, local: InetAddress, localPort: Int): Socket {
+        val host = addr.hostName ?: addr.hostAddress ?: ""
+        val plain = Socket()
+        plain.bind(java.net.InetSocketAddress(local, localPort))
+        plain.connect(java.net.InetSocketAddress(addr, port), 15000)
+        return if (isGoogleHost(host))
+            base.createSocket(plain, host, port, true)
+        else
+            base.createSocket(FragmentingPlainSocket(plain), host, port, true)
+    }
 
     override fun createSocket(s: Socket, host: String, port: Int, autoClose: Boolean): Socket {
         return if (isGoogleHost(host)) base.createSocket(s, host, port, autoClose)
-        else wrap(base.createSocket(s, host, port, autoClose) as SSLSocket, host)
+        else base.createSocket(FragmentingPlainSocket(s), host, port, autoClose)
     }
-
-    private fun wrap(ssl: SSLSocket, host: String): SSLSocket =
-        if (isGoogleHost(host)) ssl else FragmentingSSLSocket(ssl)
 }
 
-private class FragmentingSSLSocket(private val d: SSLSocket) : SSLSocket() {
-    private var firstDone = false
-    private val out: OutputStream by lazy { d.outputStream }
+private class FragmentingPlainSocket(private val plain: Socket) : Socket() {
+    private var firstWrite = true
 
-    override fun getOutputStream(): OutputStream = object : OutputStream() {
-        override fun write(b: Int) { out.write(b) }
-        override fun write(buf: ByteArray, off: Int, len: Int) {
-            if (!firstDone && len > 1) {
-                firstDone = true
-                out.write(buf, off, 1); out.flush()
-                out.write(buf, off + 1, len - 1)
-            } else {
-                out.write(buf, off, len)
+    companion object {
+        // Split after ~55 bytes: TLS Record(5) + Handshake(4) + Version(2) +
+        // Random(32) + SessionIDLen(1) + partial. SNI extension lands in segment 2.
+        const val SPLIT_AT = 55
+    }
+
+    private val fragmentingOut: OutputStream by lazy {
+        val base = plain.getOutputStream()
+        object : OutputStream() {
+            override fun write(b: Int) = base.write(b)
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                if (firstWrite && len > SPLIT_AT) {
+                    firstWrite = false
+                    base.write(b, off, SPLIT_AT)
+                    base.flush()
+                    base.write(b, off + SPLIT_AT, len - SPLIT_AT)
+                } else {
+                    base.write(b, off, len)
+                }
             }
+            override fun flush() = base.flush()
+            override fun close() = base.close()
         }
-        override fun flush() = out.flush()
-        override fun close() = out.close()
     }
 
-    override fun getInputStream(): InputStream                    = d.inputStream
-    override fun startHandshake()                                 { d.startHandshake() }
-    override fun getSession()                                     = d.session
-    override fun addHandshakeCompletedListener(l: javax.net.ssl.HandshakeCompletedListener) { d.addHandshakeCompletedListener(l) }
-    override fun removeHandshakeCompletedListener(l: javax.net.ssl.HandshakeCompletedListener) { d.removeHandshakeCompletedListener(l) }
-    override fun setUseClientMode(m: Boolean)                     { d.useClientMode = m }
-    override fun getUseClientMode(): Boolean                      = d.useClientMode
-    override fun setNeedClientAuth(n: Boolean)                    { d.needClientAuth = n }
-    override fun getNeedClientAuth(): Boolean                     = d.needClientAuth
-    override fun setWantClientAuth(w: Boolean)                    { d.wantClientAuth = w }
-    override fun getWantClientAuth(): Boolean                     = d.wantClientAuth
-    override fun setEnableSessionCreation(f: Boolean)             { d.enableSessionCreation = f }
-    override fun getEnableSessionCreation(): Boolean              = d.enableSessionCreation
-    override fun getSupportedCipherSuites(): Array<String>        = d.supportedCipherSuites
-    override fun getEnabledCipherSuites(): Array<String>          = d.enabledCipherSuites
-    override fun setEnabledCipherSuites(s: Array<String>)        { d.enabledCipherSuites = s }
-    override fun getSupportedProtocols(): Array<String>           = d.supportedProtocols
-    override fun getEnabledProtocols(): Array<String>             = d.enabledProtocols
-    override fun setEnabledProtocols(p: Array<String>)           { d.enabledProtocols = p }
-    override fun close()                                          { d.close() }
-    override fun isClosed(): Boolean                              = d.isClosed
-    override fun isConnected(): Boolean                           = d.isConnected
-    override fun getInetAddress(): InetAddress                    = d.inetAddress
-    override fun getPort(): Int                                   = d.port
-    override fun getLocalAddress(): InetAddress                   = d.localAddress
-    override fun getLocalPort(): Int                              = d.localPort
-    override fun getRemoteSocketAddress(): java.net.SocketAddress = d.remoteSocketAddress
-    override fun getLocalSocketAddress(): java.net.SocketAddress  = d.localSocketAddress
-    override fun connect(e: java.net.SocketAddress)               { d.connect(e) }
-    override fun connect(e: java.net.SocketAddress, t: Int)       { d.connect(e, t) }
-    override fun bind(b: java.net.SocketAddress)                  { d.bind(b) }
-    override fun getChannel(): java.nio.channels.SocketChannel    = d.channel
-    override fun setSoTimeout(t: Int)                             { d.soTimeout = t }
-    override fun getSoTimeout(): Int                              = d.soTimeout
-    override fun setSoLinger(on: Boolean, l: Int)                 { d.setSoLinger(on, l) }
-    override fun getSoLinger(): Int                               = d.soLinger
-    override fun setTcpNoDelay(on: Boolean)                       { d.tcpNoDelay = on }
-    override fun getTcpNoDelay(): Boolean                         = d.tcpNoDelay
-    override fun setKeepAlive(on: Boolean)                        { d.keepAlive = on }
-    override fun getKeepAlive(): Boolean                          = d.keepAlive
-    override fun setReuseAddress(on: Boolean)                     { d.reuseAddress = on }
-    override fun getReuseAddress(): Boolean                       = d.reuseAddress
-    override fun setSendBufferSize(s: Int)                        { d.sendBufferSize = s }
-    override fun getSendBufferSize(): Int                         = d.sendBufferSize
-    override fun setReceiveBufferSize(s: Int)                     { d.receiveBufferSize = s }
-    override fun getReceiveBufferSize(): Int                      = d.receiveBufferSize
-    override fun shutdownInput()                                  { d.shutdownInput() }
-    override fun shutdownOutput()                                 { d.shutdownOutput() }
-    override fun isInputShutdown(): Boolean                       = d.isInputShutdown
-    override fun isOutputShutdown(): Boolean                      = d.isOutputShutdown
-    override fun toString(): String                               = d.toString()
+    override fun getOutputStream(): OutputStream = fragmentingOut
+    override fun getInputStream(): java.io.InputStream = plain.getInputStream()
+    override fun close() = plain.close()
+    override fun isClosed(): Boolean = plain.isClosed
+    override fun isConnected(): Boolean = plain.isConnected
+    override fun getInetAddress(): InetAddress = plain.inetAddress
+    override fun getPort(): Int = plain.port
+    override fun getLocalAddress(): InetAddress = plain.localAddress
+    override fun getLocalPort(): Int = plain.localPort
+    override fun getRemoteSocketAddress(): java.net.SocketAddress = plain.remoteSocketAddress
+    override fun getLocalSocketAddress(): java.net.SocketAddress = plain.localSocketAddress
+    override fun connect(endpoint: java.net.SocketAddress) = plain.connect(endpoint)
+    override fun connect(endpoint: java.net.SocketAddress, timeout: Int) = plain.connect(endpoint, timeout)
+    override fun bind(bindpoint: java.net.SocketAddress) = plain.bind(bindpoint)
+    override fun getChannel(): java.nio.channels.SocketChannel = plain.channel
+    override fun setSoTimeout(timeout: Int) = plain.setSoTimeout(timeout)
+    override fun getSoTimeout(): Int = plain.soTimeout
+    override fun setSoLinger(on: Boolean, linger: Int) = plain.setSoLinger(on, linger)
+    override fun getSoLinger(): Int = plain.soLinger
+    override fun setTcpNoDelay(on: Boolean) = plain.setTcpNoDelay(on)
+    override fun getTcpNoDelay(): Boolean = plain.tcpNoDelay
+    override fun setKeepAlive(on: Boolean) = plain.setKeepAlive(on)
+    override fun getKeepAlive(): Boolean = plain.keepAlive
+    override fun setReuseAddress(on: Boolean) = plain.setReuseAddress(on)
+    override fun getReuseAddress(): Boolean = plain.reuseAddress
+    override fun setSendBufferSize(size: Int) = plain.setSendBufferSize(size)
+    override fun getSendBufferSize(): Int = plain.sendBufferSize
+    override fun setReceiveBufferSize(size: Int) = plain.setReceiveBufferSize(size)
+    override fun getReceiveBufferSize(): Int = plain.receiveBufferSize
+    override fun shutdownInput() = plain.shutdownInput()
+    override fun shutdownOutput() = plain.shutdownOutput()
+    override fun isInputShutdown(): Boolean = plain.isInputShutdown
+    override fun isOutputShutdown(): Boolean = plain.isOutputShutdown
+    override fun toString(): String = plain.toString()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DnsManager
-// ─────────────────────────────────────────────────────────────────────────────
 class DnsManager(private val context: Context) {
 
     private val prefs: SharedPreferences =
@@ -222,7 +175,6 @@ class DnsManager(private val context: Context) {
     }
 
     init {
-        // Fresh install → counter must start at 0, not a stale value
         if (!prefs.getBoolean(KEY_INITIALIZED, false)) {
             prefs.edit()
                 .putInt(KEY_DOWNLOAD_COUNT, 0)
@@ -232,16 +184,10 @@ class DnsManager(private val context: Context) {
         }
     }
 
-    // ── OkHttpClient API ──────────────────────────────────────────────────────
-
-    /** Thread-safe, cached OkHttpClient with DoH + SNI fragmentation when shield is ON. */
     fun getClient(): OkHttpClient = cachedClient ?: synchronized(this) {
         cachedClient ?: buildClient().also { cachedClient = it }
     }
 
-    /**
-     * Enable DoH with [provider]. Falls back to CLOUDFLARE_WARP if primary fails.
-     */
     fun enableDoh(provider: DohProvider = getCurrentProvider()) {
         prefs.edit()
             .putBoolean(KEY_DOH_ENABLED, true)
@@ -266,8 +212,6 @@ class DnsManager(private val context: Context) {
     }
 
     fun isDohEnabled(): Boolean = prefs.getBoolean(KEY_DOH_ENABLED, true)
-
-    /** Alias kept for call-site compatibility with older UnblockShieldScreen code. */
     fun isShieldPersistedOn(): Boolean = isDohEnabled()
 
     fun getCurrentProvider(): DohProvider {
@@ -275,9 +219,7 @@ class DnsManager(private val context: Context) {
         return runCatching { DohProvider.valueOf(name!!) }.getOrDefault(DohProvider.CLOUDFLARE)
     }
 
-    // ── Download quota API ────────────────────────────────────────────────────
-
-    fun isProUser(): Boolean   = prefs.getBoolean(KEY_IS_PRO, false)
+    fun isProUser(): Boolean = prefs.getBoolean(KEY_IS_PRO, false)
     fun setProUser(pro: Boolean) { prefs.edit().putBoolean(KEY_IS_PRO, pro).apply() }
     fun getDownloadCount(): Int = prefs.getInt(KEY_DOWNLOAD_COUNT, 0)
 
@@ -287,10 +229,6 @@ class DnsManager(private val context: Context) {
 
     fun canDownload(): Boolean = isProUser() || getDownloadCount() < FREE_DOWNLOAD_LIMIT
 
-    /**
-     * Atomically increments the counter.
-     * Returns true when the download is allowed; false when limit is reached.
-     */
     fun consumeDownload(): Boolean {
         if (isProUser()) return true
         val current = getDownloadCount()
@@ -301,8 +239,6 @@ class DnsManager(private val context: Context) {
     }
 
     fun resetDownloadCount() { prefs.edit().putInt(KEY_DOWNLOAD_COUNT, 0).apply() }
-
-    // ── Internal ──────────────────────────────────────────────────────────────
 
     private fun invalidate() { synchronized(this) { cachedClient = null } }
 
