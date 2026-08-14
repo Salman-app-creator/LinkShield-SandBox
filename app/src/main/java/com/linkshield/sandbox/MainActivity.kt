@@ -3,67 +3,75 @@ package com.linkshield.sandbox
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.license.LicenseManager
+import com.linkshield.sandbox.ui.MediaGrabberScreen
 import com.linkshield.sandbox.ui.UnblockShieldScreen
-import com.linkshield.sandbox.ui.UnblockShieldViewModel
-import com.linkshield.sandbox.ui.theme.LinkShieldTheme
-import com.linkshield.sandbox.ui.theme.ThemeManager
+import com.linkshield.sandbox.ui.UpgradeScreen
 
 class MainActivity : ComponentActivity() {
-
-    private val viewModel: UnblockShieldViewModel by viewModels()
     private lateinit var dnsManager: DnsManager
-    private lateinit var licenseManager: LicenseManager
-    private lateinit var disclaimerManager: DisclaimerManager
-    private lateinit var themeManager: ThemeManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         dnsManager = DnsManager(applicationContext)
-        licenseManager = LicenseManager(applicationContext)
-        disclaimerManager = DisclaimerManager(applicationContext)
-        themeManager = ThemeManager(applicationContext)
-
-        val interceptedUrl = intent.getStringExtra("url")
-        if (!interceptedUrl.isNullOrBlank()) {
-            viewModel.updateUrl(interceptedUrl)
-            viewModel.loadUrl(interceptedUrl)
-        }
 
         setContent {
-            var isDarkTheme by remember { mutableStateOf(themeManager.isDarkTheme()) }
+            MaterialTheme {
+                MainAppContainer(dnsManager)
+            }
+        }
+    }
+}
 
-            LinkShieldTheme(darkTheme = isDarkTheme) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    UnblockShieldScreen(
-                        dnsManager = dnsManager,
-                        viewModel = viewModel,
-                        licenseManager = licenseManager,
-                        disclaimerManager = disclaimerManager,
-                        isDarkTheme = isDarkTheme,
-                        onThemeToggle = {
-                            isDarkTheme = !isDarkTheme
-                            themeManager.setTheme(
-                                if (isDarkTheme) ThemeManager.THEME_DARK else ThemeManager.THEME_LIGHT
-                            )
-                        }
-                    )
-                }
+@Composable
+fun MainAppContainer(dnsManager: DnsManager) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var detectedMediaUrl by remember { mutableStateOf<String?>(null) }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = { Icon(Icons.Default.Security, contentDescription = "Shield") },
+                    label = { Text("Shield") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = { Icon(Icons.Default.Download, contentDescription = "Grabber") },
+                    label = { Text("Grabber") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = { Icon(Icons.Default.Star, contentDescription = "Upgrade") },
+                    label = { Text("Upgrade") }
+                )
+            }
+        }
+    ) { innerPadding ->
+        Surface(modifier = Modifier.padding(innerPadding)) {
+            when (selectedTab) {
+                0 -> UnblockShieldScreen(
+                    dnsManager = dnsManager,
+                    onMediaFound = { url ->
+                        detectedMediaUrl = url
+                    }
+                )
+                1 -> MediaGrabberScreen(
+                    detectedMediaUrl = detectedMediaUrl
+                )
+                2 -> UpgradeScreen()
             }
         }
     }
