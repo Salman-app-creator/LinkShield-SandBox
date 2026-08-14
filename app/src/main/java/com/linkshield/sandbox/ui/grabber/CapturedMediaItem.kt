@@ -1,9 +1,7 @@
-package com.linkshield.sandbox.ui
+package com.linkshield.sandbox.ui.grabber
 
 /**
  * Lightweight snapshot of a media item captured by the Browser WebView JS bridge.
- * Lives in package com.linkshield.sandbox.ui so both UnblockShieldViewModel
- * and MediaGrabberScreen can reference it without cross-package imports.
  */
 data class CapturedMediaItem(
     val url:       String,
