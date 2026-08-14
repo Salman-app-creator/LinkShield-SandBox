@@ -1,75 +1,72 @@
 package com.linkshield.sandbox.ui
 
 import android.annotation.SuppressLint
+import android.app.role.RoleManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.linkshield.sandbox.R
 import com.linkshield.sandbox.dns.DnsManager
-
-fun getRemainingTrialDays(context: Context): Long {
-    val prefs = context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE)
-    val installTime = prefs.getLong("first_install_time", System.currentTimeMillis())
-    val thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000
-    val isProActivated = prefs.getBoolean("is_pro_activated", false)
-
-    if (isProActivated) return -1
-
-    val elapsedTime = System.currentTimeMillis() - installTime
-    val remainingMillis = thirtyDaysInMillis - elapsedTime
-    val remainingDays = remainingMillis / (1000 * 60 * 60 * 24)
-
-    return if (remainingDays > 0) remainingDays else 0
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnblockShieldScreen(
     dnsManager: DnsManager,
-    viewModel: UnblockShieldViewModel,
-    isVisible: Boolean,
-    onUrlCaptured: (String) -> Unit = {}
+    viewModel: UnblockShieldViewModel
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE) }
-    
-    var showAcceptDialog by remember { mutableStateOf(!prefs.getBoolean("has_accepted_terms", false)) }
+    val clipboardManager = LocalClipboardManager.current
+
+    // App Preferences State
+    var hasAcceptedTerms by remember { mutableStateOf(prefs.getBoolean("has_accepted_terms", false)) }
+    var isDefaultSet by remember { mutableStateOf(prefs.getBoolean("is_default_browser", false)) }
     var isShieldActive by remember { mutableStateOf(prefs.getBoolean("is_shield_active", true)) }
-    var isStrictDoH by remember { mutableStateOf(prefs.getBoolean("is_strict_doh", true)) }
-    val remainingDays = remember { getRemainingTrialDays(context) }
+    var isDarkMode by remember { mutableStateOf(prefs.getBoolean("is_dark_mode", false)) }
+    var isProActivated by remember { mutableStateOf(prefs.getBoolean("is_pro_activated", false)) }
+    var downloadCount by remember { mutableStateOf(prefs.getInt("download_count", 0)) }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
-    val webView = viewModel.getOrCreateWebView(context, 0, dnsManager)
-
-    // Terms & Conditions / Accept Dialog
-    if (showAcceptDialog) {
+    // STEP 1: Mandatory Disclaimer / Terms Dialog
+    if (!hasAcceptedTerms) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("Welcome to LinkShield Sandbox", fontWeight = FontWeight.Bold) },
+            title = { Text("Disclaimer & Terms", fontWeight = FontWeight.Bold) },
             text = {
-                Text("This app uses Encrypted DoH (DNS-over-HTTPS) to secure your web traffic and bypass restricted connections safely. Please accept to proceed.")
+                Text("LinkShield Sandbox utilizes Encrypted DoH (DNS-over-HTTPS) to protect your browsing and bypass network restrictions safely. You must accept to proceed.")
             },
             confirmButton = {
                 Button(
                     onClick = {
                         prefs.edit().putBoolean("has_accepted_terms", true).apply()
-                        showAcceptDialog = false
+                        hasAcceptedTerms = true
                     }
                 ) {
                     Text("Accept & Continue")
@@ -78,211 +75,387 @@ fun UnblockShieldScreen(
         )
     }
 
-    DisposableEffect(webView, isShieldActive, isStrictDoH) {
+    // STEP 2: Mandatory Set As Default Browser Screen
+    else if (!isDefaultSet) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = null,
+                    modifier = Modifier.size(72.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Enable LinkShield Protection",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "To enable full DoH proxy protection and link sandboxing, LinkShield must be set as your default browser.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = {
+                        openDefaultBrowserSettings(context)
+                        // Mark set in prefs for session proceed
+                        prefs.edit().putBoolean("is_default_browser", true).apply()
+                        isDefaultSet = true
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Enable Shield (Set Default)")
+                }
+            }
+        }
+    }
+
+    // MAIN APP SCREEN
+    else {
+        Scaffold(
+            topBar = {
+                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    // TOP ROW 1: Logo, Shield Toggle, Theme Switch, Trial Badge
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Logo loaded from mipmap
+                            Image(
+                                painter = painterResource(id = R.mipmap.ic_launcher),
+                                contentDescription = "App Logo",
+                                modifier = Modifier.size(30.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            IconButton(
+                                onClick = {
+                                    isShieldActive = !isShieldActive
+                                    prefs.edit().putBoolean("is_shield_active", isShieldActive).apply()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isShieldActive) Icons.Default.Shield else Icons.Default.ShieldMoon,
+                                    contentDescription = "Shield State",
+                                    tint = if (isShieldActive) MaterialTheme.colorScheme.primary else Color.Red
+                                )
+                            }
+                            Text(
+                                text = if (isShieldActive) "Shield ON" else "OFF",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Light / Dark Theme Switch
+                            IconButton(
+                                onClick = {
+                                    isDarkMode = !isDarkMode
+                                    prefs.edit().putBoolean("is_dark_mode", isDarkMode).apply()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                    contentDescription = "Theme"
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Pro / Trial Badge
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isProActivated) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Text(
+                                    text = if (isProActivated) "PRO UNLOCKED" else "TRIAL MODE",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    // TOP ROW 2: Nav Controls & Address Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { viewModel.goBack() }, enabled = viewModel.canGoBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                        IconButton(onClick = { viewModel.goForward() }, enabled = viewModel.canGoForward) {
+                            Icon(Icons.Default.ArrowForward, contentDescription = "Forward")
+                        }
+                        IconButton(onClick = { viewModel.reload() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp),
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = viewModel.currentUrl.ifBlank { "https://..." },
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            bottomBar = {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        icon = { Icon(Icons.Default.Shield, contentDescription = "Shield") },
+                        label = { Text("Shield") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        icon = { Icon(Icons.Default.Download, contentDescription = "Grabber") },
+                        label = { Text("Grabber") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        icon = { Icon(Icons.Default.Star, contentDescription = "Upgrade") },
+                        label = { Text("Upgrade") }
+                    )
+                }
+            }
+        ) { padding ->
+            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                when (selectedTab) {
+                    0 -> ShieldWebView(viewModel = viewModel, dnsManager = dnsManager, isShieldActive = isShieldActive)
+                    1 -> GrabberTab(
+                        currentUrl = viewModel.currentUrl,
+                        downloadCount = downloadCount,
+                        isPro = isProActivated,
+                        onDownloadExecute = {
+                            if (!isProActivated && downloadCount >= 20) {
+                                selectedTab = 2 // Redirect to Upgrade
+                                Toast.makeText(context, "20 Free Downloads Limit Exceeded! Upgrade to Pro.", Toast.LENGTH_LONG).show()
+                            } else {
+                                downloadCount++
+                                prefs.edit().putInt("download_count", downloadCount).apply()
+                                Toast.makeText(context, "Parsing & Downloading Media...", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                    2 -> UpgradeTab(
+                        isPro = isProActivated,
+                        onActivateKey = { key ->
+                            val usedKeys = prefs.getStringSet("claimed_keys", mutableSetOf()) ?: mutableSetOf()
+                            if (usedKeys.contains(key)) {
+                                Toast.makeText(context, "This License Key is already claimed!", Toast.LENGTH_LONG).show()
+                            } else {
+                                // Save key as claimed & unlock Pro
+                                prefs.edit()
+                                    .putBoolean("is_pro_activated", true)
+                                    .putStringSet("claimed_keys", usedKeys.toMutableSet().apply { add(key) })
+                                    .apply()
+                                isProActivated = true
+                                Toast.makeText(context, "Pro Features Successfully Unlocked!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onCopyAccount = { text ->
+                            clipboardManager.setText(AnnotatedString(text))
+                            Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ---------------------- SUB-COMPONENTS ----------------------
+
+@Composable
+fun ShieldWebView(
+    viewModel: UnblockShieldViewModel,
+    dnsManager: DnsManager,
+    isShieldActive: Boolean
+) {
+    val context = LocalContext.current
+    val webView = remember { viewModel.getOrCreateWebView(context, 0, dnsManager) }
+
+    DisposableEffect(webView, isShieldActive) {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                url?.let {
-                    viewModel.updateUrl(it)
-                    onUrlCaptured(it)
-                }
+                url?.let { viewModel.updateUrl(it) }
             }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                url?.let {
-                    viewModel.updateUrl(it)
-                    onUrlCaptured(it)
-                }
-
-                if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
-                    val adBlockerScript = """
-                        (function() {
-                            if (window.__ytAdBlockerInjected) return;
-                            window.__ytAdBlockerInjected = true;
-                            function removeAds() {
-                                var video = document.querySelector('video');
-                                var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
-                                if (skipBtn) { try { skipBtn.click(); } catch(e){} }
-                                var adShowing = document.querySelector('.ad-showing, .ad-interrupting');
-                                if (adShowing && video && !isNaN(video.duration)) {
-                                    video.currentTime = video.duration || 999;
-                                }
-                                var selectors = ['.ad-banner', '.ytp-ad-overlay-container', '#player-ads', 'ytd-promoted-sparkles-web-renderer'];
-                                selectors.forEach(function(sel) {
-                                    document.querySelectorAll(sel).forEach(function(el) { el.style.display = 'none'; });
-                                });
-                            }
-                            setInterval(removeAds, 500);
-                        })();
-                    """.trimIndent()
-                    view?.evaluateJavascript(adBlockerScript, null)
-                }
-            }
-
-            // DoH Interceptor to bypass ISP blocks / ERR_CONNECTION_RESET
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 if (isShieldActive && request != null && request.isForMainFrame) {
-                    val url = request.url.toString()
-                    val response = dnsManager.resolveAndFetch(url, isStrictDoH)
+                    val response = dnsManager.resolveAndFetch(request.url.toString(), true)
                     if (response != null) return response
                 }
                 return super.shouldInterceptRequest(view, request)
             }
         }
-
         onDispose { }
     }
+
+    AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+}
+
+@Composable
+fun GrabberTab(
+    currentUrl: String,
+    downloadCount: Int,
+    isPro: Boolean,
+    onDownloadExecute: () -> Unit
+) {
+    var manualUrl by remember { mutableStateOf(currentUrl) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 4.dp)
+            .padding(16.dp)
     ) {
-        // Top Shield Header Status Card with Toggle Switch & Mode Controls
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 2.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isShieldActive) MaterialTheme.colorScheme.surfaceVariant 
-                                 else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            )
+        Text("Media Grabber & Downloader", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Free Downloads Remaining: ${if (isPro) "UNLIMITED" else "${20 - downloadCount}/20"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = manualUrl,
+            onValueChange = { manualUrl = it },
+            label = { Text("Target URL / Social Link") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onDownloadExecute,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = {
-                                isShieldActive = !isShieldActive
-                                prefs.edit().putBoolean("is_shield_active", isShieldActive).apply()
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isShieldActive) Icons.Default.Shield else Icons.Default.ShieldMoon,
-                                contentDescription = "Toggle Shield",
-                                tint = if (isShieldActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isShieldActive) "LinkShield Active" else "Shield Disabled",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // Strict DoH / Normal Mode Switch
-                        FilterChip(
-                            selected = isStrictDoH,
-                            onClick = {
-                                isStrictDoH = !isStrictDoH
-                                prefs.edit().putBoolean("is_strict_doh", isStrictDoH).apply()
-                            },
-                            label = { 
-                                Text(
-                                    if (isStrictDoH) "DoH Strict" else "DoH Auto", 
-                                    fontSize = 10.sp
-                                ) 
-                            },
-                            modifier = Modifier.height(26.dp)
-                        )
-
-                        // Dynamic Trial / Pro Badge
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (remainingDays.toInt() == -1) MaterialTheme.colorScheme.tertiaryContainer
-                                    else MaterialTheme.colorScheme.secondaryContainer
-                        ) {
-                            Text(
-                                text = when {
-                                    remainingDays.toInt() == -1 -> "PRO ACTIVE"
-                                    remainingDays > 0 -> "TRIAL: ${remainingDays}D LEFT"
-                                    else -> "EXPIRED"
-                                },
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            }
+            Icon(Icons.Default.Download, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Parse & Download HD Video")
         }
 
-        // Navigation Bar & URL Input Display
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onDownloadExecute,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(onClick = { viewModel.goBack() }, enabled = viewModel.canGoBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-            }
-            IconButton(onClick = { viewModel.goForward() }, enabled = viewModel.canGoForward) {
-                Icon(Icons.Default.ArrowForward, contentDescription = "Forward")
-            }
-            IconButton(onClick = { viewModel.reload() }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Reload")
-            }
-
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(40.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Secure",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = viewModel.currentUrl.ifBlank { "https://..." },
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
-        if (viewModel.isLoading) {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        // Isolated WebView Window
-        Box(modifier = Modifier.weight(1f)) {
-            AndroidView(
-                factory = { webView },
-                modifier = Modifier.fillMaxSize()
-            )
+            Icon(Icons.Default.MusicNote, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Download Audio Only (MP3)")
         }
     }
 }
+
+@Composable
+fun UpgradeTab(
+    isPro: Boolean,
+    onActivateKey: (String) -> Unit,
+    onCopyAccount: (String) -> Unit
+) {
+    var keyInput by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text("Upgrade to Pro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Account Details for Payment:", fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Easypaisa: 03001234567")
+                    IconButton(onClick = { onCopyAccount("03001234567") }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("JazzCash: 03007654321")
+                    IconButton(onClick = { onCopyAccount("03007654321") }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (isPro) {
+            Text("PRO Version is Active on this Device!", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        } else {
+            OutlinedTextField(
+                value = keyInput,
+                onValueChange = { keyInput = it },
+                label = { Text("Enter Purchased License Key") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    if (keyInput.isNotBlank()) onActivateKey(keyInput.trim())
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Activate Key")
+            }
+        }
+    }
+}
+
+private fun openDefaultBrowserSettings(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
+            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+            context.startActivity(intent)
+  
