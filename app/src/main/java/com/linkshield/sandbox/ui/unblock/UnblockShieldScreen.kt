@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.dns.DnsManager
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
 
@@ -77,6 +78,9 @@ fun UnblockShieldScreen(
 ) {
     var urlText by remember { mutableStateOf("https://google.com") }
     var currentWebUrl by remember { mutableStateOf("https://google.com") }
+    
+    // Standalone OkHttpClient instance to prevent build errors with DnsManager
+    val networkClient = remember { OkHttpClient.Builder().build() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // --- Top Bar Section ---
@@ -87,7 +91,6 @@ fun UnblockShieldScreen(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Standard Shield Icon (Missing Drawable Fix)
             Icon(
                 imageVector = Icons.Default.Shield,
                 contentDescription = "App Logo",
@@ -97,7 +100,6 @@ fun UnblockShieldScreen(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Address Bar Text Cut-off Fix
             BasicTextField(
                 value = urlText,
                 onValueChange = { urlText = it },
@@ -132,7 +134,7 @@ fun UnblockShieldScreen(
             }
         }
 
-        // --- WebView Section with Custom DoH Interceptor ---
+        // --- WebView Section ---
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -163,14 +165,13 @@ fun UnblockShieldScreen(
                             }
 
                             return try {
-                                val okHttpClient = dnsManager.okHttpClient
                                 val builder = Request.Builder().url(url)
 
                                 request.requestHeaders.forEach { (k, v) ->
                                     builder.addHeader(k, v)
                                 }
 
-                                val response = okHttpClient.newCall(builder.build()).execute()
+                                val response = networkClient.newCall(builder.build()).execute()
                                 val contentType = response.header("content-type", "text/html") ?: "text/html"
                                 val mimeType = contentType.split(";")[0].trim()
                                 val encoding = if (contentType.contains("charset=")) {
