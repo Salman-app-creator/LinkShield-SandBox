@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.linkshield.sandbox.dns.DnsManager
+import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val dnsManager = DnsManager(this)
+        val licenseManager = LicenseManager(this)
 
         setContent {
             val systemTheme = isSystemInDarkTheme()
@@ -67,9 +69,8 @@ class MainActivity : ComponentActivity() {
                             )
                             1 -> MediaGrabberScreen(
                                 detectedMediaUrl = detectedMediaUrl,
-                                onDownloadTriggered = {
-                                    // Optional state update
-                                }
+                                licenseManager = licenseManager,
+                                onDownloadTriggered = { }
                             )
                             2 -> UpgradeScreen()
                         }
