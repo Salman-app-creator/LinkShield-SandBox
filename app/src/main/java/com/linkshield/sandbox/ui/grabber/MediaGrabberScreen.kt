@@ -1,5 +1,9 @@
 package com.linkshield.sandbox.ui
 
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,9 +28,9 @@ fun MediaGrabberScreen(initialUrl: String?) {
     var selectedQuality by remember { mutableStateOf("1080p (HD)") }
     var expandedQualityMenu by remember { mutableStateOf(false) }
 
-    // Sample quota variables (In production, load via SharedPreferences / DataStore)
-    var remainingFreeDownloads by remember { mutableIntStateOf(3) }
-    val totalFreeQuota = 5
+    // FIXED: Free Limit is now 20 Downloads
+    val totalFreeQuota = 20
+    var remainingFreeDownloads by remember { mutableIntStateOf(20) }
 
     val qualities = listOf("1080p (HD)", "720p (SD)", "480p (Low)", "MP3 (Audio Only)")
 
@@ -45,7 +49,7 @@ fun MediaGrabberScreen(initialUrl: String?) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // --- Free Downloads Meter Card ---
+        // --- Free Downloads Counter Card (20 Downloads) ---
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
@@ -89,7 +93,7 @@ fun MediaGrabberScreen(initialUrl: String?) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Manual Address Input Field
+        // Manual Link Input
         OutlinedTextField(
             value = inputUrl,
             onValueChange = { inputUrl = it },
@@ -100,7 +104,7 @@ fun MediaGrabberScreen(initialUrl: String?) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Quality Options Dropdown
+        // Quality Menu
         ExposedDropdownMenuBox(
             expanded = expandedQualityMenu,
             onExpandedChange = { expandedQualityMenu = !expandedQualityMenu }
@@ -134,18 +138,39 @@ fun MediaGrabberScreen(initialUrl: String?) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Download Action Button
+        // REAL DOWNLOAD TRIGGER BUTTON
         Button(
             onClick = {
-                if (inputUrl.isNotBlank()) {
+                val targetUrl = inputUrl.trim()
+                if (targetUrl.isNotBlank() && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
                     if (remainingFreeDownloads > 0) {
-                        remainingFreeDownloads--
-                        Toast.makeText(context, "Starting Download ($selectedQuality)...", Toast.LENGTH_SHORT).show()
+                        try {
+                            // REAL SYSTEM DOWNLOAD MANAGER TRIGGER
+                            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                            val uri = Uri.parse(targetUrl)
+                            val request = DownloadManager.Request(uri).apply {
+                                setTitle("Downloading LinkShield Media")
+                                setDescription("Downloading $selectedQuality file...")
+                                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                setDestinationInExternalPublicDir(
+                                    Environment.DIRECTORY_DOWNLOADS,
+                                    "LinkShield_${System.currentTimeMillis()}.${if (selectedQuality.contains("MP3")) "mp3" else "mp4"}"
+                                )
+                                setAllowedOverMetered(true)
+                                setAllowedOverRoaming(true)
+                            }
+
+                            downloadManager.enqueue(request)
+                            remainingFreeDownloads--
+                            Toast.makeText(context, "Download started! Check notifications.", Toast.LENGTH_LONG).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Download error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                        }
                     } else {
                         Toast.makeText(context, "Free daily limit reached! Upgrade to Pro for unlimited downloads.", Toast.LENGTH_LONG).show()
                     }
                 } else {
-                    Toast.makeText(context, "Please enter a valid link!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Please enter a valid HTTP/HTTPS link!", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier
@@ -160,7 +185,7 @@ fun MediaGrabberScreen(initialUrl: String?) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Auto Detected Streams Box
+        // Captured Streams Info
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
