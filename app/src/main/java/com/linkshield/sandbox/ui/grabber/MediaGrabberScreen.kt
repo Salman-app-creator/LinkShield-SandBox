@@ -29,12 +29,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.dns.DnsManager
+import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.CapturedMediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -49,9 +49,6 @@ data class MediaOption(
     val extension: String
 )
 
-// ─────────────────────────────────────────────────────────────────────────────
-// URL Sanitizer Helper Function (Removes Tracking Queries like ?si=...)
-// ─────────────────────────────────────────────────────────────────────────────
 fun cleanMediaUrl(rawUrl: String): String {
     return try {
         val uri = URI(rawUrl.trim())
@@ -77,9 +74,11 @@ fun cleanMediaUrl(rawUrl: String): String {
 @Composable
 fun MediaGrabberScreen(
     dnsManager: DnsManager,
+    licenseManager: LicenseManager,
     activeUrl: String = "",
     capturedMedia: List<CapturedMediaItem> = emptyList(),
-    onClearCaptured: () -> Unit = {}
+    onClearCaptured: () -> Unit = {},
+    onUpgradeRequired: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -96,46 +95,22 @@ fun MediaGrabberScreen(
         }
     }
 
-    fun fetchQualityOptions(cleanedUrl: String, quality: String, isAudioOnly: Boolean = false, onResult: (String?) -> Unit) {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient()
-                val jsonPayload = JSONObject().apply {
-                    put("url", cleanedUrl)
-                    if (isAudioOnly) {
-                        put("downloadMode", "audio")
-                        put("audioFormat", "mp3")
-                    } else {
-                        put("videoQuality", quality)
-                    }
-                }
-
-                val request = Request.Builder()
-                    .url("https://api.cobalt.tools/api/json")
-                    .addHeader("Accept", "application/json")
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("User-Agent", GRABBER_CHROME_UA)
-                    .post(jsonPayload.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                if (response.isSuccessful && responseData != null) {
-                    val json = JSONObject(responseData)
-                    val status = json.optString("status")
-                    if (status == "stream" || status == "redirect") {
-                        onResult(json.optString("url"))
-                    } else {
-                        onResult(null)
-                    }
-                } else {
-                    onResult(null)
-                }
-            } catch (e: Exception) {
-                onResult(null)
-            }
+    fun checkLicenseAndDownload(downloadAction: () -> Unit) {
+        if (licenseManager.isProUser()) {
+            downloadAction()
+            return
         }
+        if (!licenseManager.isTrialActive()) {
+            Toast.makeText(context, "Trial ended. Please upgrade to Pro.", Toast.LENGTH_LONG).show()
+            onUpgradeRequired()
+            return
+        }
+        if (!licenseManager.incrementDownloadCount()) {
+            Toast.makeText(context, "20 free downloads used. Upgrade to Pro.", Toast.LENGTH_LONG).show()
+            onUpgradeRequired()
+            return
+        }
+        downloadAction()
     }
 
     fun processUrl() {
@@ -154,7 +129,7 @@ fun MediaGrabberScreen(
 
         scope.launch(Dispatchers.IO) {
             try {
-                val client = OkHttpClient()
+                val client = dnsManager.getClient()
                 val jsonPayload = JSONObject().apply {
                     put("url", sanitizedUrl)
                 }
@@ -178,10 +153,8 @@ fun MediaGrabberScreen(
 
                         if (status == "stream" || status == "redirect" || status == "picker") {
                             val downloadUrl = json.optString("url")
-                            
-                            // Generate Green Hole Downloader Style Quality Options
                             val list = mutableListOf<MediaOption>()
-                            
+
                             if (downloadUrl.isNotBlank()) {
                                 list.add(MediaOption(downloadUrl, "1080p Full HD", "VIDEO", "mp4"))
                                 list.add(MediaOption(downloadUrl, "720p HD", "VIDEO", "mp4"))
@@ -329,7 +302,9 @@ fun MediaGrabberScreen(
                     MediaItemCard(
                         media = item,
                         onDownloadClick = {
-                            enqueueDirectDownload(context, item.url, item.extension, item.quality)
+                            checkLicenseAndDownload {
+                                enqueueDirectDownload(context, item.url, item.extension, item.quality)
+                            }
                         }
                     )
                 }
