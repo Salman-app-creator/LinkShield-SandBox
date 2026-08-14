@@ -3,21 +3,18 @@ package com.linkshield.sandbox.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
-import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,16 +24,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.dns.DnsManager
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper function to calculate remaining trial days
-// ─────────────────────────────────────────────────────────────────────────────
 fun getRemainingTrialDays(context: Context): Long {
     val prefs = context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE)
     val installTime = prefs.getLong("first_install_time", System.currentTimeMillis())
     val thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000
     val isProActivated = prefs.getBoolean("is_pro_activated", false)
 
-    if (isProActivated) return -1 // -1 indicates Pro Version Activated
+    if (isProActivated) return -1
 
     val elapsedTime = System.currentTimeMillis() - installTime
     val remainingMillis = thirtyDaysInMillis - elapsedTime
@@ -54,15 +48,40 @@ fun UnblockShieldScreen(
     onUrlCaptured: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE) }
+    
+    var showAcceptDialog by remember { mutableStateOf(!prefs.getBoolean("has_accepted_terms", false)) }
+    var isShieldActive by remember { mutableStateOf(prefs.getBoolean("is_shield_active", true)) }
+    var isStrictDoH by remember { mutableStateOf(prefs.getBoolean("is_strict_doh", true)) }
     val remainingDays = remember { getRemainingTrialDays(context) }
+
     val webView = viewModel.getOrCreateWebView(context, 0, dnsManager)
 
-    // Ensure YouTube Auto Ad-Blocker and Active URL capturing are active on current WebView
-    DisposableEffect(webView) {
-        val originalClient = webView.webViewClient
+    // Terms & Conditions / Accept Dialog
+    if (showAcceptDialog) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Welcome to LinkShield Sandbox", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("This app uses Encrypted DoH (DNS-over-HTTPS) to secure your web traffic and bypass restricted connections safely. Please accept to proceed.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        prefs.edit().putBoolean("has_accepted_terms", true).apply()
+                        showAcceptDialog = false
+                    }
+                ) {
+                    Text("Accept & Continue")
+                }
+            }
+        )
+    }
+
+    DisposableEffect(webView, isShieldActive, isStrictDoH) {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                originalClient?.onPageStarted(view, url, favicon)
+                super.onPageStarted(view, url, favicon)
                 url?.let {
                     viewModel.updateUrl(it)
                     onUrlCaptured(it)
@@ -70,59 +89,45 @@ fun UnblockShieldScreen(
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                originalClient?.onPageFinished(view, url)
+                super.onPageFinished(view, url)
                 url?.let {
                     viewModel.updateUrl(it)
                     onUrlCaptured(it)
                 }
 
-                // 🛡️ YOUTUBE COSMETIC AD-BLOCKER INJECTION ENGINE 🛡️
                 if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
                     val adBlockerScript = """
                         (function() {
                             if (window.__ytAdBlockerInjected) return;
                             window.__ytAdBlockerInjected = true;
-
                             function removeAds() {
-                                // 1. Auto-Skip Video Ads
                                 var video = document.querySelector('video');
                                 var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
-                                if (skipBtn) {
-                                    try { skipBtn.click(); } catch(e){}
-                                }
+                                if (skipBtn) { try { skipBtn.click(); } catch(e){} }
                                 var adShowing = document.querySelector('.ad-showing, .ad-interrupting');
                                 if (adShowing && video && !isNaN(video.duration)) {
                                     video.currentTime = video.duration || 999;
                                 }
-
-                                // 2. Hide Static / Banner / Overlay Ads
-                                var selectors = [
-                                    'ytd-promoted-sparkles-web-renderer',
-                                    'ytm-promoted-sparkles-web-renderer',
-                                    '.ad-banner',
-                                    '.ytp-ad-overlay-container',
-                                    '#player-ads',
-                                    'ytd-banner-promo-renderer',
-                                    'ytd-statement-banner-renderer',
-                                    '.ytp-ad-text-inline'
-                                ];
+                                var selectors = ['.ad-banner', '.ytp-ad-overlay-container', '#player-ads', 'ytd-promoted-sparkles-web-renderer'];
                                 selectors.forEach(function(sel) {
-                                    document.querySelectorAll(sel).forEach(function(el) {
-                                        el.style.display = 'none';
-                                    });
+                                    document.querySelectorAll(sel).forEach(function(el) { el.style.display = 'none'; });
                                 });
                             }
-
                             setInterval(removeAds, 500);
                         })();
                     """.trimIndent()
-
                     view?.evaluateJavascript(adBlockerScript, null)
                 }
             }
 
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                return originalClient?.shouldOverrideUrlLoading(view, request) ?: super.shouldOverrideUrlLoading(view, request)
+            // DoH Interceptor to bypass ISP blocks / ERR_CONNECTION_RESET
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                if (isShieldActive && request != null && request.isForMainFrame) {
+                    val url = request.url.toString()
+                    val response = dnsManager.resolveAndFetch(url, isStrictDoH)
+                    if (response != null) return response
+                }
+                return super.shouldInterceptRequest(view, request)
             }
         }
 
@@ -132,110 +137,112 @@ fun UnblockShieldScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 8.dp)
+            .padding(top = 4.dp)
     ) {
-        // Top Shield Header Status
+        // Top Shield Header Status Card with Toggle Switch & Mode Controls
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(horizontal = 10.dp, vertical = 2.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(
+                containerColor = if (isShieldActive) MaterialTheme.colorScheme.surfaceVariant 
+                                 else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            )
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Left Side: Shield Status
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = "Shield Active",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "LinkShield Active",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Right Side: Dynamic Trial / Pro Badge & DoH Status
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // DoH Status Badge
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = {
+                                isShieldActive = !isShieldActive
+                                prefs.edit().putBoolean("is_shield_active", isShieldActive).apply()
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isShieldActive) Icons.Default.Shield else Icons.Default.ShieldMoon,
+                                contentDescription = "Toggle Shield",
+                                tint = if (isShieldActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "DoH ON",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            text = if (isShieldActive) "LinkShield Active" else "Shield Disabled",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
                         )
                     }
 
-                    // Professional Trial / Pro Badge
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (remainingDays.toInt() == -1) MaterialTheme.colorScheme.tertiaryContainer
-                                else MaterialTheme.colorScheme.secondaryContainer
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = when {
-                                remainingDays.toInt() == -1 -> "PRO ACTIVE"
-                                remainingDays > 0 -> "TRIAL: ${remainingDays}D LEFT"
-                                else -> "TRIAL EXPIRED"
+                        // Strict DoH / Normal Mode Switch
+                        FilterChip(
+                            selected = isStrictDoH,
+                            onClick = {
+                                isStrictDoH = !isStrictDoH
+                                prefs.edit().putBoolean("is_strict_doh", isStrictDoH).apply()
                             },
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (remainingDays.toInt() == -1) MaterialTheme.colorScheme.onTertiaryContainer
-                                    else MaterialTheme.colorScheme.onSecondaryContainer
+                            label = { 
+                                Text(
+                                    if (isStrictDoH) "DoH Strict" else "DoH Auto", 
+                                    fontSize = 10.sp
+                                ) 
+                            },
+                            modifier = Modifier.height(26.dp)
                         )
+
+                        // Dynamic Trial / Pro Badge
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (remainingDays.toInt() == -1) MaterialTheme.colorScheme.tertiaryContainer
+                                    else MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = when {
+                                    remainingDays.toInt() == -1 -> "PRO ACTIVE"
+                                    remainingDays > 0 -> "TRIAL: ${remainingDays}D LEFT"
+                                    else -> "EXPIRED"
+                                },
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Navigation & URL Bar
+        // Navigation Bar & URL Input Display
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = { viewModel.goBack() },
-                enabled = viewModel.canGoBack
-            ) {
+            IconButton(onClick = { viewModel.goBack() }, enabled = viewModel.canGoBack) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back")
             }
-
-            IconButton(
-                onClick = { viewModel.goForward() },
-                enabled = viewModel.canGoForward
-            ) {
+            IconButton(onClick = { viewModel.goForward() }, enabled = viewModel.canGoForward) {
                 Icon(Icons.Default.ArrowForward, contentDescription = "Forward")
             }
-
             IconButton(onClick = { viewModel.reload() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Reload")
             }
 
-            // Browser URL Display Bar
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(42.dp),
-                shape = RoundedCornerShape(21.dp),
+                    .height(40.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Row(
@@ -255,24 +262,22 @@ fun UnblockShieldScreen(
                         text = viewModel.currentUrl.ifBlank { "https://..." },
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontSize = 12.sp
                     )
                 }
             }
         }
 
-        // Progress Bar when Loading
         if (viewModel.isLoading) {
             LinearProgressIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp),
+                    .height(2.dp),
                 color = MaterialTheme.colorScheme.primary
             )
         }
 
-        // Main Isolated WebView Container
+        // Isolated WebView Window
         Box(modifier = Modifier.weight(1f)) {
             AndroidView(
                 factory = { webView },
