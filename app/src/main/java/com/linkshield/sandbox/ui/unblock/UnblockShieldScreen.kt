@@ -98,7 +98,7 @@ fun UnblockShieldScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // SAFE: Built-in Security icon, NO painterResource crash
+                    // SAFE: Built-in Security icon, NO crash
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Security,
@@ -277,6 +277,32 @@ fun UnblockShieldScreen(
                     }, "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
+                        
+                        // TIKTOK / RESTRICTED SITES FIX
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val url = request?.url ?: return false
+                            val scheme = url.scheme?.lowercase() ?: return false
+                            
+                            // HTTP/HTTPS ko WebView mein hi load karo
+                            if (scheme == "http" || scheme == "https") return false
+                            
+                            // TikTok, Instagram, aur dusre app-specific schemes handle karo
+                            if (scheme.startsWith("snssdk") || scheme == "intent" || scheme == "market" || 
+                                scheme.startsWith("instagram") || scheme.startsWith("fb")) {
+                                try {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, url)
+                                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // App install nahi hai to fallback
+                                    view?.loadUrl("https://www.tiktok.com")
+                                }
+                                return true
+                            }
+                            
+                            return true
+                        }
+
                         override fun shouldInterceptRequest(
                             view: WebView?,
                             request: WebResourceRequest?
