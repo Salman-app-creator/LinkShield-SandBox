@@ -98,7 +98,6 @@ fun UnblockShieldScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // SAFE: Built-in Security icon, NO crash
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Security,
@@ -269,7 +268,8 @@ fun UnblockShieldScreen(
                         mediaPlaybackRequiresUserGesture = false
                         allowFileAccess = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                        // DESKTOP USERAGENT — TikTok web properly load hoga
+                        userAgentString = "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                     }
 
                     addJavascriptInterface(LinkShieldBridge { url ->
@@ -278,25 +278,19 @@ fun UnblockShieldScreen(
 
                     webViewClient = object : WebViewClient() {
                         
-                        // TIKTOK / RESTRICTED SITES FIX
+                        // BLOCK all non-HTTP schemes to prevent refresh loops
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val url = request?.url ?: return false
                             val scheme = url.scheme?.lowercase() ?: return false
                             
-                            // HTTP/HTTPS ko WebView mein hi load karo
+                            // Allow only HTTP/HTTPS inside WebView
                             if (scheme == "http" || scheme == "https") return false
                             
-                            // TikTok, Instagram, aur dusre app-specific schemes handle karo
+                            // BLOCK TikTok, Instagram, FB app schemes completely
                             if (scheme.startsWith("snssdk") || scheme == "intent" || scheme == "market" || 
-                                scheme.startsWith("instagram") || scheme.startsWith("fb")) {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, url)
-                                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    // App install nahi hai to fallback
-                                    view?.loadUrl("https://www.tiktok.com")
-                                }
+                                scheme.startsWith("instagram") || scheme.startsWith("fb") ||
+                                scheme.startsWith("tiktok")) {
+                                // Do nothing — block completely
                                 return true
                             }
                             
