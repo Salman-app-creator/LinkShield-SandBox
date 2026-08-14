@@ -98,7 +98,7 @@ fun UnblockShieldScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // SAFE: Built-in icon, no missing drawable crash
+                    // SAFE: Built-in Security icon, NO painterResource crash
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Security,
