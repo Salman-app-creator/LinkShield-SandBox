@@ -13,8 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.ui.MediaGrabberScreen
-import com.linkshield.sandbox.ui.UnblockShieldScreen
-import com.linkshield.sandbox.ui.UpgradeScreen
+import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
+import com.linkshield.sandbox.ui.Upgrade.UpgradeScreen
 
 class MainActivity : ComponentActivity() {
     private lateinit var dnsManager: DnsManager
@@ -64,7 +64,7 @@ fun MainAppContainer(dnsManager: DnsManager) {
             when (selectedTab) {
                 0 -> UnblockShieldScreen(
                     dnsManager = dnsManager,
-                    onMediaFound = { url ->
+                    onMediaFound = { url: String ->
                         detectedMediaUrl = url
                     }
                 )
