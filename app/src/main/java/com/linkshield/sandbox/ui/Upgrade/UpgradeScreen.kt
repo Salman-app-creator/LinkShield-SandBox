@@ -1,4 +1,4 @@
-package com.linkshield.sandbox.ui
+package com.linkshield.sandbox.ui.Upgrade
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -12,13 +12,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -76,7 +76,7 @@ fun UpgradeScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // WhatsApp Launcher Button
+        // WhatsApp Launcher Button (Standard Send Icon Fix)
         Button(
             onClick = {
                 val whatsappUrl = "https://wa.me/923136176616?text=Hello%2C%20I%20have%20completed%20the%20payment%20for%20LinkShield%20Pro.%20Please%20verify%20my%20receipt%20and%20provide%20the%20license%20key."
@@ -90,7 +90,7 @@ fun UpgradeScreen() {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
         ) {
             Icon(
-                painter = painterResource(id = com.linkshield.sandbox.R.drawable.ic_whatsapp),
+                imageVector = Icons.Default.Send,
                 contentDescription = "WhatsApp",
                 tint = Color.White,
                 modifier = Modifier.size(24.dp)
