@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,10 +33,11 @@ fun UpgradeScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE) }
+    
     var keyInput by remember { mutableStateOf("") }
     var keyError by remember { mutableStateOf<String?>(null) }
-    var isSuccess by remember { mutableStateOf(false) }
-    var isProUnlocked by remember { mutableStateOf(licenseManager.isProActive()) }
+    var isProUnlocked by remember { mutableStateOf(prefs.getBoolean("is_pro_activated", false)) }
 
     val scrollState = rememberScrollState()
 
@@ -89,7 +92,7 @@ fun UpgradeScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        if (isProUnlocked || isSuccess) {
+        if (isProUnlocked) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -173,10 +176,11 @@ fun UpgradeScreen(
 
                     Button(
                         onClick = {
+                            val trimmedKey = keyInput.trim()
                             when {
-                                keyInput.isBlank() -> keyError = "Please enter your license key"
-                                licenseManager.validateKey(keyInput.trim()) -> {
-                                    isSuccess = true
+                                trimmedKey.isBlank() -> keyError = "Please enter your license key"
+                                licenseManager.validateKey(trimmedKey) -> {
+                                    prefs.edit().putBoolean("is_pro_activated", true).apply()
                                     isProUnlocked = true
                                 }
                                 else -> keyError = "Invalid key or already used. Please contact support."
