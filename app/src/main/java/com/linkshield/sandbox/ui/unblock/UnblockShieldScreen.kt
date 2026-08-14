@@ -3,7 +3,6 @@ package com.linkshield.sandbox.ui.unblock
 import android.annotation.SuppressLint
 import android.net.http.SslError
 import android.webkit.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -23,13 +22,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.linkshield.sandbox.R
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.dns.DohProvider
 import okhttp3.Request
@@ -42,20 +39,17 @@ const val MEDIA_SNIFFER_JS = """
                 window.AndroidBridge.processMedia(url);
             }
         }
-        
         var origFetch = window.fetch;
         window.fetch = function() {
             var url = arguments[0];
             if (typeof url === 'string') sendToAndroid(url);
             return origFetch.apply(this, arguments);
         };
-
         var origOpen = window.XMLHttpRequest.prototype.open;
         window.XMLHttpRequest.prototype.open = function(method, url) {
             if (typeof url === 'string') sendToAndroid(url);
             return origOpen.apply(this, arguments);
         };
-
         setInterval(function() {
             var elements = document.querySelectorAll('video, audio, source');
             elements.forEach(function(el) {
@@ -90,31 +84,29 @@ fun UnblockShieldScreen(
     val dohProviders = remember { DohProvider.values().toList() }
     var selectedProvider by remember { mutableStateOf(dnsManager.getCurrentProvider()) }
     var isServerMenuExpanded by remember { mutableStateOf(false) }
-
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // --- Top Header ---
         Surface(
             modifier = Modifier.fillMaxWidth(),
             tonalElevation = 4.dp,
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
-                // ROW 1: [ App Logo ] [ LinkShield ] | [ Server Dropdown ] | [ Theme Switch ] | [ Trial Tag ]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // App Logo with dedicated PNG icon
+                    // SAFE: Built-in icon, no missing drawable crash
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        Icon(
+                            imageVector = Icons.Default.Security,
                             contentDescription = "App Logo",
-                            modifier = Modifier.size(42.dp)
+                            modifier = Modifier.size(42.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "LinkShield",
                             fontWeight = FontWeight.Bold,
@@ -123,7 +115,6 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // Server Dropdown using DnsManager providers
                     Box {
                         OutlinedButton(
                             onClick = { isServerMenuExpanded = true },
@@ -174,7 +165,6 @@ fun UnblockShieldScreen(
                         }
                     }
 
-                    // Dark/Light Theme Toggle
                     IconButton(
                         onClick = { onToggleTheme() },
                         modifier = Modifier.size(32.dp)
@@ -186,7 +176,6 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // Trial Tag
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
@@ -203,7 +192,6 @@ fun UnblockShieldScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // ROW 2: Navigation & URL Input
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -269,7 +257,6 @@ fun UnblockShieldScreen(
             }
         }
 
-        // --- Persistent WebView with DnsManager integration ---
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -294,13 +281,9 @@ fun UnblockShieldScreen(
                             view: WebView?,
                             request: WebResourceRequest?
                         ): WebResourceResponse? {
-                            // Only intercept if DoH Shield is enabled
                             if (!dnsManager.isDohEnabled()) return null
-                            
                             val url = request?.url?.toString() ?: return null
                             if (!url.startsWith("http://") && !url.startsWith("https://")) return null
-
-                            // Let Google domains pass through normally
                             if (url.contains("google.com") || url.contains("googleapis.com") || url.contains("gstatic.com")) {
                                 return super.shouldInterceptRequest(view, request)
                             }
@@ -325,7 +308,6 @@ fun UnblockShieldScreen(
                                 } else "utf-8"
 
                                 val stream = response.body?.byteStream() ?: ByteArrayInputStream(ByteArray(0))
-
                                 WebResourceResponse(mimeType, encoding, stream)
                             } catch (_: Exception) {
                                 super.shouldInterceptRequest(view, request)
