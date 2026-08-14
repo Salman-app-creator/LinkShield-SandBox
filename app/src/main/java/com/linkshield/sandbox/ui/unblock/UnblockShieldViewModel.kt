@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Request
-import java.io.ByteArrayInputStream
 import java.net.URLDecoder
 
 internal const val CHROME_UA =
@@ -271,7 +270,6 @@ private class ShieldWebViewClient(
         error: WebResourceError?
     ) {
         super.onReceivedError(view, request, error)
-        // If ISP resets connection, attempt DoH fallback reload for main frame
         if (request?.isForMainFrame == true) {
             val url = request.url.toString()
             if (dnsManager.isDohEnabled() && !url.contains("retry=true")) {
@@ -289,7 +287,6 @@ private class ShieldWebViewClient(
         if (!url.startsWith("http://") && !url.startsWith("https://")) return null
 
         val lower = url.lowercase()
-        // Skip streaming media segments to allow direct native playback without buffering stalls
         val skipExts = listOf(".m3u8", ".ts", ".mp4", ".mp3", ".webm", ".m4s", ".mpd", ".key")
         if (skipExts.any { lower.endsWith(it) }) return null
         if (lower.contains("googlevideo.com") || lower.contains("videoplayback") || lower.contains("blob:")) return null
@@ -308,7 +305,7 @@ private class ShieldWebViewClient(
             val response = dnsManager.getClient().newCall(reqBuilder.build()).execute()
 
             if (!response.isSuccessful && response.code == 503) {
-                return null // Pass control back to WebView native stack on server overload
+                return null
             }
 
             response.headers("Set-Cookie").forEach { cookie ->
@@ -319,10 +316,7 @@ private class ShieldWebViewClient(
             val mime = if (ct != null) "${ct.type}/${ct.subtype}" else "text/html"
             val charset = ct?.charset()?.name() ?: "UTF-8"
             val headers = mutableMapOf<String, String>()
-            
             response.headers.forEach { (k, v) -> headers[k] = v }
-            
-            // Allow cross-origin requests for media elements
             headers["Access-Control-Allow-Origin"] = "*"
 
             WebResourceResponse(
@@ -331,7 +325,6 @@ private class ShieldWebViewClient(
                 headers, response.body?.byteStream()
             )
         }.getOrElse {
-            // Fallback gracefully on Network/SSL error
             null
         }
     }
