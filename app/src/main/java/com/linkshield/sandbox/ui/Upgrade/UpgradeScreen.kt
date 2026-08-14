@@ -16,8 +16,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.license.LicenseManager
 
+// Payment constants — edit ONLY here
+private const val EASYPAISA_NUMBER = "03001234567"
+private const val JAZZCASH_NUMBER = "03007654321"
+private const val USDT_ADDRESS = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"
+private const val PRICE_PKR = "350"
+private const val PRICE_USD = "1.25"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpgradeScreen(
@@ -33,11 +38,10 @@ fun UpgradeScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE) }
-    
+
     var keyInput by remember { mutableStateOf("") }
     var keyError by remember { mutableStateOf<String?>(null) }
-    var isProUnlocked by remember { mutableStateOf(prefs.getBoolean("is_pro_activated", false)) }
+    var isProUnlocked by remember { mutableStateOf(licenseManager.isProUser()) }
 
     val scrollState = rememberScrollState()
 
@@ -47,17 +51,33 @@ fun UpgradeScreen(
             .padding(16.dp)
             .verticalScroll(scrollState)
     ) {
-        // Header Section
         Text(
             text = "Upgrade to LinkShield Pro",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Unlock full sandbox isolation & uninterrupted browsing.",
+            text = "One-time payment. Lifetime access. All features unlocked.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Price pill
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Rs. $PRICE_PKR  /  $$PRICE_USD  (one-time)",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 10.dp, horizontal = 16.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -87,6 +107,8 @@ fun UpgradeScreen(
                 ProFeatureRow("Ad-Free YouTube Experience", "Automatic ad-blocking & background support")
                 Spacer(modifier = Modifier.height(8.dp))
                 ProFeatureRow("Isolated Media Grabber", "Download videos in high resolution safely")
+                Spacer(modifier = Modifier.height(8.dp))
+                ProFeatureRow("Unlimited Downloads", "No 20-download cap")
             }
         }
 
@@ -133,10 +155,51 @@ fun UpgradeScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    PaymentRow("JazzCash / EasyPaisa", "03001234567", "Account Name: LinkShield Admin", context)
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    PaymentRow("SadaPay / Nayapay", "03001234567", "Account Name: LinkShield Admin", context)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    PaymentRow("EasyPaisa", EASYPAISA_NUMBER, "Account: Salman Latif", context)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    PaymentRow("JazzCash", JAZZCASH_NUMBER, "Account: Salman Latif", context)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // USDT Crypto Payment
+                    Column {
+                        Text(
+                            "USDT (TRC20)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                USDT_ADDRESS,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 11.sp
+                            )
+                            IconButton(
+                                onClick = { copyToClipboard(context, "USDT Address", USDT_ADDRESS) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    contentDescription = "Copy USDT address",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            "TRC20 network only",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 10.sp
+                        )
+                    }
                 }
             }
 
@@ -180,8 +243,9 @@ fun UpgradeScreen(
                             when {
                                 trimmedKey.isBlank() -> keyError = "Please enter your license key"
                                 licenseManager.validateKey(trimmedKey) -> {
-                                    prefs.edit().putBoolean("is_pro_activated", true).apply()
                                     isProUnlocked = true
+                                    keyError = null
+                                    Toast.makeText(context, "Pro Activated! Enjoy unlimited features.", Toast.LENGTH_SHORT).show()
                                 }
                                 else -> keyError = "Invalid key or already used. Please contact support."
                             }
@@ -199,7 +263,7 @@ fun UpgradeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(80.dp)) // Padding for bottom navbar
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
