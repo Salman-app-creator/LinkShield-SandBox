@@ -29,11 +29,9 @@ fun MediaGrabberScreen(
     val context = LocalContext.current
     var inputUrl by remember(detectedMediaUrl) { mutableStateOf(detectedMediaUrl) }
     
-    // Real download count from LicenseManager
-    var remainingDownloads by remember(licenseManager) {
-        mutableIntStateOf(
-            licenseManager?.getRemainingDownloads()?.coerceAtMost(20) ?: 20
-        )
+    // REAL download count from LicenseManager
+    val remainingDownloads = remember(licenseManager) {
+        licenseManager?.getRemainingDownloads()?.coerceAtMost(20) ?: 20
     }
 
     Column(
@@ -74,13 +72,8 @@ fun MediaGrabberScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
-                    val quotaText = if (remainingDownloads >= 20) {
-                        "20 of 20 downloads remaining"
-                    } else {
-                        "$remainingDownloads of 20 downloads remaining"
-                    }
                     Text(
-                        text = quotaText,
+                        text = "$remainingDownloads of 20 downloads remaining",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -90,7 +83,6 @@ fun MediaGrabberScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // URL Input Field
         OutlinedTextField(
             value = inputUrl,
             onValueChange = { inputUrl = it },
@@ -102,7 +94,6 @@ fun MediaGrabberScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Download Action Button
         Button(
             onClick = {
                 if (inputUrl.isBlank()) {
@@ -117,12 +108,11 @@ fun MediaGrabberScreen(
 
                 val finalDownloadUrl = inputUrl.trim()
                 
-                // Block unsupported sites with clear message
                 if (finalDownloadUrl.contains("youtube.com") || 
                     finalDownloadUrl.contains("youtu.be") ||
                     finalDownloadUrl.contains("facebook.com") ||
                     finalDownloadUrl.contains("instagram.com")) {
-                    Toast.makeText(context, "This site requires media extraction. Paste the direct MP4/MP3 link only.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Paste the direct MP4/MP3 link only. This site is not supported.", Toast.LENGTH_LONG).show()
                     return@Button
                 }
 
@@ -151,11 +141,7 @@ fun MediaGrabberScreen(
                     val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                     downloadManager.enqueue(request)
 
-                    // Consume download and refresh count
                     licenseManager?.incrementDownloadCount()
-                    remainingDownloads = licenseManager?.getRemainingDownloads()?.coerceAtMost(20) 
-                        ?: (remainingDownloads - 1)
-                    
                     onDownloadTriggered()
                     Toast.makeText(context, "Download started! Check notification panel.", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
