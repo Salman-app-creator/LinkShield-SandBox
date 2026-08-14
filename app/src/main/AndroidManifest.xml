@@ -1,59 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Internet & Network Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
-        android:name=".LinkShieldApp"
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher_foreground"
-        android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_launcher_foreground"
+        android:icon="@drawable/ic_app_logo"
+        android:roundIcon="@drawable/ic_app_logo"
+        android:label="LinkShield Sandbox"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LinkShield"
-        android:usesCleartextTraffic="false"
-        android:requestLegacyExternalStorage="true">
+        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask"
-            android:configChanges="orientation|screenSize|smallestScreenSize">
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize">
+            
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            
         </activity>
-
-        <activity
-            android:name=".LinkInterceptorActivity"
-            android:exported="true"
-            android:theme="@style/Theme.LinkShield.Transparent"
-            android:excludeFromRecents="true"
-            android:noHistory="true">
-
-            <intent-filter android:priority="999">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <category android:name="android.intent.category.APP_BROWSER" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-            </intent-filter>
-
-        </activity>
-
+        
     </application>
 
 </manifest>
