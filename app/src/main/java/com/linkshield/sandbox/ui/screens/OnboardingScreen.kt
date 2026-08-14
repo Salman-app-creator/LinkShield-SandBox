@@ -71,3 +71,4 @@ fun OnboardingScreen(onGetStarted: () -> Unit) {
         }
     }
 }
+
