@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
                             1 -> MediaGrabberScreen(
                                 detectedMediaUrl = detectedMediaUrl,
                                 licenseManager = licenseManager,
+                                dnsManager = dnsManager,
                                 onDownloadTriggered = { }
                             )
                             2 -> UpgradeScreen()
