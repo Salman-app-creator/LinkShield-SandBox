@@ -18,21 +18,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.api.CobaltApiService
+import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun MediaGrabberScreen(
     detectedMediaUrl: String = "",
     licenseManager: LicenseManager? = null,
+    dnsManager: DnsManager? = null,
     onDownloadTriggered: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var inputUrl by remember(detectedMediaUrl) { mutableStateOf(detectedMediaUrl) }
     
-    // REAL download count from LicenseManager
-    val remainingDownloads = remember(licenseManager) {
-        licenseManager?.getRemainingDownloads()?.coerceAtMost(20) ?: 20
+    var remainingDownloads by remember(licenseManager) {
+        mutableIntStateOf(licenseManager?.getRemainingDownloads()?.coerceAtMost(20) ?: 20)
     }
+    
+    var isLoading by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -49,7 +55,6 @@ fun MediaGrabberScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Quota Card with REAL count
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -106,53 +111,58 @@ fun MediaGrabberScreen(
                     return@Button
                 }
 
-                val finalDownloadUrl = inputUrl.trim()
+                isLoading = true
                 
-                if (finalDownloadUrl.contains("youtube.com") || 
-                    finalDownloadUrl.contains("youtu.be") ||
-                    finalDownloadUrl.contains("facebook.com") ||
-                    finalDownloadUrl.contains("instagram.com")) {
-                    Toast.makeText(context, "Paste the direct MP4/MP3 link only. This site is not supported.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-
-                try {
-                    val fileName = "LinkShield_${System.currentTimeMillis()}.mp4"
-                    val mimeType = when {
-                        finalDownloadUrl.endsWith(".mp3", true) -> "audio/mpeg"
-                        finalDownloadUrl.endsWith(".webm", true) -> "video/webm"
-                        finalDownloadUrl.endsWith(".m3u8", true) -> "application/x-mpegURL"
-                        else -> "video/mp4"
+                scope.launch {
+                    try {
+                        val cobalt = CobaltApiService(context, dnsManager ?: DnsManager(context))
+                        val result = cobalt.fetchMediaUrl(inputUrl.trim())
+                        
+                        if (result.success && result.url != null) {
+                            val request = DownloadManager.Request(Uri.parse(result.url)).apply {
+                                setTitle(result.filename ?: "LinkShield_Download")
+                                setDescription("Downloading via LinkShield")
+                                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                setDestinationInExternalPublicDir(
+                                    Environment.DIRECTORY_DOWNLOADS,
+                                    result.filename ?: "LinkShield_Video.mp4"
+                                )
+                                setAllowedOverMetered(true)
+                                setAllowedOverRoaming(true)
+                            }
+                            
+                            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                            downloadManager.enqueue(request)
+                            
+                            licenseManager?.incrementDownloadCount()
+                            remainingDownloads = licenseManager?.getRemainingDownloads()?.coerceAtMost(20) 
+                                ?: (remainingDownloads - 1)
+                            
+                            onDownloadTriggered()
+                            Toast.makeText(context, "Download started! Check notifications.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, result.error ?: "Failed to fetch media", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        isLoading = false
                     }
-
-                    val request = DownloadManager.Request(Uri.parse(finalDownloadUrl)).apply {
-                        setTitle("LinkShield Download")
-                        setDescription("Downloading media file...")
-                        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                        setDestinationInExternalPublicDir(
-                            Environment.DIRECTORY_DOWNLOADS,
-                            fileName
-                        )
-                        setAllowedOverMetered(true)
-                        setAllowedOverRoaming(true)
-                        setMimeType(mimeType)
-                    }
-
-                    val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                    downloadManager.enqueue(request)
-
-                    licenseManager?.incrementDownloadCount()
-                    onDownloadTriggered()
-                    Toast.makeText(context, "Download started! Check notification panel.", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(8.dp),
-            enabled = remainingDownloads > 0
+            enabled = remainingDownloads > 0 && !isLoading
         ) {
-            Text("Download Video (MP4)", fontSize = 16.sp)
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("Download Video (MP4)", fontSize = 16.sp)
+            }
         }
     }
 }
