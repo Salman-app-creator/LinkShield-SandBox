@@ -29,9 +29,9 @@ fun UpgradeScreen() {
     val context = LocalContext.current
     var licenseKeyInput by remember { mutableStateOf("") }
 
-    // Mock Trial Data (Can be linked to prefs)
-    val remainingTrialDays = 2
-    val remainingTrialHours = 14
+    // FIXED: Trial Period is set to 30 Days
+    val remainingTrialDays = 30
+    val remainingTrialHours = 0
 
     Column(
         modifier = Modifier
@@ -48,7 +48,7 @@ fun UpgradeScreen() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // --- Remaining Trial Period Card ---
+        // --- Trial Period Card (30 Days) ---
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
@@ -85,7 +85,7 @@ fun UpgradeScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- License Key Input ---
+        // License Key Activation Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -125,7 +125,7 @@ fun UpgradeScreen() {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- Payment Details ---
+        // Payment Cards
         PaymentCard(
             title = "EasyPaisa",
             accountTitle = "Account Title: Salman Latif",
@@ -153,7 +153,6 @@ fun UpgradeScreen() {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // WhatsApp Support Button
         Button(
             onClick = {
                 val whatsappUrl = "https://wa.me/923136176616?text=Hello%2C%20I%20have%20completed%20the%20payment%20for%20LinkShield%20Pro."
