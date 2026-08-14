@@ -1,389 +1,233 @@
 package com.linkshield.sandbox.ui
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.linkshield.sandbox.dns.DohProvider
 import com.linkshield.sandbox.dns.DnsManager
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnblockShieldScreen(
-    dnsManager:    DnsManager,
-    viewModel:     UnblockShieldViewModel,
-    isVisible:     Boolean,
-    isDarkTheme:   Boolean = true,
-    onToggleTheme: () -> Unit = {},
-    onUrlCaptured: (String) -> Unit = {} // <--- Active Browser Link Auto-Capture Callback
+    dnsManager: DnsManager,
+    viewModel: UnblockShieldViewModel,
+    isVisible: Boolean,
+    onUrlCaptured: (String) -> Unit = {}
 ) {
-    val focusManager = LocalFocusManager.current
+    val webView = viewModel.getOrCreateWebView(LocalContext.current, 0, dnsManager)
 
-    var urlBarValue by remember { mutableStateOf(TextFieldValue(viewModel.currentUrl)) }
-    var isEditing   by remember { mutableStateOf(false) }
-    var showDnsMenu by remember { mutableStateOf(false) }
-    var isDohOn     by remember { mutableStateOf(dnsManager.isDohEnabled()) }
+    // Ensure YouTube Auto Ad-Blocker and Active URL capturing are active on current WebView
+    DisposableEffect(webView) {
+        val originalClient = webView.webViewClient
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                originalClient?.onPageStarted(view, url, favicon)
+                url?.let {
+                    viewModel.updateUrl(it)
+                    onUrlCaptured(it)
+                }
+            }
 
-    val currentUrl = viewModel.currentUrl
-    
-    // Auto-Catch Active Page Link for Grabber Tab
-    LaunchedEffect(currentUrl) {
-        if (!isEditing && urlBarValue.text != currentUrl) {
-            urlBarValue = TextFieldValue(
-                text = currentUrl,
-                selection = TextRange(currentUrl.length)
-            )
+            override fun onPageFinished(view: WebView?, url: String?) {
+                originalClient?.onPageFinished(view, url)
+                url?.let {
+                    viewModel.updateUrl(it)
+                    onUrlCaptured(it)
+                }
+
+                // 🛡️ YOUTUBE COSMETIC AD-BLOCKER INJECTION ENGINE 🛡️
+                if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
+                    val adBlockerScript = """
+                        (function() {
+                            if (window.__ytAdBlockerInjected) return;
+                            window.__ytAdBlockerInjected = true;
+
+                            function removeAds() {
+                                // 1. Auto-Skip Video Ads
+                                var video = document.querySelector('video');
+                                var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
+                                if (skipBtn) {
+                                    try { skipBtn.click(); } catch(e){}
+                                }
+                                var adShowing = document.querySelector('.ad-showing, .ad-interrupting');
+                                if (adShowing && video && !isNaN(video.duration)) {
+                                    video.currentTime = video.duration || 999;
+                                }
+
+                                // 2. Hide Static / Banner / Overlay Ads
+                                var selectors = [
+                                    'ytd-promoted-sparkles-web-renderer',
+                                    'ytm-promoted-sparkles-web-renderer',
+                                    '.ad-banner',
+                                    '.ytp-ad-overlay-container',
+                                    '#player-ads',
+                                    'ytd-banner-promo-renderer',
+                                    'ytd-statement-banner-renderer',
+                                    '.ytp-ad-text-inline'
+                                ];
+                                selectors.forEach(function(sel) {
+                                    document.querySelectorAll(sel).forEach(function(el) {
+                                        el.style.display = 'none';
+                                    });
+                                });
+                            }
+
+                            setInterval(removeAds, 500);
+                        })();
+                    """.trimIndent()
+
+                    view?.evaluateJavascript(adBlockerScript, null)
+                }
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                return originalClient?.shouldOverrideUrlLoading(view, request) ?: super.shouldOverrideUrlLoading(view, request)
+            }
         }
-        if (currentUrl.isNotBlank() && currentUrl.startsWith("http")) {
-            onUrlCaptured(currentUrl)
-        }
-    }
 
-    val shieldTint by animateColorAsState(
-        targetValue   = if (isDohOn) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(300),
-        label         = "shieldTint"
-    )
-
-    BackHandler(enabled = isVisible && viewModel.canGoBack) {
-        viewModel.goBack()
+        onDispose { }
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().alpha(if (isVisible) 1f else 0f)
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 8.dp)
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 4.dp
+        // Top Shield Header Status
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            Column {
-                // ROW 1: Logo | Shield Status | Theme Toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = "LinkShield",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "LinkShield",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isDohOn)
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        else
-                            MaterialTheme.colorScheme.error.copy(alpha = 0.10f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = if (isDohOn) shieldTint else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isDohOn) "SHIELD ACTIVE" else "SHIELD INACTIVE",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isDohOn) shieldTint else MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = onToggleTheme,
-                        enabled = isVisible,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = "Toggle theme",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                // ROW 2: Nav Controls | Address Bar | Shield Dropdown
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, end = 4.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    IconButton(
-                        onClick = { viewModel.goBack() },
-                        enabled = viewModel.canGoBack && isVisible,
-                        modifier = Modifier.size(38.dp).alpha(if (viewModel.canGoBack) 1f else 0.30f)
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack, "Back",
-                            Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.goForward() },
-                        enabled = viewModel.canGoForward && isVisible,
-                        modifier = Modifier.size(38.dp).alpha(if (viewModel.canGoForward) 1f else 0.30f)
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward, "Forward",
-                            Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.reload() },
-                        enabled = isVisible,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh, "Refresh",
-                            Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = urlBarValue,
-                        onValueChange = { newValue ->
-                            isEditing = true
-                            urlBarValue = newValue
-                        },
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        placeholder = {
-                            Text(
-                                "Search or enter URL",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp
-                            )
-                        },
-                        trailingIcon = {
-                            if (urlBarValue.text.isNotEmpty()) {
-                                IconButton(
-                                    onClick = {
-                                        urlBarValue = TextFieldValue(text = "", selection = TextRange(0))
-                                        viewModel.updateUrl("")
-                                    },
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close, "Clear",
-                                        Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Go
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onGo = {
-                                isEditing = false
-                                focusManager.clearFocus()
-                                val url = urlBarValue.text
-                                if (url.isNotBlank()) viewModel.loadUrl(url)
-                            }
-                        ),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
-                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                        )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = "Shield Active",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
-
-                    Box {
-                        IconButton(
-                            onClick = { if (isVisible) showDnsMenu = true },
-                            enabled = isVisible,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = if (isDohOn) "Shield ON" else "Shield OFF",
-                                tint = shieldTint,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showDnsMenu,
-                            onDismissRequest = { showDnsMenu = false }
-                        ) {
-                            Text(
-                                "DNS Shield",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                            )
-                            HorizontalDivider()
-
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "Disabled",
-                                        color = if (!isDohOn) MaterialTheme.colorScheme.error
-                                                else MaterialTheme.colorScheme.onSurface
-                                    )
-                                },
-                                leadingIcon = {
-                                    if (!isDohOn) Icon(
-                                        Icons.Default.CheckCircle, null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                },
-                                onClick = {
-                                    dnsManager.disableDoh()
-                                    isDohOn = false
-                                    showDnsMenu = false
-                                }
-                            )
-
-                            HorizontalDivider()
-
-                            DohProvider.entries.forEach { provider ->
-                                val isSelected = isDohOn && dnsManager.getCurrentProvider() == provider
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            provider.displayName,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        if (isSelected) Icon(
-                                            Icons.Default.CheckCircle, null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    },
-                                    onClick = {
-                                        runCatching { dnsManager.enableDoh(provider) }
-                                        isDohOn = true
-                                        showDnsMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "LinkShield Sandbox Active",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-
-                AnimatedVisibility(visible = viewModel.isLoading) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = Color.Transparent
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = "DoH ON",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
         }
 
-        Box(
-            modifier = Modifier.fillMaxWidth().weight(1f)
+        // Navigation & URL Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    viewModel.getOrCreateWebView(
-                        context = ctx,
-                        tabIndex = 0,
-                        dnsManager = dnsManager
+            IconButton(
+                onClick = { viewModel.goBack() },
+                enabled = viewModel.canGoBack
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+            }
+
+            IconButton(
+                onClick = { viewModel.goForward() },
+                enabled = viewModel.canGoForward
+            ) {
+                Icon(Icons.Default.ArrowForward, contentDescription = "Forward")
+            }
+
+            IconButton(onClick = { viewModel.reload() }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Reload")
+            }
+
+            // Browser URL Display Bar
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp),
+                shape = RoundedCornerShape(21.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Secure",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
                     )
-                },
-                update = { _ -> },
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = viewModel.currentUrl.ifBlank { "https://..." },
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        // Progress Bar when Loading
+        if (viewModel.isLoading) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // Main Isolated WebView Container
+        Box(modifier = Modifier.weight(1f)) {
+            AndroidView(
+                factory = { webView },
                 modifier = Modifier.fillMaxSize()
             )
         }
