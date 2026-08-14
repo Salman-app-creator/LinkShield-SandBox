@@ -3,7 +3,6 @@ package com.linkshield.sandbox
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -21,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.ui.MediaGrabberScreen
@@ -31,11 +29,10 @@ import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 class MainActivity : ComponentActivity() {
     private lateinit var dnsManager: DnsManager
 
-    // Role Manager Launcher for Default Browser prompt
     private val roleManagerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        // Continue to main screen regardless of user choice
+        // Proceed after default browser prompt
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,9 +62,7 @@ class MainActivity : ComponentActivity() {
             try {
                 val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
                 startActivity(intent)
-            } catch (e: Exception) {
-                // Fallback if settings page not available
-            }
+            } catch (_: Exception) {}
         }
     }
 }
@@ -79,54 +74,126 @@ fun MainAppFlow(
 ) {
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE) }
-    
-    // Check if disclaimer was accepted previously
+
     var isDisclaimerAccepted by remember {
         mutableStateOf(sharedPrefs.getBoolean("disclaimer_accepted", false))
     }
+    var isDefaultBrowserHandled by remember {
+        mutableStateOf(sharedPrefs.getBoolean("default_browser_handled", false))
+    }
 
-    if (!isDisclaimerAccepted) {
-        // --- Step 1: Mandatory Disclaimer Screen ---
-        DisclaimerDialog(
-            onAccept = {
-                sharedPrefs.edit().putBoolean("disclaimer_accepted", true).apply()
-                isDisclaimerAccepted = true
-                onRequestDefaultBrowser() // Trigger Default Browser Request right after accept
-            }
-        )
-    } else {
-        // --- Step 2: Main Application Interface ---
-        MainAppContainer(dnsManager = dnsManager)
+    when {
+        !isDisclaimerAccepted -> {
+            DisclaimerScreen(
+                onAccept = {
+                    sharedPrefs.edit().putBoolean("disclaimer_accepted", true).apply()
+                    isDisclaimerAccepted = true
+                }
+            )
+        }
+        !isDefaultBrowserHandled -> {
+            DefaultBrowserPromptScreen(
+                onSetDefault = {
+                    onRequestDefaultBrowser()
+                    sharedPrefs.edit().putBoolean("default_browser_handled", true).apply()
+                    isDefaultBrowserHandled = true
+                },
+                onSkip = {
+                    sharedPrefs.edit().putBoolean("default_browser_handled", true).apply()
+                    isDefaultBrowserHandled = true
+                }
+            )
+        }
+        else -> {
+            MainAppContainer(dnsManager = dnsManager)
+        }
     }
 }
 
 @Composable
-fun DisclaimerDialog(onAccept: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = { /* Prevent dismiss without accept */ },
-        title = {
-            Text(
-                text = "Privacy & Usage Terms",
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge
+fun DisclaimerScreen(onAccept: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Security,
+                contentDescription = "Shield",
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
-        },
-        text = {
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "LinkShield Sandbox uses Custom Secure DNS (DoH) to protect your privacy and unblock restricted networks. " +
-                        "By proceeding, you agree that this application is strictly for personal privacy testing and sandbox browsing.",
+                text = "Privacy & Sandbox Disclaimer",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "LinkShield Sandbox utilizes Encrypted DNS over HTTPS (DoH) to bypass restrictive network censorship and protect online privacy. By proceeding, you agree to use this tool responsibly for personal testing and secure browsing.",
                 style = MaterialTheme.typography.bodyMedium
             )
-        },
-        confirmButton = {
+            Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = onAccept,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("I Accept & Set Default Browser")
+                Text("I Accept Terms")
             }
         }
-    )
+    }
+}
+
+@Composable
+fun DefaultBrowserPromptScreen(
+    onSetDefault: () -> Unit,
+    onSkip: () -> Unit
+) {
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Security,
+                contentDescription = "Default Browser",
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.secondary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Set as Default Browser",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Set LinkShield Sandbox as your default browser to open all incoming links with automatic encrypted DNS protection and media detection.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onSetDefault,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Set as Default Browser")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = onSkip,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Skip for Now")
+            }
+        }
+    }
 }
 
 @Composable
@@ -171,7 +238,7 @@ fun MainAppContainer(dnsManager: DnsManager) {
                     }
                 )
                 1 -> MediaGrabberScreen(
-                    detectedMediaUrl = detectedMediaUrl
+                    initialUrl = detectedMediaUrl
                 )
                 2 -> UpgradeScreen()
             }
