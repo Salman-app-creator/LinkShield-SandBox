@@ -3,6 +3,7 @@ package com.linkshield.sandbox.ui.unblock
 import android.annotation.SuppressLint
 import android.net.http.SslError
 import android.webkit.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -22,18 +23,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.linkshield.sandbox.R
 import com.linkshield.sandbox.dns.DnsManager
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
+import com.linkshield.sandbox.dns.DohProvider
 import okhttp3.Request
-import okhttp3.dnsoverhttps.DnsOverHttps
 import java.io.ByteArrayInputStream
-import java.net.InetAddress
 
 const val MEDIA_SNIFFER_JS = """
     (function() {
@@ -76,8 +76,6 @@ class LinkShieldBridge(private val onMediaDetected: (String) -> Unit) {
     }
 }
 
-data class DohServer(val name: String, val url: String, val ip1: String, val ip2: String)
-
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun UnblockShieldScreen(
@@ -89,34 +87,11 @@ fun UnblockShieldScreen(
     var urlText by remember { mutableStateOf("https://google.com") }
     var currentWebUrl by remember { mutableStateOf("https://google.com") }
     
-    val dohServers = remember {
-        listOf(
-            DohServer("Cloudflare", "https://cloudflare-dns.com/dns-query", "1.1.1.1", "1.0.0.1"),
-            DohServer("Google DNS", "https://dns.google/dns-query", "8.8.8.8", "8.8.4.4"),
-            DohServer("AdGuard", "https://dns.adguard.com/dns-query", "94.140.14.14", "94.140.15.15"),
-            DohServer("Quad9", "https://dns.quad9.net/dns-query", "9.9.9.9", "149.112.112.112")
-        )
-    }
-    var selectedServer by remember { mutableStateOf(dohServers[0]) }
+    val dohProviders = remember { DohProvider.values().toList() }
+    var selectedProvider by remember { mutableStateOf(dnsManager.getCurrentProvider()) }
     var isServerMenuExpanded by remember { mutableStateOf(false) }
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-
-    val dohClient = remember(selectedServer) {
-        val bootstrapClient = OkHttpClient.Builder().build()
-        val doh = DnsOverHttps.Builder()
-            .client(bootstrapClient)
-            .url(selectedServer.url.toHttpUrl())
-            .bootstrapDnsHosts(
-                InetAddress.getByName(selectedServer.ip1),
-                InetAddress.getByName(selectedServer.ip2)
-            )
-            .build()
-
-        OkHttpClient.Builder()
-            .dns(doh)
-            .build()
-    }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // --- Top Header ---
@@ -132,15 +107,14 @@ fun UnblockShieldScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // App Logo Icon (FIXED: Replaced missing drawable with Icon)
+                    // App Logo with dedicated PNG icon
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
                             contentDescription = "App Logo",
-                            modifier = Modifier.size(42.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier = Modifier.size(42.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "LinkShield",
                             fontWeight = FontWeight.Bold,
@@ -149,7 +123,7 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // Server Dropdown Selection
+                    // Server Dropdown using DnsManager providers
                     Box {
                         OutlinedButton(
                             onClick = { isServerMenuExpanded = true },
@@ -165,7 +139,7 @@ fun UnblockShieldScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = selectedServer.name,
+                                text = selectedProvider.displayName.split(" ").first(),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -180,18 +154,20 @@ fun UnblockShieldScreen(
                             expanded = isServerMenuExpanded,
                             onDismissRequest = { isServerMenuExpanded = false }
                         ) {
-                            dohServers.forEach { server ->
+                            dohProviders.forEach { provider ->
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = server.name,
-                                            fontWeight = if (server == selectedServer) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (server == selectedServer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            text = provider.displayName,
+                                            fontWeight = if (provider == selectedProvider) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (provider == selectedProvider) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     onClick = {
-                                        selectedServer = server
+                                        selectedProvider = provider
+                                        dnsManager.enableDoh(provider)
                                         isServerMenuExpanded = false
+                                        webViewInstance?.reload()
                                     }
                                 )
                             }
@@ -293,7 +269,7 @@ fun UnblockShieldScreen(
             }
         }
 
-        // --- Persistent WebView ---
+        // --- Persistent WebView with DnsManager integration ---
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -318,15 +294,21 @@ fun UnblockShieldScreen(
                             view: WebView?,
                             request: WebResourceRequest?
                         ): WebResourceResponse? {
+                            // Only intercept if DoH Shield is enabled
+                            if (!dnsManager.isDohEnabled()) return null
+                            
                             val url = request?.url?.toString() ?: return null
+                            if (!url.startsWith("http://") && !url.startsWith("https://")) return null
 
-                            if (url.contains("google.com") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+                            // Let Google domains pass through normally
+                            if (url.contains("google.com") || url.contains("googleapis.com") || url.contains("gstatic.com")) {
                                 return super.shouldInterceptRequest(view, request)
                             }
 
                             return try {
+                                val client = dnsManager.getClient()
                                 val builder = Request.Builder().url(url)
-                                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                                    .header("User-Agent", settings.userAgentString)
                                     .header("Accept-Language", "en-US,en;q=0.9")
 
                                 request.requestHeaders.forEach { (k, v) ->
@@ -335,7 +317,7 @@ fun UnblockShieldScreen(
                                     }
                                 }
 
-                                val response = dohClient.newCall(builder.build()).execute()
+                                val response = client.newCall(builder.build()).execute()
                                 val contentType = response.header("content-type", "text/html") ?: "text/html"
                                 val mimeType = contentType.split(";")[0].trim()
                                 val encoding = if (contentType.contains("charset=")) {
