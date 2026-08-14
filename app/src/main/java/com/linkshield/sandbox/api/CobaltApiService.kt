@@ -37,14 +37,13 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
 
     suspend fun fetchMediaUrl(pageUrl: String): MediaResult = withContext(Dispatchers.IO) {
         try {
+            // FIXED: Cobalt API v7 correct body format
             val jsonBody = JSONObject().apply {
                 put("url", pageUrl)
-                put("isNoTTWatermark", true)
-                put("isTTFullAudio", false)
-                put("isAudioOnly", false)
-                put("aFormat", "mp3")
-                put("filenameStyle", "classic")
                 put("downloadMode", "auto")
+                put("videoQuality", "720")
+                put("audioFormat", "mp3")
+                put("filenameStyle", "classic")
             }
 
             val request = Request.Builder()
