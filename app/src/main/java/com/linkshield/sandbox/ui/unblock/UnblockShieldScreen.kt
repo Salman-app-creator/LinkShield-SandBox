@@ -64,7 +64,6 @@ fun UnblockShieldScreen(
     val focusManager = LocalFocusManager.current
     val clipboardManager = LocalClipboardManager.current
 
-    // ── CRITICAL FIX: Use mutableState so Compose recomposes when values change ──
     var hasAcceptedDisclaimer by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
     var isFirstLaunchComplete by remember { mutableStateOf(licenseManager.isFirstLaunchComplete()) }
 
@@ -85,36 +84,27 @@ fun UnblockShieldScreen(
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    // STEP 1: Mandatory Disclaimer — CANNOT be dismissed
-    // ═════════════════════════════════════════════════════════════════
     if (!hasAcceptedDisclaimer) {
         FirstLaunchDisclaimerDialog(
             onAccept = {
                 disclaimerManager.accept()
-                hasAcceptedDisclaimer = true   // <-- Forces recomposition
+                hasAcceptedDisclaimer = true
             }
         )
         return
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    // STEP 2: Mandatory Default Browser — CANNOT be skipped
-    // ═════════════════════════════════════════════════════════════════
     if (!isFirstLaunchComplete) {
         EnableProtectionScreen(
             onEnable = {
                 openDefaultBrowserSettings(context)
                 licenseManager.setFirstLaunchComplete()
-                isFirstLaunchComplete = true   // <-- Forces recomposition
+                isFirstLaunchComplete = true
             }
         )
         return
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    // Restriction Dialog (when trial expired + limit reached)
-    // ═════════════════════════════════════════════════════════════════
     if (showRestrictionDialog) {
         AlertDialog(
             onDismissRequest = { showRestrictionDialog = false },
@@ -133,9 +123,6 @@ fun UnblockShieldScreen(
         )
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    // MAIN APP SCREEN
-    // ═════════════════════════════════════════════════════════════════
     Scaffold(
         topBar = {
             Column(
@@ -144,7 +131,6 @@ fun UnblockShieldScreen(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                // ── ROW 1: Logo | Shield | Server | Mode | Badge ──
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -177,7 +163,6 @@ fun UnblockShieldScreen(
                             modifier = Modifier.padding(end = 8.dp)
                         )
 
-                        // Server dropdown
                         Box {
                             IconButton(
                                 onClick = { showServerMenu = true },
@@ -219,7 +204,6 @@ fun UnblockShieldScreen(
                             }
                         }
 
-                        // Dark/Light toggle
                         IconButton(
                             onClick = onThemeToggle,
                             modifier = Modifier.size(32.dp)
@@ -232,7 +216,6 @@ fun UnblockShieldScreen(
 
                         Spacer(modifier = Modifier.width(6.dp))
 
-                        // Trial / Pro badge
                         val badgeText = licenseManager.getStatusBadgeText()
                         val badgeColor = when {
                             licenseManager.isProUser() -> MaterialTheme.colorScheme.primaryContainer
@@ -255,7 +238,6 @@ fun UnblockShieldScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // ── ROW 2: Back | Forward | Refresh | Address Bar | Copy ──
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -363,9 +345,6 @@ fun UnblockShieldScreen(
     }
 }
 
-// ═════════════════════════════════════════════════════════════════
-// Enable Protection Screen — MANDATORY, cannot be bypassed
-// ═════════════════════════════════════════════════════════════════
 @Composable
 private fun EnableProtectionScreen(onEnable: () -> Unit) {
     Box(
@@ -457,4 +436,18 @@ fun ShieldWebView(
         onDispose { }
     }
 
-    AndroidView(factory = {
+    AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+}
+
+private fun openDefaultBrowserSettings(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
+            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+            context.startActivity(intent)
+            return
+        }
+    }
+    val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+    context.startActivity(intent)
+}
