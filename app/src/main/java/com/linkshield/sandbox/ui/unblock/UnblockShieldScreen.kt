@@ -1,4 +1,4 @@
-package com.linkshield.sandbox.ui
+package com.linkshield.sandbox.ui.unblock
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
@@ -10,17 +10,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.linkshield.sandbox.R
 import com.linkshield.sandbox.dns.DnsManager
 import okhttp3.Request
 import java.io.ByteArrayInputStream
@@ -87,12 +87,12 @@ fun UnblockShieldScreen(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Enlarged Logo Fix
+            // Standard Shield Icon (Missing Drawable Fix)
             Icon(
-                painter = painterResource(id = R.drawable.ic_shield_logo),
+                imageVector = Icons.Default.Shield,
                 contentDescription = "App Logo",
                 modifier = Modifier.size(36.dp),
-                tint = Color.Unspecified
+                tint = MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -163,7 +163,7 @@ fun UnblockShieldScreen(
                             }
 
                             return try {
-                                val okHttpClient = dnsManager.getOkHttpClient()
+                                val okHttpClient = dnsManager.okHttpClient
                                 val builder = Request.Builder().url(url)
 
                                 request.requestHeaders.forEach { (k, v) ->
