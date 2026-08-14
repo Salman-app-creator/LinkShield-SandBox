@@ -3,6 +3,7 @@ package com.linkshield.sandbox.ui.unblock
 import android.annotation.SuppressLint
 import android.net.http.SslError
 import android.webkit.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -17,17 +18,18 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.linkshield.sandbox.R
 import com.linkshield.sandbox.dns.DnsManager
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -83,20 +85,19 @@ data class DohServer(val name: String, val url: String, val ip1: String, val ip2
 @Composable
 fun UnblockShieldScreen(
     dnsManager: DnsManager,
-    onMediaFound: (String) -> Unit
+    onMediaFound: (String) -> Unit,
+    isDarkMode: Boolean,
+    onToggleTheme: () -> Unit
 ) {
     var urlText by remember { mutableStateOf("https://google.com") }
     var currentWebUrl by remember { mutableStateOf("https://google.com") }
-    var isShieldEnabled by remember { mutableStateOf(true) }
-    var isDarkMode by remember { mutableStateOf(false) }
-
-    // --- Server Selection State ---
+    
     val dohServers = remember {
         listOf(
             DohServer("Cloudflare", "https://cloudflare-dns.com/dns-query", "1.1.1.1", "1.0.0.1"),
             DohServer("Google DNS", "https://dns.google/dns-query", "8.8.8.8", "8.8.4.4"),
-            DohServer("AdGuard (No Ads)", "https://dns.adguard.com/dns-query", "94.140.14.14", "94.140.15.15"),
-            DohServer("Quad9 Security", "https://dns.quad9.net/dns-query", "9.9.9.9", "149.112.112.112")
+            DohServer("AdGuard", "https://dns.adguard.com/dns-query", "94.140.14.14", "94.140.15.15"),
+            DohServer("Quad9", "https://dns.quad9.net/dns-query", "9.9.9.9", "149.112.112.112")
         )
     }
     var selectedServer by remember { mutableStateOf(dohServers[0]) }
@@ -104,7 +105,6 @@ fun UnblockShieldScreen(
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
 
-    // Dynamic DoH Client building based on selected server
     val dohClient = remember(selectedServer) {
         val bootstrapClient = OkHttpClient.Builder().build()
         val doh = DnsOverHttps.Builder()
@@ -121,8 +121,6 @@ fun UnblockShieldScreen(
             .build()
     }
 
-    val standardClient = remember { OkHttpClient.Builder().build() }
-
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // --- Top Header ---
         Surface(
@@ -130,42 +128,34 @@ fun UnblockShieldScreen(
             tonalElevation = 4.dp,
             color = MaterialTheme.colorScheme.surface
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                // ROW 1: [ Logo ] | [ Shield Switch ] | [ Server Dropdown ] | [ Theme ] | [ Trial ]
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
+                // ROW 1: [ App Logo ] [ LinkShield ] | [ Server Dropdown ] | [ Theme Switch ] | [ Trial Tag ]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // 1. Logo
+                    // Actual App Logo (Bara size)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = "Logo",
-                            modifier = Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground), // Primary App Logo Icon
+                            contentDescription = "App Logo",
+                            modifier = Modifier.size(42.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = "LinkShield",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
-                    // 2. Shield Switch
-                    Switch(
-                        checked = isShieldEnabled,
-                        onCheckedChange = { isShieldEnabled = it },
-                        modifier = Modifier.height(30.dp)
-                    )
-
-                    // 3. SERVER SELECTION DROPDOWN BUTTON
+                    // Server Dropdown Selection
                     Box {
                         OutlinedButton(
                             onClick = { isServerMenuExpanded = true },
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             modifier = Modifier.height(32.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
@@ -177,7 +167,7 @@ fun UnblockShieldScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = selectedServer.name.take(8) + "..",
+                                text = selectedServer.name,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -210,9 +200,9 @@ fun UnblockShieldScreen(
                         }
                     }
 
-                    // 4. Mode Toggle Switch
+                    // Real Working Dark/Light Theme Toggle
                     IconButton(
-                        onClick = { isDarkMode = !isDarkMode },
+                        onClick = { onToggleTheme() },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
@@ -222,7 +212,7 @@ fun UnblockShieldScreen(
                         )
                     }
 
-                    // 5. Trial Display Tag
+                    // Trial Tag
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
@@ -237,22 +227,22 @@ fun UnblockShieldScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // ROW 2: Navigation Controls & Address Bar
+                // ROW 2: Navigation & URL Input
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { webViewInstance?.goBack() },
+                        onClick = { if (webViewInstance?.canGoBack() == true) webViewInstance?.goBack() },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(20.dp))
                     }
 
                     IconButton(
-                        onClick = { webViewInstance?.goForward() },
+                        onClick = { if (webViewInstance?.canGoForward() == true) webViewInstance?.goForward() },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Icons.Default.ArrowForward, contentDescription = "Forward", modifier = Modifier.size(20.dp))
@@ -267,7 +257,6 @@ fun UnblockShieldScreen(
 
                     Spacer(modifier = Modifier.width(4.dp))
 
-                    // Address Bar
                     BasicTextField(
                         value = urlText,
                         onValueChange = { urlText = it },
@@ -306,7 +295,7 @@ fun UnblockShieldScreen(
             }
         }
 
-        // --- WebView Section ---
+        // --- Persistent WebView ---
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -333,15 +322,11 @@ fun UnblockShieldScreen(
                         ): WebResourceResponse? {
                             val url = request?.url?.toString() ?: return null
 
-                            // Disable proxy intercept for Google Domain to avoid CAPTCHA triggers
-                            if (!isShieldEnabled || url.contains("google.com") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+                            if (url.contains("google.com") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
                                 return super.shouldInterceptRequest(view, request)
                             }
 
                             return try {
-                                val activeClient = if (isShieldEnabled) dohClient else standardClient
-                                
-                                // Pass complete Browser Headers to prevent bot detection
                                 val builder = Request.Builder().url(url)
                                     .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
                                     .header("Accept-Language", "en-US,en;q=0.9")
@@ -352,7 +337,7 @@ fun UnblockShieldScreen(
                                     }
                                 }
 
-                                val response = activeClient.newCall(builder.build()).execute()
+                                val response = dohClient.newCall(builder.build()).execute()
                                 val contentType = response.header("content-type", "text/html") ?: "text/html"
                                 val mimeType = contentType.split(";")[0].trim()
                                 val encoding = if (contentType.contains("charset=")) {
@@ -369,6 +354,7 @@ fun UnblockShieldScreen(
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
+                            if (url != null) urlText = url
                             view?.evaluateJavascript(MEDIA_SNIFFER_JS, null)
                         }
 
