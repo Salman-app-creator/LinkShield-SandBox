@@ -319,14 +319,6 @@ fun ShieldWebView(
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                if (isShieldActive && request != null && request.isForMainFrame) {
-                    try {
-                        val response = dnsManager.interceptRequest(request.url.toString())
-                        if (response != null) return response
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
                 return super.shouldInterceptRequest(view, request)
             }
         }
@@ -463,4 +455,9 @@ private fun openDefaultBrowserSettings(context: Context) {
         if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
             val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
             context.startActivity(intent)
-            retu
+            return
+        }
+    }
+    val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+    context.startActivity(intent)
+}
