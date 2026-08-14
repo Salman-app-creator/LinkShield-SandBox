@@ -18,15 +18,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.license.LicenseManager
 
 @Composable
 fun MediaGrabberScreen(
     detectedMediaUrl: String = "",
-    onDownloadTriggered: () -> Unit
+    licenseManager: LicenseManager? = null,
+    onDownloadTriggered: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var inputUrl by remember(detectedMediaUrl) { mutableStateOf(detectedMediaUrl) }
-    var downloadsRemaining by remember { mutableStateOf(18) } // Quota State
+    
+    // Real download count from LicenseManager
+    var remainingDownloads by remember(licenseManager) {
+        mutableIntStateOf(
+            licenseManager?.getRemainingDownloads()?.coerceAtMost(20) ?: 20
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -43,7 +51,7 @@ fun MediaGrabberScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Quota Card (Removed "today" word)
+        // Quota Card with REAL count
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -66,8 +74,13 @@ fun MediaGrabberScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
+                    val quotaText = if (remainingDownloads >= 20) {
+                        "20 of 20 downloads remaining"
+                    } else {
+                        "$remainingDownloads of 20 downloads remaining"
+                    }
                     Text(
-                        text = "$downloadsRemaining of 20 downloads remaining", // FIXED: "today" word removed
+                        text = quotaText,
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -97,46 +110,61 @@ fun MediaGrabberScreen(
                     return@Button
                 }
 
-                if (downloadsRemaining <= 0) {
-                    Toast.makeText(context, "Download quota exceeded! Please upgrade.", Toast.LENGTH_LONG).show()
+                if (remainingDownloads <= 0) {
+                    Toast.makeText(context, "Download quota exceeded! Please upgrade to Pro.", Toast.LENGTH_LONG).show()
                     return@Button
                 }
 
-                // Proper Direct Video Stream Resolver for DownloadManager
-                var finalDownloadUrl = inputUrl.trim()
+                val finalDownloadUrl = inputUrl.trim()
                 
-                // Handling YouTube/Web Pages to prevent downloading HTML text files
-                if (finalDownloadUrl.contains("youtube.com") || finalDownloadUrl.contains("youtu.be")) {
-                    Toast.makeText(context, "Extracting direct MP4 video stream...", Toast.LENGTH_SHORT).show()
-                    // Extracting direct stream endpoint fallback
-                    finalDownloadUrl = "https://ytstream-download-service.com/direct?url=" + Uri.encode(finalDownloadUrl)
+                // Block unsupported sites with clear message
+                if (finalDownloadUrl.contains("youtube.com") || 
+                    finalDownloadUrl.contains("youtu.be") ||
+                    finalDownloadUrl.contains("facebook.com") ||
+                    finalDownloadUrl.contains("instagram.com")) {
+                    Toast.makeText(context, "This site requires media extraction. Paste the direct MP4/MP3 link only.", Toast.LENGTH_LONG).show()
+                    return@Button
                 }
 
                 try {
+                    val fileName = "LinkShield_${System.currentTimeMillis()}.mp4"
+                    val mimeType = when {
+                        finalDownloadUrl.endsWith(".mp3", true) -> "audio/mpeg"
+                        finalDownloadUrl.endsWith(".webm", true) -> "video/webm"
+                        finalDownloadUrl.endsWith(".m3u8", true) -> "application/x-mpegURL"
+                        else -> "video/mp4"
+                    }
+
                     val request = DownloadManager.Request(Uri.parse(finalDownloadUrl)).apply {
-                        setTitle("LinkShield Media Video")
-                        setDescription("Downloading MP4 video file...")
+                        setTitle("LinkShield Download")
+                        setDescription("Downloading media file...")
                         setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                         setDestinationInExternalPublicDir(
                             Environment.DIRECTORY_DOWNLOADS,
-                            "LinkShield_Video_${System.currentTimeMillis()}.mp4" // Enforce MP4 extension
+                            fileName
                         )
                         setAllowedOverMetered(true)
                         setAllowedOverRoaming(true)
+                        setMimeType(mimeType)
                     }
 
                     val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                     downloadManager.enqueue(request)
 
-                    downloadsRemaining -= 1
+                    // Consume download and refresh count
+                    licenseManager?.incrementDownloadCount()
+                    remainingDownloads = licenseManager?.getRemainingDownloads()?.coerceAtMost(20) 
+                        ?: (remainingDownloads - 1)
+                    
                     onDownloadTriggered()
-                    Toast.makeText(context, "Download Started in Background!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Download started! Check notification panel.", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(8.dp),
+            enabled = remainingDownloads > 0
         ) {
             Text("Download Video (MP4)", fontSize = 16.sp)
         }
