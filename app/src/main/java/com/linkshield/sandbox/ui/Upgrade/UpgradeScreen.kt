@@ -12,9 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +27,11 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun UpgradeScreen() {
     val context = LocalContext.current
+    var licenseKeyInput by remember { mutableStateOf("") }
+
+    // Mock Trial Data (Can be linked to prefs)
+    val remainingTrialDays = 2
+    val remainingTrialHours = 14
 
     Column(
         modifier = Modifier
@@ -35,38 +42,108 @@ fun UpgradeScreen() {
         Text(
             text = "Upgrade to Pro License",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
         )
 
-        Text(
-            text = "Unlock high-speed DoH servers, unlimited media downloads, and advanced privacy shield features.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
-        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // --- Remaining Trial Period Card ---
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = "Trial Counter",
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Free Trial Status",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Text(
+                        text = "Remaining Time: $remainingTrialDays Days, $remainingTrialHours Hours",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // --- License Key Input ---
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Activate Pro License Key",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = licenseKeyInput,
+                    onValueChange = { licenseKeyInput = it },
+                    label = { Text("Enter License Key") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        if (licenseKeyInput.trim().length >= 8) {
+                            Toast.makeText(context, "License Key Activated Successfully!", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "Invalid License Key", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Key, contentDescription = "Activate")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Activate License")
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // EasyPaisa Card
+        // --- Payment Details ---
         PaymentCard(
             title = "EasyPaisa",
-            accountTitle = "Salman Latif",
+            accountTitle = "Account Title: Salman Latif",
             accountNumber = "03136176616",
             onCopy = { copyToClipboard(context, "03136176616", "EasyPaisa Number") }
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // JazzCash Card
         PaymentCard(
             title = "JazzCash",
-            accountTitle = "Salman Latif",
+            accountTitle = "Account Title: Salman Latif",
             accountNumber = "03061934345",
             onCopy = { copyToClipboard(context, "03061934345", "JazzCash Number") }
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // USDT TRC20 Card
         PaymentCard(
             title = "USDT (TRC20 Network)",
             accountTitle = "Wallet Address",
@@ -74,12 +151,12 @@ fun UpgradeScreen() {
             onCopy = { copyToClipboard(context, "TYu23x89A1zLp90KqM3vR7u8W", "USDT Address") }
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // WhatsApp Launcher Button (Standard Send Icon Fix)
+        // WhatsApp Support Button
         Button(
             onClick = {
-                val whatsappUrl = "https://wa.me/923136176616?text=Hello%2C%20I%20have%20completed%20the%20payment%20for%20LinkShield%20Pro.%20Please%20verify%20my%20receipt%20and%20provide%20the%20license%20key."
+                val whatsappUrl = "https://wa.me/923136176616?text=Hello%2C%20I%20have%20completed%20the%20payment%20for%20LinkShield%20Pro."
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl))
                 context.startActivity(intent)
             },
@@ -128,7 +205,8 @@ private fun PaymentCard(
                 Text(
                     text = title,
                     fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = accountTitle,
@@ -138,14 +216,16 @@ private fun PaymentCard(
                 Text(
                     text = accountNumber,
                     fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             IconButton(onClick = onCopy) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Copy Details"
+                    contentDescription = "Copy Details",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
