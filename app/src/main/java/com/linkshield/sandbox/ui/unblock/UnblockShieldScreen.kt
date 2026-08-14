@@ -3,7 +3,6 @@ package com.linkshield.sandbox.ui.unblock
 import android.annotation.SuppressLint
 import android.net.http.SslError
 import android.webkit.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -23,13 +22,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.linkshield.sandbox.R
 import com.linkshield.sandbox.dns.DnsManager
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -135,14 +132,15 @@ fun UnblockShieldScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Actual App Logo (Bara size)
+                    // App Logo Icon (FIXED: Replaced missing drawable with Icon)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground), // Primary App Logo Icon
+                        Icon(
+                            imageVector = Icons.Default.Security,
                             contentDescription = "App Logo",
-                            modifier = Modifier.size(42.dp)
+                            modifier = Modifier.size(42.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "LinkShield",
                             fontWeight = FontWeight.Bold,
@@ -200,7 +198,7 @@ fun UnblockShieldScreen(
                         }
                     }
 
-                    // Real Working Dark/Light Theme Toggle
+                    // Dark/Light Theme Toggle
                     IconButton(
                         onClick = { onToggleTheme() },
                         modifier = Modifier.size(32.dp)
