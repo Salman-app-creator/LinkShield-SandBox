@@ -10,6 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
@@ -20,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -73,6 +77,8 @@ class LinkShieldBridge(private val onMediaDetected: (String) -> Unit) {
     }
 }
 
+data class DohServer(val name: String, val url: String, val ip1: String, val ip2: String)
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun UnblockShieldScreen(
@@ -82,14 +88,32 @@ fun UnblockShieldScreen(
     var urlText by remember { mutableStateOf("https://google.com") }
     var currentWebUrl by remember { mutableStateOf("https://google.com") }
     var isShieldEnabled by remember { mutableStateOf(true) }
-    var showMenu by remember { mutableStateOf(false) }
+    var isDarkMode by remember { mutableStateOf(false) }
 
-    val dohClient = remember {
+    // --- Server Selection State ---
+    val dohServers = remember {
+        listOf(
+            DohServer("Cloudflare", "https://cloudflare-dns.com/dns-query", "1.1.1.1", "1.0.0.1"),
+            DohServer("Google DNS", "https://dns.google/dns-query", "8.8.8.8", "8.8.4.4"),
+            DohServer("AdGuard (No Ads)", "https://dns.adguard.com/dns-query", "94.140.14.14", "94.140.15.15"),
+            DohServer("Quad9 Security", "https://dns.quad9.net/dns-query", "9.9.9.9", "149.112.112.112")
+        )
+    }
+    var selectedServer by remember { mutableStateOf(dohServers[0]) }
+    var isServerMenuExpanded by remember { mutableStateOf(false) }
+
+    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+
+    // Dynamic DoH Client building based on selected server
+    val dohClient = remember(selectedServer) {
         val bootstrapClient = OkHttpClient.Builder().build()
         val doh = DnsOverHttps.Builder()
             .client(bootstrapClient)
-            .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
-            .bootstrapDnsHosts(InetAddress.getByName("1.1.1.1"), InetAddress.getByName("1.0.0.1"))
+            .url(selectedServer.url.toHttpUrl())
+            .bootstrapDnsHosts(
+                InetAddress.getByName(selectedServer.ip1),
+                InetAddress.getByName(selectedServer.ip2)
+            )
             .build()
 
         OkHttpClient.Builder()
@@ -100,30 +124,150 @@ fun UnblockShieldScreen(
     val standardClient = remember { OkHttpClient.Builder().build() }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // --- Top Bar Section ---
+        // --- Top Header ---
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            tonalElevation = 3.dp,
+            tonalElevation = 4.dp,
             color = MaterialTheme.colorScheme.surface
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                // ROW 1: [ Logo ] | [ Shield Switch ] | [ Server Dropdown ] | [ Theme ] | [ Trial ]
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // App Logo (Left)
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(30.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                    // 1. Logo
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = "Logo",
+                            modifier = Modifier.size(36.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "LinkShield",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // 2. Shield Switch
+                    Switch(
+                        checked = isShieldEnabled,
+                        onCheckedChange = { isShieldEnabled = it },
+                        modifier = Modifier.height(30.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    // 3. SERVER SELECTION DROPDOWN BUTTON (New Feature)
+                    Box {
+                        OutlinedButton(
+                            onClick = { isServerMenuExpanded = true },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.height(32.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = "Server",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = selectedServer.name.take(8) + "..",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Expand",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
 
-                    // Address Bar with Dynamic Theme Support
+                        DropdownMenu(
+                            expanded = isServerMenuExpanded,
+                            onDismissRequest = { isServerMenuExpanded = false }
+                        ) {
+                            dohServers.forEach { server ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = server.name,
+                                            fontWeight = if (server == selectedServer) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (server == selectedServer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedServer = server
+                                        isServerMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. Mode Toggle Switch
+                    IconButton(
+                        onClick = { isDarkMode = !isDarkMode },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Theme Toggle",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // 5. Trial Display Tag
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "Trial 30d",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ROW 2: Navigation Controls & Address Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { webViewInstance?.goBack() },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(20.dp))
+                    }
+
+                    IconButton(
+                        onClick = { webViewInstance?.goForward() },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowForward, contentDescription = "Forward", modifier = Modifier.size(20.dp))
+                    }
+
+                    IconButton(
+                        onClick = { webViewInstance?.reload() },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reload", modifier = Modifier.size(20.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Address Bar
                     BasicTextField(
                         value = urlText,
                         onValueChange = { urlText = it },
@@ -140,10 +284,10 @@ fun UnblockShieldScreen(
                                 MaterialTheme.colorScheme.surfaceVariant,
                                 RoundedCornerShape(8.dp)
                             )
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     Button(
                         onClick = {
@@ -153,64 +297,11 @@ fun UnblockShieldScreen(
                             }
                             currentWebUrl = formatted
                         },
-                        contentPadding = PaddingValues(horizontal = 12.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        modifier = Modifier.height(36.dp)
                     ) {
-                        Text("Go")
+                        Text("Go", fontSize = 12.sp)
                     }
-
-                    // Shield Mode Toggle Switch
-                    Switch(
-                        checked = isShieldEnabled,
-                        onCheckedChange = { isShieldEnabled = it },
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
-
-                    // Shield Menu Button (Shield Icon triggers drop-down)
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Security,
-                                contentDescription = "Shield Options",
-                                tint = if (isShieldEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Refresh Page") },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                onClick = {
-                                    showMenu = false
-                                    val temp = currentWebUrl
-                                    currentWebUrl = ""
-                                    currentWebUrl = temp
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Clear Cache & Cookies") },
-                                onClick = {
-                                    CookieManager.getInstance().removeAllCookies(null)
-                                    showMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Status Banner
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = if (isShieldEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
-                ) {
-                    Text(
-                        text = if (isShieldEnabled) "Shield Active: Encrypted DoH Proxy ON" else "Shield OFF: Standard Network Routing",
-                        modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isShieldEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                        textAlign = TextAlign.Center
-                    )
                 }
             }
         }
@@ -220,6 +311,7 @@ fun UnblockShieldScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
+                    webViewInstance = this
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
