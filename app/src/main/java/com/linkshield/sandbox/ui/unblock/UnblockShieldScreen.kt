@@ -34,7 +34,6 @@ const val MEDIA_SNIFFER_JS = """
             }
         }
         
-        // Fetch Interceptor
         var origFetch = window.fetch;
         window.fetch = function() {
             var url = arguments[0];
@@ -42,14 +41,12 @@ const val MEDIA_SNIFFER_JS = """
             return origFetch.apply(this, arguments);
         };
 
-        // XHR Interceptor
         var origOpen = window.XMLHttpRequest.prototype.open;
         window.XMLHttpRequest.prototype.open = function(method, url) {
             if (typeof url === 'string') sendToAndroid(url);
             return origOpen.apply(this, arguments);
         };
 
-        // Standard HTML Tag Monitoring
         setInterval(function() {
             var elements = document.querySelectorAll('video, audio, source');
             elements.forEach(function(el) {
@@ -79,8 +76,7 @@ fun UnblockShieldScreen(
     var urlText by remember { mutableStateOf("https://google.com") }
     var currentWebUrl by remember { mutableStateOf("https://google.com") }
     
-    // Standalone OkHttpClient instance to prevent build errors with DnsManager
-    val networkClient = remember { OkHttpClient.Builder().build() }
+    val fallbackClient = remember { OkHttpClient.Builder().build() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // --- Top Bar Section ---
@@ -166,12 +162,11 @@ fun UnblockShieldScreen(
 
                             return try {
                                 val builder = Request.Builder().url(url)
-
                                 request.requestHeaders.forEach { (k, v) ->
                                     builder.addHeader(k, v)
                                 }
 
-                                val response = networkClient.newCall(builder.build()).execute()
+                                val response = fallbackClient.newCall(builder.build()).execute()
                                 val contentType = response.header("content-type", "text/html") ?: "text/html"
                                 val mimeType = contentType.split(";")[0].trim()
                                 val encoding = if (contentType.contains("charset=")) {
