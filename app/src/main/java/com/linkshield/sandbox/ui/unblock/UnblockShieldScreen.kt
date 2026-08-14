@@ -1,6 +1,7 @@
 package com.linkshield.sandbox.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.graphics.Bitmap
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
@@ -19,13 +20,30 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.dns.DnsManager
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper function to calculate remaining trial days
+// ─────────────────────────────────────────────────────────────────────────────
+fun getRemainingTrialDays(context: Context): Long {
+    val prefs = context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE)
+    val installTime = prefs.getLong("first_install_time", System.currentTimeMillis())
+    val thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000
+    val isProActivated = prefs.getBoolean("is_pro_activated", false)
+
+    if (isProActivated) return -1 // -1 indicates Pro Version Activated
+
+    val elapsedTime = System.currentTimeMillis() - installTime
+    val remainingMillis = thirtyDaysInMillis - elapsedTime
+    val remainingDays = remainingMillis / (1000 * 60 * 60 * 24)
+
+    return if (remainingDays > 0) remainingDays else 0
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +53,9 @@ fun UnblockShieldScreen(
     isVisible: Boolean,
     onUrlCaptured: (String) -> Unit = {}
 ) {
-    val webView = viewModel.getOrCreateWebView(LocalContext.current, 0, dnsManager)
+    val context = LocalContext.current
+    val remainingDays = remember { getRemainingTrialDays(context) }
+    val webView = viewModel.getOrCreateWebView(context, 0, dnsManager)
 
     // Ensure YouTube Auto Ad-Blocker and Active URL capturing are active on current WebView
     DisposableEffect(webView) {
@@ -129,6 +149,7 @@ fun UnblockShieldScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                // Left Side: Shield Status
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Shield,
@@ -138,21 +159,48 @@ fun UnblockShieldScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "LinkShield Sandbox Active",
+                        text = "LinkShield Active",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = "DoH ON",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+
+                // Right Side: Dynamic Trial / Pro Badge & DoH Status
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // DoH Status Badge
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "DoH ON",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    // Professional Trial / Pro Badge
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (remainingDays.toInt() == -1) MaterialTheme.colorScheme.tertiaryContainer
+                                else MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = when {
+                                remainingDays.toInt() == -1 -> "PRO ACTIVE"
+                                remainingDays > 0 -> "TRIAL: ${remainingDays}D LEFT"
+                                else -> "TRIAL EXPIRED"
+                            },
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (remainingDays.toInt() == -1) MaterialTheme.colorScheme.onTertiaryContainer
+                                    else MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
         }
