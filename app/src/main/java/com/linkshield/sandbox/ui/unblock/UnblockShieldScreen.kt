@@ -161,7 +161,7 @@ fun UnblockShieldScreen(
                         modifier = Modifier.height(30.dp)
                     )
 
-                    // 3. SERVER SELECTION DROPDOWN BUTTON (New Feature)
+                    // 3. SERVER SELECTION DROPDOWN BUTTON
                     Box {
                         OutlinedButton(
                             onClick = { isServerMenuExpanded = true },
@@ -333,15 +333,23 @@ fun UnblockShieldScreen(
                         ): WebResourceResponse? {
                             val url = request?.url?.toString() ?: return null
 
-                            if (!isShieldEnabled || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+                            // Disable proxy intercept for Google Domain to avoid CAPTCHA triggers
+                            if (!isShieldEnabled || url.contains("google.com") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
                                 return super.shouldInterceptRequest(view, request)
                             }
 
                             return try {
                                 val activeClient = if (isShieldEnabled) dohClient else standardClient
+                                
+                                // Pass complete Browser Headers to prevent bot detection
                                 val builder = Request.Builder().url(url)
+                                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                                    .header("Accept-Language", "en-US,en;q=0.9")
+
                                 request.requestHeaders.forEach { (k, v) ->
-                                    builder.addHeader(k, v)
+                                    if (!k.equals("User-Agent", ignoreCase = true)) {
+                                        builder.addHeader(k, v)
+                                    }
                                 }
 
                                 val response = activeClient.newCall(builder.build()).execute()
