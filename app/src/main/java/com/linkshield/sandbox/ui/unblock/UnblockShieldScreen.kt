@@ -1,11 +1,9 @@
 package com.linkshield.sandbox.ui
 
-import android.annotation.SuppressLint
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.webkit.WebResourceRequest
@@ -39,13 +37,16 @@ import com.linkshield.sandbox.dns.DnsManager
 @Composable
 fun UnblockShieldScreen(
     dnsManager: DnsManager,
-    viewModel: UnblockShieldViewModel
+    viewModel: UnblockShieldViewModel,
+    isVisible: Boolean = true,
+    onUrlCaptured: (String) -> Unit = {}
 ) {
+    if (!isVisible) return
+
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("linkshield_prefs", Context.MODE_PRIVATE) }
     val clipboardManager = LocalClipboardManager.current
 
-    // App Preferences State
     var hasAcceptedTerms by remember { mutableStateOf(prefs.getBoolean("has_accepted_terms", false)) }
     var isDefaultSet by remember { mutableStateOf(prefs.getBoolean("is_default_browser", false)) }
     var isShieldActive by remember { mutableStateOf(prefs.getBoolean("is_shield_active", true)) }
@@ -54,13 +55,13 @@ fun UnblockShieldScreen(
     var downloadCount by remember { mutableStateOf(prefs.getInt("download_count", 0)) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // STEP 1: Mandatory Disclaimer / Terms Dialog
+    // STEP 1: Mandatory Disclaimer / Terms
     if (!hasAcceptedTerms) {
         AlertDialog(
             onDismissRequest = { },
             title = { Text("Disclaimer & Terms", fontWeight = FontWeight.Bold) },
             text = {
-                Text("LinkShield Sandbox utilizes Encrypted DoH (DNS-over-HTTPS) to protect your browsing and bypass network restrictions safely. You must accept to proceed.")
+                Text("LinkShield Sandbox uses Encrypted DoH (DNS-over-HTTPS) to protect your browsing and bypass blocks safely. Accept to proceed.")
             },
             confirmButton = {
                 Button(
@@ -74,8 +75,7 @@ fun UnblockShieldScreen(
             }
         )
     }
-
-    // STEP 2: Mandatory Set As Default Browser Screen
+    // STEP 2: Mandatory Set As Default Browser
     else if (!isDefaultSet) {
         Box(
             modifier = Modifier
@@ -101,7 +101,7 @@ fun UnblockShieldScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "To enable full DoH proxy protection and link sandboxing, LinkShield must be set as your default browser.",
+                    text = "To enable DoH proxy protection and link sandboxing, LinkShield must be set as your default browser.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -109,7 +109,6 @@ fun UnblockShieldScreen(
                 Button(
                     onClick = {
                         openDefaultBrowserSettings(context)
-                        // Mark set in prefs for session proceed
                         prefs.edit().putBoolean("is_default_browser", true).apply()
                         isDefaultSet = true
                     },
@@ -120,13 +119,12 @@ fun UnblockShieldScreen(
             }
         }
     }
-
     // MAIN APP SCREEN
     else {
         Scaffold(
             topBar = {
                 Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    // TOP ROW 1: Logo, Shield Toggle, Theme Switch, Trial Badge
+                    // ROW 1: Logo, Shield State, Dark Mode Toggle, Trial/Pro Badge
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -135,7 +133,6 @@ fun UnblockShieldScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Logo loaded from mipmap
                             Image(
                                 painter = painterResource(id = R.mipmap.ic_launcher),
                                 contentDescription = "App Logo",
@@ -163,7 +160,6 @@ fun UnblockShieldScreen(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Light / Dark Theme Switch
                             IconButton(
                                 onClick = {
                                     isDarkMode = !isDarkMode
@@ -173,13 +169,12 @@ fun UnblockShieldScreen(
                             ) {
                                 Icon(
                                     imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                    contentDescription = "Theme"
+                                    contentDescription = "Theme Toggle"
                                 )
                             }
 
                             Spacer(modifier = Modifier.width(6.dp))
 
-                            // Pro / Trial Badge
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isProActivated) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
@@ -194,7 +189,7 @@ fun UnblockShieldScreen(
                         }
                     }
 
-                    // TOP ROW 2: Nav Controls & Address Bar
+                    // ROW 2: Nav Controls & Address Bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -256,14 +251,19 @@ fun UnblockShieldScreen(
         ) { padding ->
             Box(modifier = Modifier.padding(padding).fillMaxSize()) {
                 when (selectedTab) {
-                    0 -> ShieldWebView(viewModel = viewModel, dnsManager = dnsManager, isShieldActive = isShieldActive)
+                    0 -> ShieldWebView(
+                        viewModel = viewModel,
+                        dnsManager = dnsManager,
+                        isShieldActive = isShieldActive,
+                        onUrlCaptured = onUrlCaptured
+                    )
                     1 -> GrabberTab(
                         currentUrl = viewModel.currentUrl,
                         downloadCount = downloadCount,
                         isPro = isProActivated,
                         onDownloadExecute = {
                             if (!isProActivated && downloadCount >= 20) {
-                                selectedTab = 2 // Redirect to Upgrade
+                                selectedTab = 2
                                 Toast.makeText(context, "20 Free Downloads Limit Exceeded! Upgrade to Pro.", Toast.LENGTH_LONG).show()
                             } else {
                                 downloadCount++
@@ -279,7 +279,6 @@ fun UnblockShieldScreen(
                             if (usedKeys.contains(key)) {
                                 Toast.makeText(context, "This License Key is already claimed!", Toast.LENGTH_LONG).show()
                             } else {
-                                // Save key as claimed & unlock Pro
                                 prefs.edit()
                                     .putBoolean("is_pro_activated", true)
                                     .putStringSet("claimed_keys", usedKeys.toMutableSet().apply { add(key) })
@@ -299,13 +298,12 @@ fun UnblockShieldScreen(
     }
 }
 
-// ---------------------- SUB-COMPONENTS ----------------------
-
 @Composable
 fun ShieldWebView(
     viewModel: UnblockShieldViewModel,
     dnsManager: DnsManager,
-    isShieldActive: Boolean
+    isShieldActive: Boolean,
+    onUrlCaptured: (String) -> Unit
 ) {
     val context = LocalContext.current
     val webView = remember { viewModel.getOrCreateWebView(context, 0, dnsManager) }
@@ -314,13 +312,20 @@ fun ShieldWebView(
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                url?.let { viewModel.updateUrl(it) }
+                url?.let {
+                    viewModel.updateUrl(it)
+                    onUrlCaptured(it)
+                }
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 if (isShieldActive && request != null && request.isForMainFrame) {
-                    val response = dnsManager.resolveAndFetch(request.url.toString(), true)
-                    if (response != null) return response
+                    try {
+                        val response = dnsManager.interceptRequest(request.url.toString())
+                        if (response != null) return response
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
                 return super.shouldInterceptRequest(view, request)
             }
@@ -458,4 +463,4 @@ private fun openDefaultBrowserSettings(context: Context) {
         if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
             val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
             context.startActivity(intent)
-  
+            retu
