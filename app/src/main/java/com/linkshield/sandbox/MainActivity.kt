@@ -14,9 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
-import com.linkshield.sandbox.ui.theme.LinkShieldTheme          // FIXED: LinkShieldSandboxTheme → LinkShieldTheme
+import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
-import com.linkshield.sandbox.ui.Upgrade.UpgradeScreen          // FIXED: ui.upgrade → ui.Upgrade
+import com.linkshield.sandbox.ui.Upgrade.UpgradeScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
             val systemTheme = isSystemInDarkTheme()
             var isDarkMode by remember { mutableStateOf(systemTheme) }
 
-            LinkShieldTheme(darkTheme = isDarkMode) {              // FIXED: LinkShieldSandboxTheme → LinkShieldTheme
+            LinkShieldTheme(darkTheme = isDarkMode) {
                 var selectedTab by remember { mutableIntStateOf(0) }
                 var detectedMediaUrl by remember { mutableStateOf("") }
 
