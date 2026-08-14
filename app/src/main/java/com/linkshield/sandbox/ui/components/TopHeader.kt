@@ -1,9 +1,6 @@
 package com.linkshield.sandbox.ui.components
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +13,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,18 +42,19 @@ fun TopHeader(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            // ROW 1: Logo, App Name & Status Controls
+            // ROW 1: Logo, App Title & Native Sliding Theme Switch
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Left Side: Metallic Shield Logo & Title
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_app_logo),
                         contentDescription = "LinkShield Logo",
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -67,6 +65,7 @@ fun TopHeader(
                     )
                 }
 
+                // Right Side: Shield Toggle, Trial Badge & Sliding Switch
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -90,43 +89,24 @@ fun TopHeader(
                         )
                     }
 
-                    val switchOffset by animateDpAsState(
-                        targetValue = if (isDarkTheme) 20.dp else 2.dp,
-                        label = "theme_slide"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .width(44.dp)
-                            .height(24.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { onThemeToggle() }
-                            .padding(2.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .offset(x = switchOffset)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    // Native Sliding Switch for Dark/Light Theme
+                    Switch(
+                        checked = isDarkTheme,
+                        onCheckedChange = { onThemeToggle() },
+                        thumbContent = {
                             Icon(
                                 imageVector = if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                contentDescription = "Theme",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(11.dp)
+                                contentDescription = "Toggle Theme",
+                                modifier = Modifier.size(SwitchDefaults.IconSize)
                             )
                         }
-                    }
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ROW 2: Navigation & URL Box
+            // ROW 2: Navigation & URL Address Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -149,7 +129,12 @@ fun TopHeader(
                         .weight(1f)
                         .height(46.dp),
                     leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = "Secure", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Secure",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
                     },
                     singleLine = true,
                     textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
