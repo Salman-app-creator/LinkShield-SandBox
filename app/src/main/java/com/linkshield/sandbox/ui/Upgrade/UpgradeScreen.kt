@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.license.LicenseManager
 
 // Payment constants — edit ONLY here
-private const val EASYPAISA_NUMBER = "03001234567"
-private const val JAZZCASH_NUMBER = "03007654321"
+private const val EASYPAISA_NUMBER = "03136176616"
+private const val JAZZCASH_NUMBER = "03061934345"
 private const val USDT_ADDRESS = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"
 private const val PRICE_PKR = "350"
 private const val PRICE_USD = "1.25"
