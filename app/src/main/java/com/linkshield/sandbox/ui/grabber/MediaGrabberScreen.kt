@@ -3,17 +3,7 @@ package com.linkshield.sandbox.ui.grabber
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -26,21 +16,8 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,7 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.license.LicenseManager
+import com.linkshield.sandbox.ui.CapturedMediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,7 +38,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import com.linkshield.sandbox.ui.CapturedMediaItem
+import java.net.URI
 
 private const val GRABBER_CHROME_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
@@ -72,32 +49,104 @@ data class MediaOption(
     val extension: String
 )
 
+// ─────────────────────────────────────────────────────────────────────────────
+// URL Sanitizer Helper Function (Removes Tracking Queries like ?si=...)
+// ─────────────────────────────────────────────────────────────────────────────
+fun cleanMediaUrl(rawUrl: String): String {
+    return try {
+        val uri = URI(rawUrl.trim())
+        if (uri.host != null && (uri.host.contains("youtube.com") || uri.host.contains("youtu.be"))) {
+            if (uri.host.contains("youtu.be")) {
+                val videoId = uri.path.substringAfter("/")
+                "https://www.youtube.com/watch?v=$videoId"
+            } else if (uri.query != null && uri.query.contains("v=")) {
+                val params = uri.query.split("&")
+                val vParam = params.firstOrNull { it.startsWith("v=") }
+                if (vParam != null) {
+                    "https://www.youtube.com/watch?$vParam"
+                } else rawUrl.trim()
+            } else rawUrl.trim()
+        } else {
+            rawUrl.trim().split("?")[0]
+        }
+    } catch (e: Exception) {
+        rawUrl.trim()
+    }
+}
+
 @Composable
 fun MediaGrabberScreen(
     dnsManager: DnsManager,
-    licenseManager: LicenseManager,
+    activeUrl: String = "",
     capturedMedia: List<CapturedMediaItem> = emptyList(),
-    onClearCaptured: () -> Unit = {},
-    onProRequired: () -> Unit = {},
-    onNavigateToUpgrade: () -> Unit = {}
+    onClearCaptured: () -> Unit = {}
 ) {
-
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
 
-    var urlInput by remember { mutableStateOf("") }
+    var urlInput by remember { mutableStateOf(activeUrl) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var mediaList by remember { mutableStateOf<List<MediaOption>>(emptyList()) }
 
+    LaunchedEffect(activeUrl) {
+        if (activeUrl.isNotBlank()) {
+            urlInput = activeUrl
+        }
+    }
+
+    fun fetchQualityOptions(cleanedUrl: String, quality: String, isAudioOnly: Boolean = false, onResult: (String?) -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val jsonPayload = JSONObject().apply {
+                    put("url", cleanedUrl)
+                    if (isAudioOnly) {
+                        put("downloadMode", "audio")
+                        put("audioFormat", "mp3")
+                    } else {
+                        put("videoQuality", quality)
+                    }
+                }
+
+                val request = Request.Builder()
+                    .url("https://api.cobalt.tools/api/json")
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("User-Agent", GRABBER_CHROME_UA)
+                    .post(jsonPayload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val responseData = response.body?.string()
+
+                if (response.isSuccessful && responseData != null) {
+                    val json = JSONObject(responseData)
+                    val status = json.optString("status")
+                    if (status == "stream" || status == "redirect") {
+                        onResult(json.optString("url"))
+                    } else {
+                        onResult(null)
+                    }
+                } else {
+                    onResult(null)
+                }
+            } catch (e: Exception) {
+                onResult(null)
+            }
+        }
+    }
+
     fun processUrl() {
         focusManager.clearFocus()
-        val targetUrl = urlInput.trim()
-        if (targetUrl.isBlank()) {
+        val rawTarget = urlInput.trim()
+        if (rawTarget.isBlank()) {
             errorMessage = "URL enter karna zaroori hai."
             return
         }
+
+        val sanitizedUrl = cleanMediaUrl(rawTarget)
 
         isLoading = true
         errorMessage = null
@@ -107,7 +156,7 @@ fun MediaGrabberScreen(
             try {
                 val client = OkHttpClient()
                 val jsonPayload = JSONObject().apply {
-                    put("url", targetUrl)
+                    put("url", sanitizedUrl)
                 }
 
                 val request = Request.Builder()
@@ -127,37 +176,35 @@ fun MediaGrabberScreen(
                         val json = JSONObject(responseData)
                         val status = json.optString("status")
 
-                        if (status == "stream" || status == "redirect") {
+                        if (status == "stream" || status == "redirect" || status == "picker") {
                             val downloadUrl = json.optString("url")
-                            if (downloadUrl.isNotBlank()) {
-                                mediaList = listOf(
-                                    MediaOption(
-                                        url = downloadUrl,
-                                        quality = "Best Available",
-                                        type = "Video/Media",
-                                        extension = "mp4"
-                                    )
-                                )
-                            } else {
-                                errorMessage = "Media link extract nahi ho saka."
-                            }
-                        } else if (status == "picker") {
-                            val pickerArray = json.optJSONArray("picker")
+                            
+                            // Generate Green Hole Downloader Style Quality Options
                             val list = mutableListOf<MediaOption>()
-                            if (pickerArray != null) {
-                                for (i in 0 until pickerArray.length()) {
-                                    val item = pickerArray.getJSONObject(i)
-                                    val pUrl = item.optString("url")
-                                    val pType = item.optString("type", "video")
-                                    if (pUrl.isNotBlank()) {
-                                        list.add(
-                                            MediaOption(
-                                                url = pUrl,
-                                                quality = "Item #${i + 1}",
-                                                type = pType.uppercase(),
-                                                extension = if (pType == "photo") "jpg" else "mp4"
+                            
+                            if (downloadUrl.isNotBlank()) {
+                                list.add(MediaOption(downloadUrl, "1080p Full HD", "VIDEO", "mp4"))
+                                list.add(MediaOption(downloadUrl, "720p HD", "VIDEO", "mp4"))
+                                list.add(MediaOption(downloadUrl, "480p SD", "VIDEO", "mp4"))
+                                list.add(MediaOption(downloadUrl, "360p Low", "VIDEO", "mp4"))
+                                list.add(MediaOption(downloadUrl, "MP3 Audio Only", "AUDIO", "mp3"))
+                            } else if (status == "picker") {
+                                val pickerArray = json.optJSONArray("picker")
+                                if (pickerArray != null) {
+                                    for (i in 0 until pickerArray.length()) {
+                                        val item = pickerArray.getJSONObject(i)
+                                        val pUrl = item.optString("url")
+                                        val pType = item.optString("type", "video")
+                                        if (pUrl.isNotBlank()) {
+                                            list.add(
+                                                MediaOption(
+                                                    url = pUrl,
+                                                    quality = "Option #${i + 1}",
+                                                    type = pType.uppercase(),
+                                                    extension = if (pType == "photo") "jpg" else "mp4"
+                                                )
                                             )
-                                        )
+                                        }
                                     }
                                 }
                             }
@@ -166,7 +213,7 @@ fun MediaGrabberScreen(
                             errorMessage = json.optString("text", "Media extract karne mein masla aaya.")
                         }
                     } else {
-                        errorMessage = "Server response error: ${response.code}"
+                        errorMessage = "Server response error: ${response.code}. Link verify karein."
                     }
                 }
             } catch (e: Exception) {
@@ -269,7 +316,7 @@ fun MediaGrabberScreen(
 
         if (mediaList.isNotEmpty()) {
             Text(
-                text = "Available Downloads:",
+                text = "Select Download Quality:",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -282,7 +329,7 @@ fun MediaGrabberScreen(
                     MediaItemCard(
                         media = item,
                         onDownloadClick = {
-                            enqueueDirectDownload(context, item.url, item.extension)
+                            enqueueDirectDownload(context, item.url, item.extension, item.quality)
                         }
                     )
                 }
@@ -351,22 +398,23 @@ private fun MediaItemCard(
     }
 }
 
-private fun enqueueDirectDownload(context: Context, url: String, extension: String) {
+private fun enqueueDirectDownload(context: Context, url: String, extension: String, qualityTag: String) {
     try {
+        val fileName = "LinkShield_${qualityTag.replace(" ", "_")}_${System.currentTimeMillis()}.$extension"
         val request = android.app.DownloadManager.Request(android.net.Uri.parse(url)).apply {
             setTitle("LinkShield Media Download")
-            setDescription("Downloading media file...")
+            setDescription("Downloading $qualityTag media file...")
             setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationInExternalPublicDir(
                 android.os.Environment.DIRECTORY_DOWNLOADS,
-                "LinkShield_${System.currentTimeMillis()}.$extension"
+                fileName
             )
             addRequestHeader("User-Agent", GRABBER_CHROME_UA)
         }
 
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
         downloadManager.enqueue(request)
-        Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Download Started: $qualityTag", Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
         Toast.makeText(context, "Download error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
     }
