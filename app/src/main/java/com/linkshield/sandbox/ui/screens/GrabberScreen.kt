@@ -18,28 +18,45 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun GrabberScreen() {
     var urlText by remember { mutableStateOf("") }
-    var selectedFormat by remember { mutableStateOf("1080p MP4") }
+    var audioOnly by remember { mutableStateOf(false) }
+    var highQual by remember { mutableStateOf(true) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text("Media Grabber", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        // Top Banner (Alert/Info Card)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("[ 20 Free Downloads Remaining ]", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("(Upgrade to Pro for Unlimited)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
-        // URL Input
+        // Input Address Bar
         OutlinedTextField(
             value = urlText,
             onValueChange = { urlText = it },
-            label = { Text("Paste Video / Stream Link") },
+            placeholder = { Text("[ Paste or Fetch Link... ]") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             singleLine = true
         )
+
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Media Preview Box
+        // Media Preview Area
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -49,39 +66,47 @@ fun GrabberScreen() {
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.PlayCircle,
-                contentDescription = "Media Preview",
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.PlayCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("(Media Preview Area)", fontSize = 12.sp)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Download Quality Selector
-        Text("Select Quality:", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("1080p MP4", "720p MP4", "Audio MP3").forEach { format ->
-                FilterChip(
-                    selected = selectedFormat == format,
-                    onClick = { selectedFormat = format },
-                    label = { Text(format, fontSize = 12.sp) }
-                )
+        // Options
+        Text("Options:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = audioOnly, onCheckedChange = { audioOnly = it })
+                Text("Audio Only", fontSize = 13.sp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = highQual, onCheckedChange = { highQual = it })
+                Text("High Qual", fontSize = 13.sp)
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
+        // Primary Download Button
         Button(
-            onClick = { /* Download logic */ },
+            onClick = { },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Download ($selectedFormat)")
+            Text("[ Download Button ]", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
