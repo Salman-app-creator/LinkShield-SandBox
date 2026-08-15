@@ -17,17 +17,19 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 fun UpgradeScreen(
-    trialDaysLeft: Int = 30, // Default 30 days for fresh install
+    trialDaysLeft: Int = 30,
     isTrialActive: Boolean = true
 ) {
     var licenseKey by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val usdtAddress = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"
 
     Column(
         modifier = Modifier
@@ -35,7 +37,6 @@ fun UpgradeScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // Title Box
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -52,7 +53,6 @@ fun UpgradeScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Dynamic Top Status Box (Fixes hardcoded 28 days issue)
         OutlinedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
@@ -71,7 +71,6 @@ fun UpgradeScreen(
         Text("Upgrade to Pro (Manual Payment):", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(8.dp))
 
-        // EasyPaisa Card
         PaymentCard(
             title = "🟢 EasyPaisa",
             accTitle = "Salman Latif",
@@ -81,7 +80,6 @@ fun UpgradeScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // JazzCash Card
         PaymentCard(
             title = "🔴 JazzCash",
             accTitle = "Salman Latif",
@@ -91,19 +89,18 @@ fun UpgradeScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // USDT (TRC20) Card
+        // Fixed USDT Card Layout
         PaymentCard(
             title = "🟢 USDT (TRC20)",
             accTitle = "Network: TRC20 (Tron)",
             number = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub",
-            onCopy = { copyText(context, clipboardManager, "TYaX...WalletAddressHere") }
+            onCopy = { copyText(context, clipboardManager, usdtAddress) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
         Text("Activate Pro License:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(8.dp))
 
-        // License Bar Input
         OutlinedTextField(
             value = licenseKey,
             onValueChange = { licenseKey = it },
@@ -115,7 +112,6 @@ fun UpgradeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Activate Button
         Button(
             onClick = { },
             modifier = Modifier
@@ -143,14 +139,25 @@ private fun PaymentCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            // Text Details wrapped properly to avoid Copy button overflow
+            Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(accTitle, fontSize = 12.sp)
-                Text("Number: $number", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = "Number: $number",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+
             OutlinedButton(
                 onClick = onCopy,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(8.dp)
             ) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
