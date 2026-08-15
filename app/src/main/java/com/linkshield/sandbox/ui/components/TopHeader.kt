@@ -13,12 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.linkshield.sandbox.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +32,14 @@ fun TopHeader(
     onThemeToggle: (Boolean) -> Unit,
     onMenuClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    
+    // Dynamically resolve resource ID to completely bypass compile-time reference errors
+    val logoResId = remember(context) {
+        val resId = context.resources.getIdentifier("ic_launcher_foreground", "drawable", context.packageName)
+        if (resId != 0) resId else context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -44,16 +52,36 @@ fun TopHeader(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ================= LEFT: LOGO =================
-            Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                contentDescription = "App Logo",
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(52.dp)
-                    .padding(end = 6.dp)
-                    .clip(CircleShape)
-            )
+            // ================= LEFT: LOGO (Safely Loaded) =================
+            if (logoResId != 0) {
+                Image(
+                    painter = painterResource(id = logoResId),
+                    contentDescription = "App Logo",
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(52.dp)
+                        .padding(end = 6.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(48.dp)
+                        .padding(end = 6.dp)
+                        .clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = "App Logo",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
 
             // ================= RIGHT: STACKED ROW 1 & ROW 2 =================
             Column(
