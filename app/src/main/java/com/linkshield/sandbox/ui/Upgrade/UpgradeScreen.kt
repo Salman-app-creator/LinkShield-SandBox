@@ -3,6 +3,8 @@ package com.linkshield.sandbox.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun UpgradeScreen(trialDaysLeft: Int = 30, isTrialActive: Boolean = true) {
     var licenseKey by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -52,12 +55,12 @@ fun UpgradeScreen(trialDaysLeft: Int = 30, isTrialActive: Boolean = true) {
             }
         }
 
-        // 2. PRICING CARD (ENGLISH ONLY)
+        // 2. PRICING CARD
         ProPricingCard()
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // 3. MANUAL PAYMENT SECTION (WITH ONE-TAP COPY)
+        // 3. MANUAL PAYMENT SECTION
         Text(
             text = "Upgrade to Pro (Manual Payment):",
             fontWeight = FontWeight.Bold,
@@ -85,6 +88,32 @@ fun UpgradeScreen(trialDaysLeft: Int = 30, isTrialActive: Boolean = true) {
             color = Color(0xFF4CAF50)
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // WHATSAPP SUPPORT BUTTON (SINGLE)
+        Button(
+            onClick = {
+                val phone = "+923136176616"
+                val message = "Hi, I have sent the payment. Please verify and send my Pro License Key."
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    data = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=${Uri.encode(message)}")
+                }
+                context.startActivity(intent)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
+        ) {
+            Text(
+                text = "💬 Send Payment Proof on WhatsApp",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
         // 4. LICENSE ACTIVATION INPUT
@@ -93,33 +122,6 @@ fun UpgradeScreen(trialDaysLeft: Int = 30, isTrialActive: Boolean = true) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-Spacer(modifier = Modifier.height(12.dp))
-
-// WHATSAPP SUPPORT / PROOF BUTTON
-Button(
-    onClick = {
-        val phone = "+923136176616" // Aap ka WhatsApp number
-        val message = "Hi, I have sent the payment. Please verify and send my Pro License Key."
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            data = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=${Uri.encode(message)}")
-        }
-        context.startActivity(intent)
-    },
-    modifier = Modifier
-        .fillMaxWidth()
-        .height(48.dp),
-    shape = RoundedCornerShape(12.dp),
-    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)) // WhatsApp Green
-) {
-    Text(
-        text = "💬 Send Payment Proof on WhatsApp",
-        color = Color.White,
-        fontWeight = FontWeight.Bold,
-        fontSize = 14.sp
-    )
-}
-
-Spacer(modifier = Modifier.height(20.dp))
 
         OutlinedTextField(
             value = licenseKey,
