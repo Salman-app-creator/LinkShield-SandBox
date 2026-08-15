@@ -22,34 +22,30 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            LinkShieldTheme {
-                MainScreen()
+            var isDarkTheme by remember { mutableStateOf(false) }
+
+            // Dynamic Dark/Light Theme Switching
+            LinkShieldTheme(darkTheme = isDarkTheme) {
+                MainScreen(
+                    isDarkTheme = isDarkTheme,
+                    onThemeToggle = { isDarkTheme = it }
+                )
             }
         }
     }
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    isDarkTheme: Boolean,
+    onThemeToggle: (Boolean) -> Unit
+) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var currentUrl by remember { mutableStateOf("https://example.com/sandbox") }
     var isShieldActive by remember { mutableStateOf(true) }
     var trialDaysLeft by remember { mutableIntStateOf(30) }
-    var isDarkTheme by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            // Placeholder text ke bajaye yahan TopHeader dikhega
-            TopHeader(
-                currentUrl = currentUrl,
-                onUrlChange = { currentUrl = it },
-                isShieldActive = isShieldActive,
-                onShieldToggle = { isShieldActive = !isShieldActive },
-                trialDaysLeft = trialDaysLeft,
-                isDarkTheme = isDarkTheme,
-                onThemeToggle = { isDarkTheme = !isDarkTheme }
-            )
-        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
@@ -80,12 +76,26 @@ fun MainScreen() {
         ) {
             when (selectedTab) {
                 0 -> {
-                    // Shield / Web Content Area
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Web Content / WebView Area")
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // TopHeader ONLY inside Shield Screen
+                        TopHeader(
+                            currentUrl = currentUrl,
+                            onUrlChange = { currentUrl = it },
+                            isShieldActive = isShieldActive,
+                            onShieldToggle = { isShieldActive = !isShieldActive },
+                            trialDaysLeft = trialDaysLeft,
+                            isDarkTheme = isDarkTheme,
+                            onThemeToggle = onThemeToggle,
+                            onMenuClick = { /* Handle Browser Menu Click */ }
+                        )
+
+                        // Web Content / WebView Area
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Web Content / WebView Area")
+                        }
                     }
                 }
                 1 -> {
