@@ -1,186 +1,166 @@
 package com.linkshield.sandbox.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 fun UpgradeScreen(
-    remainingDays: Int = 28,
-    isPro: Boolean = false,
-    onActivateLicense: (String) -> Unit = {}
+    trialDaysLeft: Int = 30, // Default 30 days for fresh install
+    isTrialActive: Boolean = true
 ) {
+    var licenseKey by remember { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    var licenseKeyInput by remember { mutableStateOf("") }
-
-    val easypaisaTitle = "Your EasyPaisa Title"
-    val easypaisaNumber = "03001234567"
-
-    val jazzcashTitle = "Your JazzCash Title"
-    val jazzcashNumber = "03007654321"
-
-    val usdtNetwork = "Network: TRC20 (Tron)"
-    val usdtAddress = "TYaX9876543210UsdtWalletAddressHere"
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .verticalScroll(rememberScrollState())
     ) {
+        // Title Box
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isPro) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
-            )
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = if (isPro) "PRO Account Active" else "Free Trial Active",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isPro) "Unlimited Access" else "Remaining: $remainingDays Days Left",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = if (isPro) MaterialTheme.colorScheme.primary else Color(0xFFFFA500)
+                Icon(Icons.Default.Star, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("[ ⭐ PRO MEMBERSHIP ]", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Dynamic Top Status Box (Fixes hardcoded 28 days issue)
+        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = if (isTrialActive) "Status: Free Trial Active" else "Status: Trial Expired",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "Remaining: $trialDaysLeft Days Left",
+                    fontSize = 12.sp
                 )
             }
         }
 
-        Text(
-            text = "Upgrade to Pro (Manual Payment)",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Upgrade to Pro (Manual Payment):", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // EasyPaisa Card
+        PaymentCard(
+            title = "🟢 EasyPaisa",
+            accTitle = "Salman Latif",
+            number = "03136176616",
+            onCopy = { copyText(context, clipboardManager, "03136176616") }
         )
 
-        PaymentAccountCard("EasyPaisa", "Title: $easypaisaTitle", easypaisaNumber, Color(0xFF00A859)) {
-            copyToClipboard(context, easypaisaNumber, "EasyPaisa Number")
-        }
+        Spacer(modifier = Modifier.height(8.dp))
 
-        PaymentAccountCard("JazzCash", "Title: $jazzcashTitle", jazzcashNumber, Color(0xFFD32F2F)) {
-            copyToClipboard(context, jazzcashNumber, "JazzCash Number")
-        }
+        // JazzCash Card
+        PaymentCard(
+            title = "🔴 JazzCash",
+            accTitle = "Salman Latif",
+            number = "03061934345",
+            onCopy = { copyText(context, clipboardManager, "03061934345") }
+        )
 
-        PaymentAccountCard("USDT (TRC20)", usdtNetwork, usdtAddress, Color(0xFF26A17B)) {
-            copyToClipboard(context, usdtAddress, "USDT Address")
-        }
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(4.dp))
+        // USDT (TRC20) Card
+        PaymentCard(
+            title = "🟢 USDT (TRC20)",
+            accTitle = "Network: TRC20 (Tron)",
+            number = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub",
+            onCopy = { copyText(context, clipboardManager, "TYaX...WalletAddressHere") }
+        )
 
-        Text(text = "Activate License Key", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Activate Pro License:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(8.dp))
 
+        // License Bar Input
         OutlinedTextField(
-            value = licenseKeyInput,
-            onValueChange = { licenseKeyInput = it },
-            label = { Text("Enter License Key") },
-            placeholder = { Text("XXXX-XXXX-XXXX-XXXX") },
-            leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
-            singleLine = true,
+            value = licenseKey,
+            onValueChange = { licenseKey = it },
+            placeholder = { Text("[ 🔑 XXXX-XXXX-XXXX-XXXX ]") },
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
+            singleLine = true
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Activate Button
         Button(
-            onClick = {
-                if (licenseKeyInput.isNotBlank()) onActivateLicense(licenseKeyInput.trim())
-            },
-            enabled = !isPro,
+            onClick = { },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(if (isPro) "Already Upgraded" else "Activate License", fontWeight = FontWeight.Bold)
+            Text("[ 🚀 Activate License ]", fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-fun PaymentAccountCard(
-    providerName: String,
-    accountTitle: String,
-    accountNumber: String,
-    badgeColor: Color,
+private fun PaymentCard(
+    title: String,
+    accTitle: String,
+    number: String,
     onCopy: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Surface(color = badgeColor, shape = RoundedCornerShape(6.dp)) {
-                    Text(
-                        text = providerName,
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(text = accountTitle, fontSize = 12.sp)
-                Text(text = accountNumber, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Column {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(accTitle, fontSize = 12.sp)
+                Text("Number: $number", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
-            IconButton(
+            OutlinedButton(
                 onClick = onCopy,
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp))
-                    .size(40.dp)
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Copy", fontSize = 11.sp)
             }
         }
     }
 }
 
-private fun copyToClipboard(context: Context, text: String, label: String) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    val clip = ClipData.newPlainText(label, text)
-    clipboard.setPrimaryClip(clip)
-    Toast.makeText(context, "$label copied!", Toast.LENGTH_SHORT).show()
+private fun copyText(context: Context, clipboard: androidx.compose.ui.platform.ClipboardManager, text: String) {
+    clipboard.setText(AnnotatedString(text))
+    Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
 }
