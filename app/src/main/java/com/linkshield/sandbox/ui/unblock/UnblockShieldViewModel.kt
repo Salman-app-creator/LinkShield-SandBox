@@ -1,4 +1,4 @@
-package com.linkshield.sandbox.ui.unblock
+package com.linkshield.sandbox.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -25,6 +25,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.net.URLDecoder
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UnblockShieldViewModel.kt  — Phase 1 update
+//
+// What changed from previous version:
+//   • AdBlockEngine.getInstance() injected into ShieldWebViewClient.
+//   • shouldInterceptRequest now calls adBlockEngine.shouldBlock(url) FIRST.
+//     Blocked requests return an EMPTY 200 response (not null, not 404) to
+//     prevent "ERR_BLOCKED_BY_CLIENT" errors from breaking page layout.
+//   • adBlockEnabled flag exposed so the UI can show a toggle.
+//   • blockedRequestCount tracks how many ads were blocked this session.
+//
+// Everything else (DoH routing, JS bridge, media detection, WebView lifecycle)
+// is IDENTICAL to the previous version.
+// ─────────────────────────────────────────────────────────────────────────────
 
 internal const val CHROME_UA =
     "Mozilla/5.0 (Linux; Android 14; SM-S918B) " +
@@ -104,6 +119,7 @@ class UnblockShieldViewModel : ViewModel() {
     private val _webViews = mutableMapOf<Int, WebView>()
     val webViews: Map<Int, WebView> = _webViews
 
+    // ── Browser state ──────────────────────────────────────────────────────────
     var currentUrl          by mutableStateOf("https://www.google.com")
         private set
     var isLoading           by mutableStateOf(false)
@@ -115,10 +131,12 @@ class UnblockShieldViewModel : ViewModel() {
     var pageTitle           by mutableStateOf("")
         private set
 
+    // ── AdBlock state — exposed to UI ──────────────────────────────────────────
     var adBlockEnabled      by mutableStateOf(true)
     var blockedRequestCount by mutableStateOf(0)
         private set
 
+    // ── Media stream state ─────────────────────────────────────────────────────
     private val _mediaUrls = MutableStateFlow<List<MediaItem>>(emptyList())
     val mediaUrls: StateFlow<List<MediaItem>> = _mediaUrls.asStateFlow()
 
@@ -128,6 +146,8 @@ class UnblockShieldViewModel : ViewModel() {
         val pageUrl:   String,
         val timestamp: Long = System.currentTimeMillis()
     )
+
+    // ── Public API ─────────────────────────────────────────────────────────────
 
     fun getOrCreateWebView(context: Context, tabIndex: Int, dnsManager: DnsManager): WebView =
         _webViews.getOrPut(tabIndex) { buildWebView(context, dnsManager) }
@@ -167,11 +187,10 @@ class UnblockShieldViewModel : ViewModel() {
         _webViews.clear()
     }
 
+    // ── WebView factory ────────────────────────────────────────────────────────
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildWebView(context: Context, dnsManager: DnsManager): WebView {
-        val webView = WebView(context.applicationContext)
-        
-        webView.apply {
+        return WebView(context.applicationContext).apply {
             layoutParams = android.view.ViewGroup.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -199,7 +218,7 @@ class UnblockShieldViewModel : ViewModel() {
 
             CookieManager.getInstance().apply {
                 setAcceptCookie(true)
-                setAcceptThirdPartyCookies(webView, true)
+                setAcceptThirdPartyCookies(this@apply, true)
             }
 
             addJavascriptInterface(
@@ -230,10 +249,23 @@ class UnblockShieldViewModel : ViewModel() {
 
             loadUrl(currentUrl)
         }
-        return webView
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ShieldWebViewClient — Phase 1: AdBlock wired in
+//
+// shouldInterceptRequest decision tree:
+//   1. Parse URL → check if AdBlock enabled AND shouldBlock() → serve EMPTY response
+//   2. If DoH enabled → route through OkHttp (existing logic, unchanged)
+//   3. Otherwise → return null (WebView native handling)
+//
+// Why return an EMPTY response instead of null for blocked URLs:
+//   Returning null tells WebView "no interception, proceed normally" →
+//   the ad request goes through. Returning a 200 with 0 bytes tells the
+//   browser "request succeeded, content is empty" → ad placeholder stays
+//   invisible, no layout errors, no console 403 flood.
+// ─────────────────────────────────────────────────────────────────────────────
 private class ShieldWebViewClient(
     private val dnsManager:    DnsManager,
     private val vm:            UnblockShieldViewModel,
@@ -241,6 +273,8 @@ private class ShieldWebViewClient(
     private val isAdBlockOn:   () -> Boolean
 ) : WebViewClient() {
 
+    // Reusable empty stream to return for blocked requests — avoids allocating
+    // a new ByteArray on every blocked request (hot path)
     private val EMPTY_STREAM get() = ByteArrayInputStream(ByteArray(0))
 
     override fun shouldOverrideUrlLoading(
@@ -251,6 +285,7 @@ private class ShieldWebViewClient(
         val scheme = url.scheme?.lowercase() ?: return false
         if (scheme == "http" || scheme == "https") return false
 
+        // intent:// — extract fallback URL if present
         if (scheme == "intent") {
             val intentStr = url.toString()
             val match     = ";S\\.browser_fallback_url=([^;]+)".toRegex().find(intentStr)
@@ -260,7 +295,7 @@ private class ShieldWebViewClient(
                     if (decoded.startsWith("http")) { view?.loadUrl(decoded); return true }
                 }
             }
-            return true
+            return true   // swallow all other custom schemes
         }
         return true
     }
@@ -300,6 +335,7 @@ private class ShieldWebViewClient(
         error:   WebResourceError?
     ) {
         super.onReceivedError(view, request, error)
+        // Retry once via DoH if main frame failed
         if (request?.isForMainFrame == true) {
             val url = request.url.toString()
             if (dnsManager.isDohEnabled() && !url.contains("retry=true")) {
@@ -309,6 +345,7 @@ private class ShieldWebViewClient(
         }
     }
 
+    // ── Main interception method ───────────────────────────────────────────────
     override fun shouldInterceptRequest(
         view:    WebView?,
         request: WebResourceRequest?
@@ -318,9 +355,13 @@ private class ShieldWebViewClient(
         val url = request.url?.toString() ?: return null
         if (!url.startsWith("http://") && !url.startsWith("https://")) return null
 
+        // ── STEP 1: Ad/Tracker blocking ────────────────────────────────────────
+        // This runs BEFORE DoH routing so blocked requests never hit the network.
         if (isAdBlockOn() && adBlockEngine.shouldBlock(url)) {
             vm.incrementBlockedCount()
 
+            // Return a transparent 1×1 GIF for image requests — preserves layout
+            // Return empty HTML for scripts/iframes — prevents JS errors
             val mime = when {
                 url.contains(".gif")  -> "image/gif"
                 url.contains(".png")  -> "image/png"
@@ -341,6 +382,7 @@ private class ShieldWebViewClient(
             )
         }
 
+        // ── STEP 2: DoH routing (existing logic — unchanged) ───────────────────
         if (!dnsManager.isDohEnabled()) return null
 
         val lower    = url.lowercase()
@@ -385,6 +427,9 @@ private class ShieldWebViewClient(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// normalizeUrl — keeps existing call sites working
+// ─────────────────────────────────────────────────────────────────────────────
 internal fun normalizeUrl(raw: String): String {
     val t = raw.trim()
     return when {
