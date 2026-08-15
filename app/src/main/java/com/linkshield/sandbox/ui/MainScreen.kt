@@ -62,9 +62,8 @@ fun MainScreen(
         Box(modifier = Modifier.padding(innerPadding)) {
             when (selectedTab) {
                 0 -> {
-                    // Browser View / WebView Container
                     Text(
-                        text = "Browser View: $currentUrl",
+                        text = "Browser / Shield Tab: $currentUrl",
                         modifier = Modifier.padding(16.dp)
                     )
                 }
