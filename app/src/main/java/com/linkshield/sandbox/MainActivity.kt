@@ -82,18 +82,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestDefaultBrowserRole() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val rm = getSystemService(Context.ROLE_SERVICE) as RoleManager
-            if (rm.isRoleAvailable(RoleManager.ROLE_BROWSER) &&
-                !rm.isRoleHeld(RoleManager.ROLE_BROWSER)) {
-                defaultBrowserLauncher.launch(
-                    rm.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
-                )
-                return
-            }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val rm = getSystemService(ROLE_SERVICE) as RoleManager
+        if (rm.isRoleAvailable(RoleManager.ROLE_BROWSER) &&
+            !rm.isRoleHeld(RoleManager.ROLE_BROWSER)) {
+            defaultBrowserLauncher.launch(
+                rm.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+            )
+            return
         }
-        openDefaultBrowserSettings(this)
     }
+    openDefaultBrowserSettings(this)
+    }
+    
 }
 
 @Composable
@@ -226,5 +227,3 @@ fun MainScreen(
     }
 }
 
-private val MainActivity.Context: android.content.Context
-    get() = this
