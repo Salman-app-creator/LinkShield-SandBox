@@ -1,6 +1,7 @@
 package com.linkshield.sandbox.ui.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +35,7 @@ fun TopHeader(
 ) {
     val context = LocalContext.current
     
-    // Dynamically resolve resource ID to completely bypass compile-time reference errors
+    // Resource safely resolve karne ka logic
     val logoResId = remember(context) {
         val resId = context.resources.getIdentifier("ic_launcher_foreground", "drawable", context.packageName)
         if (resId != 0) resId else context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)
@@ -48,27 +49,22 @@ fun TopHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .padding(8.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ================= LEFT: LOGO (Safely Loaded) =================
+            // ================= LEFT: PROPER SIZED LOGO =================
             if (logoResId != 0) {
                 Image(
                     painter = painterResource(id = logoResId),
                     contentDescription = "App Logo",
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(52.dp)
-                        .padding(end = 6.dp)
+                        .size(42.dp)
                         .clip(CircleShape)
                 )
             } else {
                 Surface(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(48.dp)
-                        .padding(end = 6.dp)
+                        .size(42.dp)
                         .clip(CircleShape),
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
@@ -77,56 +73,58 @@ fun TopHeader(
                             imageVector = Icons.Default.Shield,
                             contentDescription = "App Logo",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
 
-            // ================= RIGHT: STACKED ROW 1 & ROW 2 =================
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // ================= RIGHT: ROW 1 & ROW 2 STACKED =================
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.weight(1f)
             ) {
-                // ------------ ROW 1 ------------
+                // ------------ ROW 1: Badges + Switch ------------
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Shield Chip
                     FilterChip(
                         selected = isShieldActive,
                         onClick = onShieldToggle,
                         label = {
                             Text(
                                 if (isShieldActive) "Shield ON" else "Shield OFF",
-                                fontSize = 11.sp
+                                fontSize = 10.sp
                             )
                         },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.Shield,
                                 contentDescription = null,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                         },
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.height(28.dp)
                     )
 
+                    // Trial Badge
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Text(
                             text = "Trial: ${trialDaysLeft}d Left",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
 
+                    // Theme Toggle
                     Switch(
                         checked = isDarkTheme,
                         onCheckedChange = onThemeToggle,
@@ -134,45 +132,46 @@ fun TopHeader(
                             Icon(
                                 imageVector = if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(10.dp)
                             )
                         },
-                        modifier = Modifier.scale(0.75f)
+                        modifier = Modifier.scale(0.7f)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // ------------ ROW 2 ------------
+                // ------------ ROW 2: Nav Buttons + Address Bar ------------
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(16.dp))
+                    IconButton(onClick = { }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(14.dp))
                     }
-                    IconButton(onClick = { }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.ArrowForward, contentDescription = "Forward", modifier = Modifier.size(16.dp))
+                    IconButton(onClick = { }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.ArrowForward, contentDescription = "Forward", modifier = Modifier.size(14.dp))
                     }
-                    IconButton(onClick = { }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reload", modifier = Modifier.size(16.dp))
+                    IconButton(onClick = { }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reload", modifier = Modifier.size(14.dp))
                     }
 
                     Spacer(modifier = Modifier.width(4.dp))
 
+                    // Fixed Width Address Bar
                     OutlinedTextField(
                         value = currentUrl,
                         onValueChange = onUrlChange,
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp),
-                        shape = RoundedCornerShape(22.dp),
+                            .height(40.dp),
+                        shape = RoundedCornerShape(20.dp),
                         singleLine = true,
                         leadingIcon = {
                             Icon(
                                 Icons.Default.Lock,
                                 contentDescription = "Secure",
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                         },
                         textStyle = LocalTextStyle.current.copy(fontSize = 11.sp),
