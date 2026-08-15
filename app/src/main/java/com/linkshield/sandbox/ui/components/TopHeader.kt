@@ -38,7 +38,6 @@ fun TopHeader(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp
     ) {
-        // Row with IntrinsicSize.Min allows Logo to take the combined height of Row 1 + Row 2
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -46,9 +45,9 @@ fun TopHeader(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ================= LEFT: LOGO (Spans Row 1 + Row 2) =================
+            // ================= LEFT: EXACT LOGO FROM YOUR DRAWABLE =================
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground), // Apna App Logo Image ID
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
                 contentDescription = "App Logo",
                 modifier = Modifier
                     .fillMaxHeight()
@@ -64,13 +63,12 @@ fun TopHeader(
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // ------------ ROW 1: Status Badges, Trial & Theme Switch ------------
+                // ------------ ROW 1 ------------
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Shield Toggle Chip
                     FilterChip(
                         selected = isShieldActive,
                         onClick = onShieldToggle,
@@ -90,15 +88,6 @@ fun TopHeader(
                         modifier = Modifier.height(32.dp)
                     )
 
-                    // Shield Icon Badge
-                    Icon(
-                        Icons.Default.Shield,
-                        contentDescription = "Shield Indicator",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-
-                    // Trial Status Badge
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.secondaryContainer
@@ -111,7 +100,6 @@ fun TopHeader(
                         )
                     }
 
-                    // Theme Toggle Switch (☀️ ──◯ 🌙)
                     Switch(
                         checked = isDarkTheme,
                         onCheckedChange = onThemeToggle,
@@ -128,7 +116,7 @@ fun TopHeader(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // ------------ ROW 2: Nav Controls & Address Bar ------------
+                // ------------ ROW 2 ------------
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -145,7 +133,6 @@ fun TopHeader(
 
                     Spacer(modifier = Modifier.width(4.dp))
 
-                    // Address Bar (No text clipping)
                     OutlinedTextField(
                         value = currentUrl,
                         onValueChange = onUrlChange,
