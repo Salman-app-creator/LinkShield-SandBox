@@ -34,66 +34,75 @@ fun TopHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
+            // Row 1: Logo | Shield Button | Shield Icon | Trial Badge | Theme Switch
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // App Logo and Name
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_app_logo),
-                        contentDescription = "LinkShield Logo",
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "LinkShield",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Image(
+                    painter = painterResource(id = R.drawable.ic_app_logo),
+                    contentDescription = "Logo",
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                )
+
+                FilterChip(
+                    selected = isShieldActive,
+                    onClick = onShieldToggle,
+                    label = { Text(if (isShieldActive) "Shield ON" else "Shield OFF", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                )
+
+                Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                    Text("Trial: ${trialDaysLeft}d Left", modifier = Modifier.padding(4.dp), fontSize = 10.sp)
                 }
 
-                // Controls
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    FilterChip(
-                        selected = isShieldActive,
-                        onClick = onShieldToggle,
-                        label = { Text(if (isShieldActive) "Shield ON" else "Shield OFF", fontSize = 11.sp) },
-                        leadingIcon = { Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(13.dp)) }
-                    )
-                    Switch(
-                        checked = isDarkTheme,
-                        onCheckedChange = { onThemeToggle() },
-                        thumbContent = {
-                            Icon(
-                                if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                contentDescription = null,
-                                modifier = Modifier.size(SwitchDefaults.IconSize)
-                            )
-                        }
-                    )
-                }
+                Switch(
+                    checked = isDarkTheme,
+                    onCheckedChange = { onThemeToggle() },
+                    thumbContent = {
+                        Icon(
+                            if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
+                            contentDescription = null,
+                            modifier = Modifier.size(SwitchDefaults.IconSize)
+                        )
+                    }
+                )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = currentUrl,
-                onValueChange = onUrlChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(24.dp),
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                placeholder = { Text("https://...") },
-                singleLine = true
-            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Row 2: Navigation Arrows + Refresh + URL Bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(18.dp))
+                }
+                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.ArrowForward, contentDescription = "Forward", modifier = Modifier.size(18.dp))
+                }
+                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp))
+                }
+
+                OutlinedTextField(
+                    value = currentUrl,
+                    onValueChange = onUrlChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                    singleLine = true
+                )
+            }
         }
     }
 }
