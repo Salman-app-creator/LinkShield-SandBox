@@ -27,21 +27,42 @@ fun TopHeader(
     isDarkTheme: Boolean,
     onThemeToggle: () -> Unit
 ) {
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                // Logo check: Yahan painterResource sahi hona chahiye
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // App Logo and Name
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_app_logo),
                         contentDescription = "LinkShield Logo",
-                        modifier = Modifier.size(32.dp).clip(CircleShape)
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("LinkShield", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "LinkShield",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Controls
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     FilterChip(
                         selected = isShieldActive,
                         onClick = onShieldToggle,
@@ -51,16 +72,27 @@ fun TopHeader(
                     Switch(
                         checked = isDarkTheme,
                         onCheckedChange = { onThemeToggle() },
-                        thumbContent = { Icon(if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode, null, modifier = Modifier.size(SwitchDefaults.IconSize)) }
+                        thumbContent = {
+                            Icon(
+                                if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                contentDescription = null,
+                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                            )
+                        }
                     )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
-                value = currentUrl, onValueChange = onUrlChange,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                value = currentUrl,
+                onValueChange = onUrlChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(24.dp),
-                leadingIcon = { Icon(Icons.Default.Lock, null, modifier = Modifier.size(16.dp)) }
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                placeholder = { Text("https://...") },
+                singleLine = true
             )
         }
     }
