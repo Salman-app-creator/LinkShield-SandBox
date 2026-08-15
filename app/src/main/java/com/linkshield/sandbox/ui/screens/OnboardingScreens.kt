@@ -1,24 +1,5 @@
 package com.linkshield.sandbox.ui.screens
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OnboardingScreens.kt
-//
-// Contains TWO full-screen composables shown before MainScreen:
-//
-//   SCREEN 1 — DisclaimerScreen
-//     • Full-screen (NOT a dialog) with scrollable T&C text
-//     • "Accept & Continue" button only appears after scrolling to bottom
-//     • Back press is disabled — user MUST accept
-//
-//   SCREEN 2 — EnableShieldScreen
-//     • Full-screen with large shield icon + "Enable Shield" button
-//     • Button opens system Default Browser settings
-//     • "Continue" button only activates when app IS confirmed default browser
-//     • User CANNOT skip this step — there is no "Skip" or "Later" option
-//     • The screen polls isDefaultBrowser() every time it recomposes via
-//       a SideEffect driven by a LaunchedEffect timer
-// ─────────────────────────────────────────────────────────────────────────────
-
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -28,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,24 +46,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.R
 import kotlinx.coroutines.delay
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 1: DisclaimerScreen
-// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun DisclaimerScreen(onAccept: () -> Unit) {
     val scrollState = rememberScrollState()
-    // Accept button only appears once user reaches within 100px of the bottom
     val hasScrolledToBottom = scrollState.value >= (scrollState.maxValue - 100).coerceAtLeast(0)
 
-    // Disable hardware back — this screen cannot be dismissed
     BackHandler(enabled = true) { /* intentionally blocked */ }
 
     Column(
@@ -89,7 +67,6 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // ── Fixed header ──────────────────────────────────────────────────────
         Surface(
             modifier        = Modifier.fillMaxWidth(),
             color           = MaterialTheme.colorScheme.surface,
@@ -99,11 +76,11 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
                 modifier            = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector        = Icons.Default.Shield,
-                    contentDescription = null,
-                    tint               = MaterialTheme.colorScheme.primary,
-                    modifier           = Modifier.size(40.dp)
+                // FIX: Generic Icon replaced with Custom App Logo
+                Image(
+                    painter            = painterResource(id = R.mipmap.ic_launcher),
+                    contentDescription = "App Logo",
+                    modifier           = Modifier.size(44.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -122,7 +99,6 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
             }
         }
 
-        // ── Scrollable T&C content ────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -179,7 +155,6 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Visual indicator — scroll hint
             if (!hasScrolledToBottom) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
@@ -199,7 +174,6 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // ── Fixed bottom accept button ────────────────────────────────────────
         Surface(
             modifier        = Modifier.fillMaxWidth(),
             color           = MaterialTheme.colorScheme.surface,
@@ -266,36 +240,22 @@ private fun DisclaimerSection(number: String, title: String, body: String) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 2: EnableShieldScreen
-//
-// MANDATORY — the user cannot move past this screen until the app is
-// confirmed as the system default browser. There is NO skip option.
-//
-// Flow:
-//  1. Show large shield icon + explanation text
-//  2. "Enable Shield" button → opens system Default Browser selector
-//  3. App polls isDefaultBrowser() every 1 second via LaunchedEffect
-//  4. Once confirmed → "Continue" button appears in green
-//  5. Tapping "Continue" calls onBrowserSet() which updates DisclaimerManager
-//     and triggers navigation to MainScreen
-// ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun EnableShieldScreen(onBrowserSet: () -> Unit) {
+fun EnableShieldScreen(
+    onRequestDefaultBrowser: () -> Unit = {}, // FIX: Added launcher action parameter
+    onBrowserSet: () -> Unit
+) {
     val context = LocalContext.current
 
-    // Poll whether the app is currently the default browser
     var isDefault by remember { mutableStateOf(context.isDefaultBrowser()) }
 
     LaunchedEffect(Unit) {
-        // Poll every second — user may switch to settings and come back
         while (!isDefault) {
             delay(1000)
             isDefault = context.isDefaultBrowser()
         }
     }
 
-    // Disable hardware back — this step cannot be skipped
     BackHandler(enabled = true) { /* intentionally blocked */ }
 
     Box(
@@ -311,7 +271,6 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // ── Animated shield icon ──────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .size(140.dp)
@@ -329,15 +288,21 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector        = if (isDefault) Icons.Default.CheckCircle else Icons.Default.Shield,
-                    contentDescription = "Shield Status",
-                    tint               = if (isDefault)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(80.dp)
-                )
+                if (isDefault) {
+                    Icon(
+                        imageVector        = Icons.Default.CheckCircle,
+                        contentDescription = "Shield Status",
+                        tint               = MaterialTheme.colorScheme.primary,
+                        modifier           = Modifier.size(80.dp)
+                    )
+                } else {
+                    // FIX: Replaced generic icon with Custom App Logo
+                    Image(
+                        painter            = painterResource(id = R.mipmap.ic_launcher),
+                        contentDescription = "App Logo",
+                        modifier           = Modifier.size(80.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -371,9 +336,15 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             Spacer(modifier = Modifier.height(48.dp))
 
             if (!isDefault) {
-                // ── Enable Shield button — opens system settings ───────────────
                 Button(
-                    onClick  = { openDefaultBrowserSettings(context) },
+                    // FIX: Triggers Activity's RoleManager Launcher directly
+                    onClick  = { 
+                        if (onRequestDefaultBrowser != {}) {
+                            onRequestDefaultBrowser()
+                        } else {
+                            openDefaultBrowserSettings(context)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -391,7 +362,6 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Status hint — no skip button here, intentionally
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -409,7 +379,6 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                 }
 
             } else {
-                // ── Continue button — only shows when confirmed default ─────────
                 AnimatedVisibility(
                     visible = isDefault,
                     enter   = fadeIn() + slideInVertically { it / 3 }
@@ -439,27 +408,15 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Opens the system UI for changing the default browser.
- * Uses RoleManager API on Android 10+ for a direct picker.
- * Falls back to Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS on older versions.
- */
 fun openDefaultBrowserSettings(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
         if (roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER) &&
             !roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
-            // This opens the direct "Set default browser" picker
             val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
-            // We need an Activity context to startActivity — context should be Activity here
             if (context is android.app.Activity) {
                 context.startActivityForResult(intent, 9001)
             } else {
-                // Fallback if called from a non-Activity context
                 context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 })
@@ -467,15 +424,11 @@ fun openDefaultBrowserSettings(context: Context) {
             return
         }
     }
-    // Android 9 and below — open general default apps settings
     context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK
     })
 }
 
-/**
- * Returns true if this app is currently the system default browser.
- */
 fun Context.isDefaultBrowser(): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
