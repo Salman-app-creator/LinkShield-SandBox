@@ -6,10 +6,12 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
@@ -18,6 +20,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -56,24 +60,58 @@ fun UnblockShieldScreen(
     isVisible: Boolean = true
 ) {
     if (!isVisible) return
+
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val clipboard = LocalClipboardManager.current
     val capturedMedia by viewModel.mediaUrls.collectAsState()
-    var accepted by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
-    var firstLaunch by remember { mutableStateOf(licenseManager.isFirstLaunchComplete()) }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    var restriction by remember { mutableStateOf(false) }
-    var serverMenu by remember { mutableStateOf(false) }
-    var address by remember { mutableStateOf(viewModel.currentUrl) }
-    var showLinkGuardDetails by remember { mutableStateOf(false) }
-    var linkGuardResult by remember { mutableStateOf<ScanResult?>(null) }
-    val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(viewModel.currentUrl) { address = viewModel.currentUrl }
-    LaunchedEffect(address) {
-        linkGuardResult = address.takeIf { it.isNotBlank() }?.let(SecurityChecker::analyzeUrl)
+    var accepted by remember {
+        mutableStateOf(disclaimerManager.hasAccepted())
     }
+
+    var firstLaunch by remember {
+        mutableStateOf(licenseManager.isFirstLaunchComplete())
+    }
+
+    var tab by rememberSaveable {
+        mutableIntStateOf(0)
+    }
+
+    var restriction by remember {
+        mutableStateOf(false)
+    }
+
+    var serverMenu by remember {
+        mutableStateOf(false)
+    }
+
+    var address by remember {
+        mutableStateOf(viewModel.currentUrl)
+    }
+
+    var showLinkGuardDetails by remember {
+        mutableStateOf(false)
+    }
+
+    var linkGuardResult by remember {
+        mutableStateOf<ScanResult?>(null)
+    }
+
+    val focusRequester = remember {
+        FocusRequester()
+    }
+
+    LaunchedEffect(viewModel.currentUrl) {
+        address = viewModel.currentUrl
+    }
+
+    LaunchedEffect(address) {
+        linkGuardResult = address
+            .takeIf { it.isNotBlank() }
+            ?.let(SecurityChecker::analyzeUrl)
+    }
+
     LaunchedEffect(Unit) {
         if (!licenseManager.isAccessAllowed()) {
             restriction = true
@@ -87,18 +125,21 @@ fun UnblockShieldScreen(
         linkGuardResult!!.score < 80 -> "REVIEW"
         else -> "SAFE"
     }
+
     val guardContainer = when (guardLabel) {
         "DANGER" -> MaterialTheme.colorScheme.errorContainer
         "REVIEW" -> MaterialTheme.colorScheme.tertiaryContainer
         "SAFE" -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
+
     val guardContent = when (guardLabel) {
         "DANGER" -> MaterialTheme.colorScheme.onErrorContainer
         "REVIEW" -> MaterialTheme.colorScheme.onTertiaryContainer
         "SAFE" -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+
     val guardIcon = when (guardLabel) {
         "DANGER" -> Icons.Default.Error
         "REVIEW" -> Icons.Default.Warning
@@ -113,6 +154,7 @@ fun UnblockShieldScreen(
         }
         return
     }
+
     if (!firstLaunch) {
         EnableProtectionScreen {
             openDefaultBrowserSettings(context)
@@ -121,35 +163,94 @@ fun UnblockShieldScreen(
         }
         return
     }
+
     if (restriction) {
         AlertDialog(
-            onDismissRequest = { restriction = false },
-            title = { Text("Upgrade Required", fontWeight = FontWeight.Bold) },
-            text = { Text(licenseManager.getRestrictionReason()) },
-            confirmButton = {
-                Button(onClick = { restriction = false; tab = 2 }) { Text("Upgrade") }
+            onDismissRequest = {
+                restriction = false
             },
-            dismissButton = { TextButton(onClick = { restriction = false }) { Text("Later") } }
+            title = {
+                Text(
+                    "Upgrade Required",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    licenseManager.getRestrictionReason()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        restriction = false
+                        tab = 2
+                    }
+                ) {
+                    Text("Upgrade")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        restriction = false
+                    }
+                ) {
+                    Text("Later")
+                }
+            }
         )
     }
+
     if (showLinkGuardDetails) {
         AlertDialog(
-            onDismissRequest = { showLinkGuardDetails = false },
-            icon = { Icon(guardIcon, null) },
-            title = { Text("Link Guard") },
+            onDismissRequest = {
+                showLinkGuardDetails = false
+            },
+            icon = {
+                Icon(
+                    guardIcon,
+                    null
+                )
+            },
+            title = {
+                Text("Link Guard")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(guardLabel, fontWeight = FontWeight.Bold)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        linkGuardResult?.warnings?.joinToString("\n")?.ifBlank {
-                            "No obvious local URL warnings detected."
-                        } ?: "Enter a URL to scan it."
+                        guardLabel,
+                        fontWeight = FontWeight.Bold
                     )
-                    linkGuardResult?.let { Text("Local safety score: ${it.score}/100", fontSize = 12.sp) }
+
+                    Text(
+                        linkGuardResult
+                            ?.warnings
+                            ?.joinToString("\n")
+                            ?.ifBlank {
+                                "No obvious local URL warnings detected."
+                            }
+                            ?: "Enter a URL to scan it."
+                    )
+
+                    linkGuardResult?.let {
+                        Text(
+                            "Local safety score: ${it.score}/100",
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showLinkGuardDetails = false }) { Text("Close") }
+                TextButton(
+                    onClick = {
+                        showLinkGuardDetails = false
+                    }
+                ) {
+                    Text("Close")
+                }
             }
         )
     }
@@ -159,7 +260,9 @@ fun UnblockShieldScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant
+                    )
                     .padding(8.dp)
             ) {
                 Row(
@@ -168,49 +271,105 @@ fun UnblockShieldScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Image(
-                        painter = painterResource(R.mipmap.ic_launcher),
+                        painter = painterResource(
+                            R.mipmap.ic_launcher
+                        ),
                         contentDescription = "LinkShield Logo",
-                        modifier = Modifier.size(52.dp).padding(2.dp)
+                        modifier = Modifier
+                            .size(52.dp)
+                            .padding(2.dp)
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val shield = dnsManager.isShieldPersistedOn()
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val shield =
+                            dnsManager.isShieldPersistedOn()
+
                         IconButton(
                             onClick = {
-                                if (shield) dnsManager.disableDoh() else dnsManager.enableDoh()
+                                if (shield) {
+                                    dnsManager.disableDoh()
+                                } else {
+                                    dnsManager.enableDoh()
+                                }
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                if (shield) Icons.Default.Shield else Icons.Default.ShieldMoon,
+                                if (shield)
+                                    Icons.Default.Shield
+                                else
+                                    Icons.Default.ShieldMoon,
                                 "Shield Toggle",
-                                tint = if (shield) MaterialTheme.colorScheme.primary else Color.Red
+                                tint =
+                                    if (shield)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        Color.Red
                             )
                         }
-                        Text(if (shield) "ON" else "OFF", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+
+                        Text(
+                            if (shield) "ON" else "OFF",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+
                         Box {
-                            IconButton(onClick = { serverMenu = true }, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.Settings, "DNS Server")
+                            IconButton(
+                                onClick = {
+                                    serverMenu = true
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    "DNS Server"
+                                )
                             }
+
                             DropdownMenu(
                                 expanded = serverMenu,
-                                onDismissRequest = { serverMenu = false }
+                                onDismissRequest = {
+                                    serverMenu = false
+                                }
                             ) {
                                 DohProvider.entries.forEach { provider ->
                                     DropdownMenuItem(
-                                        text = { Text(provider.displayName) },
+                                        text = {
+                                            Text(provider.displayName)
+                                        },
                                         onClick = {
                                             dnsManager.enableDoh(provider)
                                             serverMenu = false
-                                            Toast.makeText(context, "DNS: ${provider.displayName}", Toast.LENGTH_SHORT).show()
+
+                                            Toast.makeText(
+                                                context,
+                                                "DNS: ${provider.displayName}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         },
                                         leadingIcon = {
-                                            if (dnsManager.getCurrentProvider() == provider) Icon(Icons.Default.Check, null)
+                                            if (
+                                                dnsManager.getCurrentProvider() ==
+                                                provider
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    null
+                                                )
+                                            }
                                         }
                                     )
-                                                                    }
+                                }
+
                                 HorizontalDivider()
+
                                 DropdownMenuItem(
-                                    text = { Text("Use Android DNS") },
+                                    text = {
+                                        Text("Use Android DNS")
+                                    },
                                     onClick = {
                                         dnsManager.disableDoh()
                                         serverMenu = false
@@ -218,154 +377,425 @@ fun UnblockShieldScreen(
                                 )
                             }
                         }
-                        Surface(
-                            modifier = Modifier
-                                .height(30.dp)
-                                .clickable { showLinkGuardDetails = true },
-                            shape = RoundedCornerShape(10.dp),
-                            color = guardContainer
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(guardIcon, "Link Guard: $guardLabel", Modifier.size(13.dp), tint = guardContent)
-                                Text(guardLabel, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = guardContent)
+
+                        DynamicLinkGuard(
+                            label = guardLabel,
+                            containerColor = guardContainer,
+                            contentColor = guardContent,
+                            icon = guardIcon,
+                            onClick = {
+                                showLinkGuardDetails = true
                             }
-                        }
+                        )
+
                         IconButton(
-                            onClick = { onThemeToggle(!isDarkTheme) },
+                            onClick = {
+                                onThemeToggle(!isDarkTheme)
+                            },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                if (isDarkTheme)
+                                    Icons.Default.DarkMode
+                                else
+                                    Icons.Default.LightMode,
                                 "Theme Toggle"
                             )
                         }
+
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = when {
-                                licenseManager.isProUser() -> MaterialTheme.colorScheme.primaryContainer
-                                licenseManager.isTrialActive() -> MaterialTheme.colorScheme.secondaryContainer
-                                else -> MaterialTheme.colorScheme.errorContainer
+                                licenseManager.isProUser() ->
+                                    MaterialTheme.colorScheme.primaryContainer
+
+                                licenseManager.isTrialActive() ->
+                                    MaterialTheme.colorScheme.secondaryContainer
+
+                                else ->
+                                    MaterialTheme.colorScheme.errorContainer
                             }
                         ) {
                             Text(
                                 licenseManager.getStatusBadgeText(),
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(
+                                    horizontal = 7.dp,
+                                    vertical = 3.dp
+                                ),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
-                Spacer(Modifier.height(5.dp))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { viewModel.goBack() }, enabled = viewModel.canGoBack, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.ArrowBack, "Back")
-                    }
-                    IconButton(onClick = { viewModel.goForward() }, enabled = viewModel.canGoForward, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.ArrowForward, "Forward")
-                    }
-                    IconButton(onClick = { viewModel.reload() }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Refresh, "Refresh")
-                    }
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it },
-                        modifier = Modifier.weight(1f).heightIn(min = 52.dp).focusRequester(focusRequester),
-                        singleLine = true,
-                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
-                        placeholder = { Text("Enter URL or search...", fontSize = 12.sp) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = {
-                            viewModel.loadUrl(address)
-                            focusManager.clearFocus()
-                        }),
-                        shape = RoundedCornerShape(22.dp)
-                    )
+
+                Spacer(
+                    Modifier.height(5.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(
                         onClick = {
-                            clipboard.setText(AnnotatedString(viewModel.currentUrl))
-                            Toast.makeText(context, "URL copied", Toast.LENGTH_SHORT).show()
+                            viewModel.goBack()
+                        },
+                        enabled = viewModel.canGoBack,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            "Back"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            viewModel.goForward()
+                        },
+                        enabled = viewModel.canGoForward,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowForward,
+                            "Forward"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            viewModel.reload()
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, "Copy URL")
+                        Icon(
+                            Icons.Default.Refresh,
+                            "Refresh"
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = {
+                            address = it
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(
+                            fontSize = 12.sp
+                        ),
+                        placeholder = {
+                            Text(
+                                "Enter URL or search...",
+                                fontSize = 12.sp
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Go
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onGo = {
+                                viewModel.loadUrl(address)
+                                focusManager.clearFocus()
+                            }
+                        ),
+                        shape = RoundedCornerShape(22.dp)
+                    )
+
+                    IconButton(
+                        onClick = {
+                            clipboard.setText(
+                                AnnotatedString(
+                                    viewModel.currentUrl
+                                )
+                            )
+
+                            Toast.makeText(
+                                context,
+                                "URL copied",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            "Copy URL"
+                        )
                     }
                 }
             }
         },
+
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
                     selected = tab == 0,
-                    onClick = { tab = 0 },
-                    icon = { Icon(Icons.Default.Shield, "Shield") },
-                    label = { Text("Shield") }
+                    onClick = {
+                        tab = 0
+                    },
+                    icon = {
+                        Icon(
+                            Icons.Default.Shield,
+                            "Shield"
+                        )
+                    },
+                    label = {
+                        Text("Shield")
+                    }
                 )
+
                 NavigationBarItem(
                     selected = tab == 1,
                     onClick = {
                         if (!licenseManager.canDownload()) {
                             tab = 2
-                            Toast.makeText(context, licenseManager.getRestrictionReason(), Toast.LENGTH_LONG).show()
-                        } else tab = 1
+
+                            Toast.makeText(
+                                context,
+                                licenseManager.getRestrictionReason(),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            tab = 1
+                        }
                     },
-                    icon = { Icon(Icons.Default.Download, "Grabber") },
-                    label = { Text("Grabber") }
+                    icon = {
+                        Icon(
+                            Icons.Default.Download,
+                            "Grabber"
+                        )
+                    },
+                    label = {
+                        Text("Grabber")
+                    }
                 )
+
                 NavigationBarItem(
                     selected = tab == 2,
-                    onClick = { tab = 2 },
-                    icon = { Icon(Icons.Default.Star, "Upgrade") },
-                    label = { Text("Upgrade") }
+                    onClick = {
+                        tab = 2
+                    },
+                    icon = {
+                        Icon(
+                            Icons.Default.Star,
+                            "Upgrade"
+                        )
+                    },
+                    label = {
+                        Text("Upgrade")
+                    }
                 )
             }
         }
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
+        Box(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
             when (tab) {
-                0 -> ShieldWebView(viewModel, dnsManager)
+                0 -> ShieldWebView(
+                    viewModel,
+                    dnsManager
+                )
+
                 1 -> MediaGrabberScreen(
                     activeUrl = viewModel.currentUrl,
                     capturedMedia = capturedMedia,
                     dnsManager = dnsManager,
                     licenseManager = licenseManager,
-                    onBack = { tab = 0 },
-                    onClearCaptured = { viewModel.clearMedia() },
-                    onUpgradeRequired = { tab = 2 }
+                    onBack = {
+                        tab = 0
+                    },
+                    onClearCaptured = {
+                        viewModel.clearMedia()
+                    },
+                    onUpgradeRequired = {
+                        tab = 2
+                    }
                 )
-                2 -> UpgradeScreen(licenseManager = licenseManager)
+
+                2 -> UpgradeScreen(
+                    licenseManager = licenseManager
+                )
             }
         }
     }
 }
 
 @Composable
-private fun EnableProtectionScreen(onEnable: () -> Unit) {
-    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+private fun DynamicLinkGuard(
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    val active = label != "SCAN"
+
+    val transition =
+        rememberInfiniteTransition(
+            label = "link_guard_transition"
+        )
+
+    val pulseScale by transition.animateFloat(
+        initialValue = 0.75f,
+        targetValue = 1.30f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis =
+                    if (label == "DANGER") 550 else 950
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "link_guard_scale"
+    )
+
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.12f,
+        targetValue =
+            if (label == "DANGER") 0.40f else 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis =
+                    if (label == "DANGER") 550 else 950
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "link_guard_alpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .widthIn(
+                min = 72.dp,
+                max = 92.dp
+            )
+            .height(34.dp)
+            .clickable {
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (active) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .scale(pulseScale)
+                    .alpha(pulseAlpha)
+                    .background(
+                        color = contentColor,
+                        shape = CircleShape
+                    )
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = containerColor,
+            shadowElevation =
+                if (label == "DANGER") 5.dp else 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = 8.dp,
+                    vertical = 5.dp
+                ),
+                verticalAlignment =
+                    Alignment.CenterVertically,
+                horizontalArrangement =
+                    Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription =
+                        "Link Guard: $label",
+                    tint = contentColor,
+                    modifier = Modifier.size(15.dp)
+                )
+
+                Text(
+                    text = label,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = contentColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnableProtectionScreen(
+    onEnable: () -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(
+                containerColor =
+                    MaterialTheme.colorScheme.surface
+            )
         ) {
             Column(
                 modifier = Modifier.padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalAlignment =
+                    Alignment.CenterHorizontally,
+                verticalArrangement =
+                    Arrangement.spacedBy(16.dp)
             ) {
-                Icon(Icons.Default.Security, null, Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("Enable LinkShield Protection", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Set LinkShield as the default browser to enable the sandbox.", style = MaterialTheme.typography.bodyMedium)
+                Icon(
+                    Icons.Default.Security,
+                    null,
+                    Modifier.size(80.dp),
+                    tint =
+                        MaterialTheme.colorScheme.primary
+                )
+
+                Text(
+                    "Enable LinkShield Protection",
+                    style =
+                        MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    "Set LinkShield as the default browser " +
+                        "to enable the sandbox.",
+                    style =
+                        MaterialTheme.typography.bodyMedium
+                )
+
                 Button(
                     onClick = onEnable,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Default.OpenInBrowser, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Enable Protection", fontWeight = FontWeight.Bold)
+                    Icon(
+                        Icons.Default.OpenInBrowser,
+                        null
+                    )
+
+                    Spacer(
+                        Modifier.width(8.dp)
+                    )
+
+                    Text(
+                        "Enable Protection",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -373,30 +803,66 @@ private fun EnableProtectionScreen(onEnable: () -> Unit) {
 }
 
 @Composable
-fun ShieldWebView(viewModel: UnblockShieldViewModel, dnsManager: DnsManager) {
+fun ShieldWebView(
+    viewModel: UnblockShieldViewModel,
+    dnsManager: DnsManager
+) {
     val context = LocalContext.current
-    val webView = remember(viewModel, dnsManager) {
-        viewModel.getOrCreateWebView(context.applicationContext, 0, dnsManager)
+
+    val webView = remember(
+        viewModel,
+        dnsManager
+    ) {
+        viewModel.getOrCreateWebView(
+            context.applicationContext,
+            0,
+            dnsManager
+        )
     }
+
     AndroidView(
-        factory = { webView },
+        factory = {
+            webView
+        },
         update = { view ->
-            view.layoutParams = view.layoutParams.apply {
-                width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
-            }
+            view.layoutParams =
+                view.layoutParams.apply {
+                    width =
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+
+                    height =
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                }
         },
         modifier = Modifier.fillMaxSize()
     )
 }
-
-private fun openDefaultBrowserSettings(context: Context) {
+private fun openDefaultBrowserSettings(
+    context: Context
+) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val roleManager = context.getSystemService(RoleManager::class.java)
-        if (roleManager?.isRoleAvailable(RoleManager.ROLE_BROWSER) == true) {
-            context.startActivity(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER))
+        val roleManager =
+            context.getSystemService(
+                RoleManager::class.java
+            )
+
+        if (
+            roleManager?.isRoleAvailable(
+                RoleManager.ROLE_BROWSER
+            ) == true
+        ) {
+            context.startActivity(
+                roleManager.createRequestRoleIntent(
+                    RoleManager.ROLE_BROWSER
+                )
+            )
             return
         }
     }
-    context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+
+    context.startActivity(
+        Intent(
+            Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
+        )
+    )
 }
