@@ -390,30 +390,24 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 
 // ── Helper functions ──
 fun openDefaultBrowserSettings(context: Context) {
-    // Method 1: Open this app's details settings where "Set as default" is available
+    // Method 1: Direct "Default browser app" settings page
     try {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = android.net.Uri.fromParts("package", context.packageName, null)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
         context.startActivity(intent)
         return
     } catch (e: Exception) {
         // Fall through
     }
 
-    // Method 2: Default apps settings
+    // Method 2: App details settings
     try {
-        val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = android.net.Uri.fromParts("package", context.packageName, null)
         }
         context.startActivity(intent)
     } catch (e: Exception) {
         // Method 3: General settings
-        val intent = Intent(Settings.ACTION_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
+        context.startActivity(Intent(Settings.ACTION_SETTINGS))
     }
 }
 
