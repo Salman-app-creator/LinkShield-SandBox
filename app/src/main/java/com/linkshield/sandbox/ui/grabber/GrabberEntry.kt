@@ -1,38 +1,22 @@
 package com.linkshield.sandbox.ui.grabber
 
-import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun GrabberEntry(
-    context: Context,
-    onBack: () -> Unit
+    viewModel: GrabberViewModel,
+    onBack: () -> Unit,
+    onDownload: (MediaQualityOption) -> Unit
 ) {
-    val applicationContext =
-        context.applicationContext
-
-    val viewModel: GrabberViewModel =
-        viewModel(
-            factory =
-                GrabberViewModelFactory(
-                    applicationContext
-                )
-        )
-
-    val downloadHandler =
-        remember(applicationContext) {
-            GrabberDownloadHandler(
-                applicationContext
-            )
-        }
+    val state by
+        viewModel.uiState
+            .collectAsStateWithLifecycle()
 
     GrabberScreen(
         viewModel = viewModel,
         onBack = onBack,
-        onDownload = {
-            downloadHandler.download(it)
-        }
+        onDownload = onDownload
     )
 }
