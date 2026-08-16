@@ -39,10 +39,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -225,12 +224,13 @@ private fun DisclaimerSection(number: String, title: String, body: String) {
 fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     val context = LocalContext.current
 
-    var isDefault: Boolean by remember { mutableStateOf(context.isDefaultBrowser()) }
+    // FIX: Use explicit MutableState instead of delegate to avoid ambiguity
+    val isDefaultState: MutableState<Boolean> = remember { mutableStateOf(checkIsDefaultBrowser(context)) }
 
     LaunchedEffect(Unit) {
-        while (!isDefault) {
+        while (!isDefaultState.value) {
             delay(1000)
-            isDefault = context.isDefaultBrowser()
+            isDefaultState.value = checkIsDefaultBrowser(context)
         }
     }
 
@@ -255,7 +255,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
-                            colors = if (isDefault) listOf(
+                            colors = if (isDefaultState.value) listOf(
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
                             ) else listOf(
@@ -266,7 +266,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (isDefault) {
+                if (isDefaultState.value) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = "Shield Enabled",
@@ -285,7 +285,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = if (isDefault) "" else "(TAP BELOW TO ENABLE)",
+                text = if (isDefaultState.value) "" else "(TAP BELOW TO ENABLE)",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -294,10 +294,10 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = if (isDefault) "Shield Enabled!" else "Enable Shield Protection",
+                text = if (isDefaultState.value) "Shield Enabled!" else "Enable Shield Protection",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (isDefault)
+                color = if (isDefaultState.value)
                     MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.onBackground,
@@ -307,7 +307,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = if (isDefault)
+                text = if (isDefaultState.value)
                     "LinkShield is now your default browser.\n" +
                     "Every link you open from WhatsApp, Gmail, and other apps will be protected."
                 else
@@ -320,7 +320,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            if (!isDefault) {
+            if (!isDefaultState.value) {
                 Button(
                     onClick = {
                         Toast.makeText(context, "Opening settings...", Toast.LENGTH_SHORT).show()
@@ -360,7 +360,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                 }
             } else {
                 AnimatedVisibility(
-                    visible = isDefault,
+                    visible = isDefaultState.value,
                     enter = fadeIn() + slideInVertically { it / 3 }
                 ) {
                     Button(
@@ -388,9 +388,10 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     }
 }
 
-// ── Helper functions ──
+// ── Helper functions (NOT extension functions - avoids ambiguity) ──
+
 fun openDefaultBrowserSettings(context: Context) {
-    // Method 1: Android 10+ direct system picker dialog (BEST - opens radio button list directly)
+    // Method 1: Android 10+ direct system picker dialog
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         try {
             val roleManager = context.getSystemService(RoleManager::class.java)
@@ -400,7 +401,7 @@ fun openDefaultBrowserSettings(context: Context) {
                 return
             }
         } catch (e: Exception) {
-            // Fall through to next method
+            // Fall through
         }
     }
 
@@ -424,37 +425,19 @@ fun openDefaultBrowserSettings(context: Context) {
     }
 }
 
-fun Context.isDefaultBrowser(): Boolean {
+// FIX: Regular function instead of Context extension - avoids "Overload resolution ambiguity"
+fun checkIsDefaultBrowser(context: Context): Boolean {
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val rm = getSystemService(RoleManager::class.java)
+            val rm = context.getSystemService(RoleManager::class.java)
             rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
         } else {
             val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
-            val resolveInfo = packageManager.resolveActivity(
+            val resolveInfo = context.packageManager.resolveActivity(
                 intent,
                 android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
             )
-            resolveInfo?.activityInfo?.packageName == packageName
-        }
-    } catch (e: Exception) {
-        false
-    }
-}
-
-
-fun Context.isDefaultBrowser(): Boolean {
-    return try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val rm = getSystemService(RoleManager::class.java)
-            rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
-        } else {
-            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
-            val resolveInfo = packageManager.resolveActivity(
-                intent,
-                android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
-            )
-            resolveInfo?.activityInfo?.packageName == packageName
+            resolveInfo?.activityInfo?.packageName == context.packageName
         }
     } catch (e: Exception) {
         false
