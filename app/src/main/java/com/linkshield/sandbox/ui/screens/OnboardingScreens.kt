@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,10 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.R
 import kotlinx.coroutines.delay
 
 // ── SCREEN 1: DisclaimerScreen ──
@@ -74,15 +77,15 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.Shield,
+                // FIX: App logo instead of generic shield
+                Image(
+                    painter = painterResource(id = R.drawable.ic_app_logo),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(48.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "🛡️ LinkShield Setup",
+                    text = "LinkShield Setup",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -246,6 +249,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // FIX: App logo instead of generic shield icon
             Box(
                 modifier = Modifier
                     .size(160.dp)
@@ -263,21 +267,26 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isDefault) Icons.Default.CheckCircle else Icons.Default.Shield,
-                    contentDescription = "Shield",
-                    tint = if (isDefault)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(90.dp)
-                )
+                if (isDefault) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Shield Enabled",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(90.dp)
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_app_logo),
+                        contentDescription = "LinkShield Logo",
+                        modifier = Modifier.size(90.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = if (isDefault) "" else "(TAP SHIELD TO ENABLE)",
+                text = if (isDefault) "" else "(TAP BELOW TO ENABLE)",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -386,15 +395,14 @@ fun openDefaultBrowserSettings(context: Context) {
             !roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)
         ) {
             val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // FIX: Removed FLAG_ACTIVITY_NEW_TASK — was breaking the intent
             context.startActivity(intent)
             return
         }
     }
+    // Fallback for older Android
     context.startActivity(
-        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
     )
 }
 
