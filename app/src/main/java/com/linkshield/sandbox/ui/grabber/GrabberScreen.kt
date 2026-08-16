@@ -1,5 +1,6 @@
 package com.linkshield.sandbox.ui.grabber
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,9 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -27,14 +25,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 
 @Composable
 fun GrabberScreen(
@@ -45,20 +40,15 @@ fun GrabberScreen(
     val state by
         viewModel.uiState.collectAsState()
 
-    val latestMedia by
-        MediaSnifferState.latestMedia.collectAsState()
-
-    LaunchedEffect(latestMedia) {
-        latestMedia?.let {
-            viewModel.setLatestMedia(it)
-        }
+    BackHandler {
+        onBack()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Grabber")
+                    Text("Media Grabber")
                 },
                 navigationIcon = {
                     IconButton(
@@ -66,20 +56,8 @@ fun GrabberScreen(
                     ) {
                         Icon(
                             Icons.Default.ArrowBack,
-                            "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            viewModel
-                                .refreshNetworkStatus()
-                        }
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            "Refresh"
+                            contentDescription =
+                                "Back"
                         )
                     }
                 }
@@ -88,103 +66,60 @@ fun GrabberScreen(
     ) { padding ->
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
             verticalArrangement =
                 Arrangement.spacedBy(12.dp)
         ) {
 
             item {
-                Spacer(
-                    Modifier.height(4.dp)
-                )
-
-                FreeDownloadsBanner()
-            }
-
-            item {
-                OutlinedTextField(
-                    value = state.address,
-                    onValueChange =
-                        viewModel::setAddress,
+                Card(
                     modifier =
-                        Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = {
-                        Text("Media URL")
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Link,
-                            null
-                        )
-                    }
-                )
-            }
-
-            item {
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp)
+                        Modifier.fillMaxWidth()
                 ) {
-
-                    Button(
-                        onClick = {
-                            viewModel.inspectUrl(
-                                state.address
-                            )
-                        },
+                    Column(
                         modifier =
-                            Modifier.weight(1f),
-                        enabled =
-                            state.address.isNotBlank() &&
-                                !state.isCheckingThreat
+                            Modifier.padding(16.dp)
                     ) {
                         Text(
-                            if (
-                                state.isCheckingThreat
-                            ) {
-                                "Checking..."
-                            } else {
-                                "Check URL"
-                            }
+                            text =
+                                "[ 20 Free Downloads Remaining ]",
+                            style =
+                                MaterialTheme
+                                    .typography
+                                    .titleMedium
                         )
-                    }
 
-                    Button(
-                        onClick = {
-                            viewModel.extractMedia(
-                                state.address
-                            )
-                        },
-                        modifier =
-                            Modifier.weight(1f),
-                        enabled =
-                            state.address.isNotBlank() &&
-                                !state.isExtracting
-                    ) {
+                        Spacer(
+                            Modifier.height(4.dp)
+                        )
+
                         Text(
-                            if (
-                                state.isExtracting
-                            ) {
-                                "Fetching..."
-                            } else {
-                                "Fetch Media"
-                            }
+                            text =
+                                "Upgrade to Pro for more downloads."
                         )
                     }
                 }
             }
 
-            if (
-                state.isCheckingThreat ||
-                state.isExpanding ||
-                state.isExtracting
-            ) {
+            item {
+                OutlinedTextField(
+                    value = state.url,
+                    onValueChange =
+                        viewModel::setUrl,
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = {
+                        Text("Media URL")
+                    }
+                )
+            }
+
+            if (state.isLoading) {
                 item {
                     LinearProgressIndicator(
                         modifier =
@@ -193,354 +128,157 @@ fun GrabberScreen(
                 }
             }
 
-            state.threat?.let { threat ->
-                item {
-                    ThreatCard(
-                        threat = threat,
-                        onDismiss =
-                            viewModel::clearThreat
-                    )
-                }
-            }
-
             if (
-                state.thumbnail.isNotBlank() ||
-                state.title.isNotBlank()
+                state.title.isNotBlank() ||
+                state.duration.isNotBlank()
             ) {
                 item {
-                    MediaPreviewCard(
-                        thumbnail =
-                            state.thumbnail,
-                        title =
-                            state.title,
-                        duration =
-                            state.duration
-                    )
-                }
-            }
-
-            if (
-                state.qualities.isNotEmpty()
-            ) {
-                item {
-                    Text(
-                        "Available formats",
-                        style =
-                            MaterialTheme.typography
-                                .titleMedium
-                    )
-                }
-
-                items(
-                    items = state.qualities,
-                    key = {
-                        it.id
-                    }
-                ) { option ->
-
-                    QualityOptionRow(
-                        option = option,
-                        selected =
-                            state.selectedQualityId ==
-                                option.id,
-                        onClick = {
-                            viewModel.selectQuality(
-                                option.id
+                    Card(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier =
+                                Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text =
+                                    state.title
+                                        .ifBlank {
+                                            "Media Preview"
+                                        },
+                                style =
+                                    MaterialTheme
+                                        .typography
+                                        .titleMedium
                             )
+
+                            if (
+                                state.duration
+                                    .isNotBlank()
+                            ) {
+                                Text(
+                                    text =
+                                        "Duration: " +
+                                            state.duration
+                                )
+                            }
                         }
-                    )
+                    }
                 }
             }
 
             item {
-                val selected =
-                    viewModel.latestOption()
+                Text(
+                    text = "Available Formats",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium
+                )
+            }
 
+            items(
+                items = state.qualities,
+                key = {
+                    it.url
+                }
+            ) { option ->
+
+                QualityOptionRow(
+                    option = option,
+                    selected =
+                        state.selectedQuality
+                            ?.url ==
+                            option.url,
+                    onSelect = {
+                        viewModel
+                            .selectQuality(
+                                option
+                            )
+                    }
+                )
+            }
+
+            item {
                 Button(
                     onClick = {
-                        selected?.let(
-                            onDownload
-                        )
+                        state.selectedQuality
+                            ?.let(onDownload)
                     },
-                    modifier =
-                        Modifier.fillMaxWidth(),
                     enabled =
-                        selected != null
+                        state.selectedQuality !=
+                            null,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Download,
-                        null
-                    )
-
-                    Spacer(
-                        Modifier.padding(
-                            horizontal = 4.dp
-                        )
-                    )
-
                     Text("Download")
                 }
             }
 
-            item {
-                NetworkBadge(
-                    status =
-                        state.network
-                )
-            }
-
-            state.error?.let { error ->
+            state.error?.let { message ->
                 item {
                     Text(
-                        error,
+                        text = message,
                         color =
-                            MaterialTheme.colorScheme
-                                .error
+                            MaterialTheme.colorScheme.error
                     )
                 }
             }
         }
     }
 }
-@Composable
-private fun FreeDownloadsBanner() {
-    Card(
-        Modifier.fillMaxWidth()
-    ) {
-        Column(
-            Modifier.padding(16.dp)
-        ) {
-            Text(
-                "20 Free Downloads Remaining",
-                style =
-                    MaterialTheme.typography
-                        .titleMedium
-            )
-
-            Text(
-                "Upgrade to Pro for more downloads.",
-                style =
-                    MaterialTheme.typography
-                        .bodySmall
-            )
-        }
-    }
-}
-
-@Composable
-private fun MediaPreviewCard(
-    thumbnail: String,
-    title: String,
-    duration: String
-) {
-    Card(
-        Modifier.fillMaxWidth()
-    ) {
-        Column(
-            Modifier.padding(12.dp)
-        ) {
-
-            if (thumbnail.isNotBlank()) {
-                AsyncImage(
-                    model = thumbnail,
-                    contentDescription =
-                        "Media thumbnail",
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(190.dp)
-                )
-            }
-
-            Spacer(
-                Modifier.height(8.dp)
-            )
-
-            Text(
-                title.ifBlank {
-                    "Media"
-                },
-                style =
-                    MaterialTheme.typography
-                        .titleMedium,
-                maxLines = 2,
-                overflow =
-                    TextOverflow.Ellipsis
-            )
-
-            if (duration.isNotBlank()) {
-                Text(
-                    duration,
-                    style =
-                        MaterialTheme.typography
-                            .bodySmall
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun QualityOptionRow(
     option: MediaQualityOption,
     selected: Boolean,
-    onClick: () -> Unit
+    onSelect: () -> Unit
 ) {
     Card(
-        Modifier.fillMaxWidth()
+        modifier =
+            Modifier.fillMaxWidth()
     ) {
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
-
             RadioButton(
                 selected = selected,
-                onClick = onClick
+                onClick = onSelect
             )
 
             Column(
-                Modifier.weight(1f)
+                modifier =
+                    Modifier.weight(1f)
             ) {
                 Text(
-                    option.displayLabel
-                )
-
-                val details =
-                    listOfNotNull(
-                        option.extension
-                            .takeIf {
-                                it.isNotBlank()
-                            },
-                        option.height?.let {
-                            "${it}p"
-                        }
-                    ).distinct()
-                        .joinToString(" • ")
-
-                if (details.isNotBlank()) {
-                    Text(
-                        details,
-                        style =
-                            MaterialTheme.typography
-                                .bodySmall
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThreatCard(
-    threat:
-        com.linkshield.sandbox.api
-            .ThreatCheckResult,
-    onDismiss: () -> Unit
-) {
-    Card(
-        Modifier.fillMaxWidth()
-    ) {
-        Column(
-            Modifier.padding(12.dp)
-        ) {
-
-            Text(
-                if (threat.isMalicious) {
-                    "⚠ Dangerous URL"
-                } else if (
-                    threat.isSuspicious
-                ) {
-                    "⚠ Suspicious URL"
-                } else {
-                    "✓ URL Checked"
-                },
-                style =
-                    MaterialTheme.typography
-                        .titleMedium
-            )
-
-            Spacer(
-                Modifier.height(4.dp)
-            )
-
-            Text(
-                threat.message.ifBlank {
-                    "No known threat detected."
-                }
-            )
-
-            if (threat.isMalicious) {
-                Spacer(
-                    Modifier.height(8.dp)
-                )
-
-                Button(
-                    onClick = onDismiss
-                ) {
-                    Text("Dismiss")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NetworkBadge(
-    status:
-        com.linkshield.sandbox.api
-            .NetworkStatus
-) {
-    Card(
-        Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            Column(
-                Modifier.weight(1f)
-            ) {
-                Text(
-                    if (
-                        status.publicIp.isBlank()
-                    ) {
-                        "Network unavailable"
-                    } else {
-                        "IP: ${status.publicIp}"
-                    }
+                    text =
+                        option.label
+                            .ifBlank {
+                                option.quality
+                            }
                 )
 
                 if (
-                    status.locationText
+                    option.mimeType
                         .isNotBlank()
                 ) {
                     Text(
-                        status.locationText,
+                        text =
+                            option.mimeType,
                         style =
-                            MaterialTheme.typography
+                            MaterialTheme
+                                .typography
                                 .bodySmall
                     )
                 }
             }
-
-            Text(
-                if (status.encryptedDns) {
-                    "DNS Shield ✓"
-                } else {
-                    "DNS Shield —"
-                },
-                style =
-                    MaterialTheme.typography
-                        .labelSmall
-            )
         }
     }
 }
