@@ -1,35 +1,29 @@
 package com.linkshield.sandbox.ui.grabber
 
-import android.content.Context
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.linkshield.sandbox.data.MediaExtractorRepository
 
 class GrabberViewModelFactory(
-    private val context: Context
+    private val application: Application
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(
         modelClass: Class<T>
     ): T {
-
         if (
             modelClass.isAssignableFrom(
                 GrabberViewModel::class.java
             )
         ) {
             return GrabberViewModel(
-                extractor =
-                    MediaExtractorRepository(
-                        context.applicationContext
-                    )
+                application
             ) as T
         }
 
         throw IllegalArgumentException(
-            "Unknown ViewModel class: " +
-                modelClass.name
+            "Unknown ViewModel: ${modelClass.name}"
         )
     }
 }
