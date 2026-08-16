@@ -1,5 +1,6 @@
 package com.linkshield.sandbox.ui.grabber
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
@@ -22,7 +23,7 @@ fun NavHostController.closeGrabber() {
 
 @Composable
 fun rememberGrabberDownloadManager(
-    context: android.content.Context
+    context: Context
 ): GrabberDownloadManager {
     return remember(context) {
         GrabberDownloadManager(
