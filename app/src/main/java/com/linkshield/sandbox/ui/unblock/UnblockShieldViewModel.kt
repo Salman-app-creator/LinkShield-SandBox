@@ -12,6 +12,7 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -37,22 +38,37 @@ internal const val JS_MEDIA_INTERCEPTOR = """
     window.__linkShieldInjected = true;
 
     function absolute(u) {
-        try { return new URL(u, location.href).href; } catch(e) { return u; }
+        try {
+            return new URL(u, location.href).href;
+        } catch(e) {
+            return u;
+        }
     }
 
     function isMedia(u) {
         if (!u || typeof u !== 'string') return false;
+
         var l = u.toLowerCase();
-        return l.includes('.m3u8') || l.includes('.mp4') || l.includes('.webm') ||
-               l.includes('.mkv') || l.includes('.mov') || l.includes('.m4a') ||
-               l.includes('.mp3') || l.includes('.ogg') || l.includes('.ts') ||
-               l.includes('.mpd') || l.includes('manifest') ||
-               l.includes('videoplayback') || l.startsWith('blob:');
+
+        return l.includes('.m3u8') ||
+               l.includes('.mp4') ||
+               l.includes('.webm') ||
+               l.includes('.mkv') ||
+               l.includes('.mov') ||
+               l.includes('.m4a') ||
+               l.includes('.mp3') ||
+               l.includes('.ogg') ||
+               l.includes('.ts') ||
+               l.includes('.mpd') ||
+               l.includes('manifest') ||
+               l.includes('videoplayback') ||
+               l.startsWith('blob:');
     }
 
     function report(u) {
         try {
             if (!u || !window.LinkShieldBridge) return;
+
             window.LinkShieldBridge.onVideoFound(
                 absolute(u),
                 document.title || '',
@@ -62,85 +78,153 @@ internal const val JS_MEDIA_INTERCEPTOR = """
     }
 
     var origXHROpen = XMLHttpRequest.prototype.open;
+
     XMLHttpRequest.prototype.open = function(method, url) {
-        if (isMedia(url)) report(url);
+        if (isMedia(url)) {
+            report(url);
+        }
+
         return origXHROpen.apply(this, arguments);
     };
 
     var origFetch = window.fetch;
+
     window.fetch = function(input, init) {
         var url = typeof input === 'string'
             ? input
             : (input && input.url ? input.url : '');
-        if (isMedia(url)) report(url);
+
+        if (isMedia(url)) {
+            report(url);
+        }
+
         return origFetch.apply(this, arguments);
     };
 
     function hookMedia(el) {
+        if (!el) return;
+
         function scan() {
             var src = el.currentSrc || el.src;
-            if (src) report(src);
-            var sources = el.querySelectorAll ? el.querySelectorAll('source') : [];
+
+            if (src) {
+                report(src);
+            }
+
+            var sources =
+                el.querySelectorAll
+                    ? el.querySelectorAll('source')
+                    : [];
+
             for (var i = 0; i < sources.length; i++) {
-                if (sources[i].src) report(sources[i].src);
+                if (sources[i].src) {
+                    report(sources[i].src);
+                }
             }
         }
 
         scan();
-        el.addEventListener('loadedmetadata', scan);
-        el.addEventListener('play', scan);
+
+        el.addEventListener(
+            'loadedmetadata',
+            scan
+        );
+
+        el.addEventListener(
+            'play',
+            scan
+        );
     }
 
     function scanAll() {
-        document.querySelectorAll('video,audio').forEach(hookMedia);
-        document.querySelectorAll('video source,audio source').forEach(function(s) {
-            if (s.src) report(s.src);
-        });
+        document
+            .querySelectorAll('video,audio')
+            .forEach(hookMedia);
+
+        document
+            .querySelectorAll('video source,audio source')
+            .forEach(function(s) {
+                if (s.src) {
+                    report(s.src);
+                }
+            });
     }
 
-    var observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(m) {
-            m.addedNodes.forEach(function(n) {
-                if (!n || !n.tagName) return;
+    var observer =
+        new MutationObserver(function(mutations) {
 
-                if (n.tagName === 'VIDEO' || n.tagName === 'AUDIO') {
-                    hookMedia(n);
-                }
+            mutations.forEach(function(m) {
 
-                if (n.querySelectorAll) {
-                    n.querySelectorAll('video,audio').forEach(hookMedia);
-                }
+                m.addedNodes.forEach(function(n) {
+
+                    if (!n || !n.tagName) {
+                        return;
+                    }
+
+                    if (
+                        n.tagName === 'VIDEO' ||
+                        n.tagName === 'AUDIO'
+                    ) {
+                        hookMedia(n);
+                    }
+
+                    if (n.querySelectorAll) {
+                        n.querySelectorAll(
+                            'video,audio'
+                        ).forEach(hookMedia);
+                    }
+                });
             });
         });
-    });
 
     function start() {
+
         if (document.body) {
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
+
+            observer.observe(
+                document.body,
+                {
+                    childList: true,
+                    subtree: true
+                }
+            );
         }
 
         scanAll();
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
+    if (
+        document.readyState ===
+        'loading'
+    ) {
+        document.addEventListener(
+            'DOMContentLoaded',
+            start
+        );
     } else {
         start();
     }
 
-    setInterval(scanAll, 3000);
-    window.addEventListener('load', scanAll);
+    setInterval(
+        scanAll,
+        3000
+    );
+
+    window.addEventListener(
+        'load',
+        scanAll
+    );
 })();
 """
 
 class UnblockShieldViewModel : ViewModel() {
 
-    private val webViews = mutableMapOf<Int, WebView>()
+    private val webViews =
+        mutableMapOf<Int, WebView>()
 
-    var currentUrl by mutableStateOf("https://www.google.com")
+    var currentUrl by mutableStateOf(
+        "https://www.google.com"
+    )
         private set
 
     var isLoading by mutableStateOf(false)
@@ -159,27 +243,54 @@ class UnblockShieldViewModel : ViewModel() {
         val url: String,
         val title: String,
         val pageUrl: String,
-        val timestamp: Long = System.currentTimeMillis()
+        val timestamp: Long =
+            System.currentTimeMillis()
     )
 
-    private val _mediaUrls = MutableStateFlow<List<MediaItem>>(emptyList())
-    val mediaUrls: StateFlow<List<MediaItem>> = _mediaUrls.asStateFlow()
+    private val _mediaUrls =
+        MutableStateFlow<List<MediaItem>>(
+            emptyList()
+        )
+
+    val mediaUrls: StateFlow<List<MediaItem>> =
+        _mediaUrls.asStateFlow()
+
+    /**
+     * Latest detected media URL.
+     *
+     * This is intentionally exposed as StateFlow so the
+     * Grabber layer can observe the same state without
+     * destroying the WebView session.
+     */
+    private val _latestMedia =
+        MutableStateFlow<MediaItem?>(null)
+
+    val latestMedia: StateFlow<MediaItem?> =
+        _latestMedia.asStateFlow()
 
     fun getOrCreateWebView(
         context: Context,
         tabIndex: Int,
         dnsManager: DnsManager
-    ): WebView = webViews.getOrPut(tabIndex) {
-        buildWebView(context, dnsManager)
-    }
+    ): WebView =
+        webViews.getOrPut(tabIndex) {
+            buildWebView(
+                context,
+                dnsManager
+            )
+        }
 
-    fun updateUrl(url: String) {
+    fun updateUrl(
+        url: String
+    ) {
         if (url.isNotBlank()) {
             currentUrl = url
         }
     }
 
-    fun updateLoading(loading: Boolean) {
+    fun updateLoading(
+        loading: Boolean
+    ) {
         isLoading = loading
     }
 
@@ -191,7 +302,9 @@ class UnblockShieldViewModel : ViewModel() {
         canGoForward = forward
     }
 
-    fun updatePageTitle(title: String) {
+    fun updatePageTitle(
+        title: String
+    ) {
         pageTitle = title
     }
 
@@ -200,48 +313,103 @@ class UnblockShieldViewModel : ViewModel() {
         title: String,
         pageUrl: String
     ) {
-        if (url.isBlank()) return
-
-        val normalized = url.trim()
-
-        if (_mediaUrls.value.any { it.url == normalized }) {
+        if (url.isBlank()) {
             return
         }
 
-        _mediaUrls.value = (
-            _mediaUrls.value + MediaItem(
+        val normalized =
+            url.trim()
+
+        if (
+            _mediaUrls.value.any {
+                it.url == normalized
+            }
+        ) {
+            return
+        }
+
+        val item =
+            MediaItem(
                 url = normalized,
                 title = title,
                 pageUrl = pageUrl
             )
-        ).takeLast(30)
+
+        _mediaUrls.value =
+            (
+                _mediaUrls.value + item
+            ).takeLast(30)
+
+        _latestMedia.value = item
     }
 
     fun clearMedia() {
-        _mediaUrls.value = emptyList()
+        _mediaUrls.value =
+            emptyList()
+
+        _latestMedia.value =
+            null
     }
 
-    fun loadUrl(url: String) {
-        val fixed = normalizeUrl(url)
+    fun consumeLatestMedia() {
+        _latestMedia.value = null
+    }
+
+    fun loadUrl(
+        url: String
+    ) {
+        val fixed =
+            normalizeUrl(url)
+
         currentUrl = fixed
-        webViews[0]?.loadUrl(fixed)
+
+        webViews[0]?.loadUrl(
+            fixed
+        )
     }
 
     fun goBack() {
-        webViews[0]?.goBack()
+        webViews[0]?.let { webView ->
+
+            if (webView.canGoBack()) {
+                webView.goBack()
+            }
+        }
     }
 
     fun goForward() {
-        webViews[0]?.goForward()
+        webViews[0]?.let { webView ->
+
+            if (webView.canGoForward()) {
+                webView.goForward()
+            }
+        }
     }
 
     fun reload() {
         webViews[0]?.reload()
     }
 
+    /**
+     * Returns the already-existing WebView without creating
+     * another browser session.
+     */
+    fun getExistingWebView(
+        tabIndex: Int = 0
+    ): WebView? =
+        webViews[tabIndex]
+
     override fun onCleared() {
-        webViews.values.forEach {
-            it.destroy()
+
+        webViews.values.forEach { webView ->
+
+            runCatching {
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+                webView.clearHistory()
+                webView.removeAllViews()
+                webView.destroy()
+            }
         }
 
         webViews.clear()
@@ -255,47 +423,70 @@ class UnblockShieldViewModel : ViewModel() {
         dnsManager: DnsManager
     ): WebView {
 
-        // IMPORTANT:
-        // Use the Activity/Compose context instead of applicationContext.
-        // WebChromeClient needs an Activity-backed context to enter native
-        // fullscreen and attach the custom video view to the activity decor.
         return WebView(context).apply {
 
             settings.apply {
+
                 javaScriptEnabled = true
+
                 domStorageEnabled = true
+
                 databaseEnabled = true
 
-                javaScriptCanOpenWindowsAutomatically = true
-                setSupportMultipleWindows(true)
+                javaScriptCanOpenWindowsAutomatically =
+                    true
 
-                mediaPlaybackRequiresUserGesture = false
+                setSupportMultipleWindows(
+                    true
+                )
 
-                cacheMode = WebSettings.LOAD_DEFAULT
-                loadsImagesAutomatically = true
+                mediaPlaybackRequiresUserGesture =
+                    false
 
-                // Responsive viewport configuration.
-                useWideViewPort = true
-                loadWithOverviewMode = true
+                cacheMode =
+                    WebSettings.LOAD_DEFAULT
 
-                // Modern Chrome Mobile User-Agent.
-                userAgentString = CHROME_UA
+                loadsImagesAutomatically =
+                    true
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                useWideViewPort =
+                    true
+
+                loadWithOverviewMode =
+                    true
+
+                userAgentString =
+                    CHROME_UA
+
+                if (
+                    Build.VERSION.SDK_INT >=
+                    Build.VERSION_CODES.LOLLIPOP
+                ) {
                     mixedContentMode =
-                        WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                        WebSettings
+                            .MIXED_CONTENT_COMPATIBILITY_MODE
                 }
 
                 @Suppress("DEPRECATION")
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                    allowFileAccess = false
+                if (
+                    Build.VERSION.SDK_INT <
+                    Build.VERSION_CODES.R
+                ) {
+                    allowFileAccess =
+                        false
                 }
             }
 
-            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager
+                .getInstance()
+                .setAcceptCookie(true)
 
-            CookieManager.getInstance()
-                .setAcceptThirdPartyCookies(this, true)
+            CookieManager
+                .getInstance()
+                .setAcceptThirdPartyCookies(
+                    this,
+                    true
+                )
 
             addJavascriptInterface(
                 object {
@@ -312,7 +503,6 @@ class UnblockShieldViewModel : ViewModel() {
                             pageUrl
                         )
                     }
-
                 },
                 "LinkShieldBridge"
             )
@@ -322,42 +512,36 @@ class UnblockShieldViewModel : ViewModel() {
                     this@UnblockShieldViewModel
                 )
 
-            // Let WebView use Android's native DNS/TLS stack.
-            // DoH is used by app-owned OkHttp requests,
-            // not by WebView internals.
             webViewClient =
                 ShieldWebViewClient(
                     dnsManager,
                     this@UnblockShieldViewModel
                 )
 
-            loadUrl(currentUrl)
+            loadUrl(
+                currentUrl
+            )
         }
     }
 }
-/**
- * Handles WebView-native video fullscreen
- * (e.g. YouTube HTML5 player).
- *
- * The fullscreen view is attached to the activity decor view
- * so it can cover the Compose hierarchy, while immersive system
- * UI is applied for a Chrome-like experience.
- *
- * State is restored in onHideCustomView().
- */
 private class LinkShieldWebChromeClient(
-    private val vm: UnblockShieldViewModel
+    private val vm:
+        UnblockShieldViewModel
 ) : android.webkit.WebChromeClient() {
 
-    private var customView: View? = null
+    private var customView: View? =
+        null
 
-    private var originalSystemUiVisibility: Int = 0
+    private var originalSystemUiVisibility:
+        Int = 0
 
     override fun onProgressChanged(
         view: WebView?,
         newProgress: Int
     ) {
-        vm.updateLoading(newProgress < 100)
+        vm.updateLoading(
+            newProgress < 100
+        )
 
         super.onProgressChanged(
             view,
@@ -369,7 +553,9 @@ private class LinkShieldWebChromeClient(
         view: WebView?,
         title: String?
     ) {
-        vm.updatePageTitle(title.orEmpty())
+        vm.updatePageTitle(
+            title.orEmpty()
+        )
 
         super.onReceivedTitle(
             view,
@@ -401,10 +587,15 @@ private class LinkShieldWebChromeClient(
         customView = view
 
         originalSystemUiVisibility =
-            activity.window.decorView.systemUiVisibility
+            activity
+                .window
+                .decorView
+                .systemUiVisibility
 
         val decor =
-            activity.window.decorView as? ViewGroup
+            activity
+                .window
+                .decorView as? ViewGroup
 
         decor?.addView(
             view,
@@ -414,24 +605,31 @@ private class LinkShieldWebChromeClient(
             )
         )
 
-        enterFullscreen(activity.window)
+        enterFullscreen(
+            activity.window
+        )
     }
 
     override fun onHideCustomView() {
 
-        val view = customView
-            ?: return
+        val view =
+            customView
+                ?: return
 
         val activity =
             view.context.findActivity()
 
-        (view.parent as? ViewGroup)
-            ?.removeView(view)
+        (
+            view.parent
+                as? ViewGroup
+        )?.removeView(view)
 
         customView = null
 
         activity?.let {
-            restoreSystemUi(it.window)
+            restoreSystemUi(
+                it.window
+            )
         }
     }
 
@@ -439,9 +637,14 @@ private class LinkShieldWebChromeClient(
         window: Window
     ) {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.R
+        ) {
 
-            window.setDecorFitsSystemWindows(false)
+            window.setDecorFitsSystemWindows(
+                false
+            )
 
             window.insetsController?.hide(
                 android.view.WindowInsets.Type.statusBars() or
@@ -469,9 +672,14 @@ private class LinkShieldWebChromeClient(
         window: Window
     ) {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.R
+        ) {
 
-            window.setDecorFitsSystemWindows(true)
+            window.setDecorFitsSystemWindows(
+                true
+            )
 
             window.insetsController?.show(
                 android.view.WindowInsets.Type.statusBars() or
@@ -486,11 +694,15 @@ private class LinkShieldWebChromeClient(
         }
     }
 
-    private fun Context.findActivity(): Activity? {
+    private fun Context.findActivity():
+        Activity? {
 
         var current: Context = this
 
-        while (current is android.content.ContextWrapper) {
+        while (
+            current is
+                android.content.ContextWrapper
+        ) {
 
             if (current is Activity) {
                 return current
@@ -506,9 +718,82 @@ private class LinkShieldWebChromeClient(
 }
 
 private class ShieldWebViewClient(
-    private val dnsManager: DnsManager,
-    private val vm: UnblockShieldViewModel
+    private val dnsManager:
+        DnsManager,
+    private val vm:
+        UnblockShieldViewModel
 ) : WebViewClient() {
+
+    private fun isMediaUrl(
+        url: String?
+    ): Boolean {
+
+        if (url.isNullOrBlank()) {
+            return false
+        }
+
+        val lower =
+            url.lowercase()
+
+        return lower.contains(".mp4") ||
+            lower.contains(".m3u8") ||
+            lower.contains(".mp3") ||
+            lower.contains(".webm") ||
+            lower.contains(".mkv") ||
+            lower.contains(".mov") ||
+            lower.contains(".m4a") ||
+            lower.contains(".ogg") ||
+            lower.contains(".mpd") ||
+            lower.contains(".ts") ||
+            lower.contains("videoplayback") ||
+            lower.contains("manifest")
+    }
+
+    override fun shouldInterceptRequest(
+        view: WebView?,
+        request: WebResourceRequest?
+    ): WebResourceResponse? {
+
+        request?.url
+            ?.toString()
+            ?.let { url ->
+
+                if (isMediaUrl(url)) {
+
+                    vm.onMediaFound(
+                        url = url,
+                        title = vm.pageTitle,
+                        pageUrl = vm.currentUrl
+                    )
+                }
+            }
+
+        return super.shouldInterceptRequest(
+            view,
+            request
+        )
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun shouldInterceptRequest(
+        view: WebView?,
+        url: String?
+    ): WebResourceResponse? {
+
+        if (isMediaUrl(url)) {
+
+            vm.onMediaFound(
+                url = url.orEmpty(),
+                title = vm.pageTitle,
+                pageUrl = vm.currentUrl
+            )
+        }
+
+        return super.shouldInterceptRequest(
+            view,
+            url
+        )
+    }
 
     override fun shouldOverrideUrlLoading(
         view: WebView?,
@@ -546,14 +831,17 @@ private class ShieldWebViewClient(
         uri: Uri
     ): Boolean {
 
-        return when (uri.scheme?.lowercase()) {
+        return when (
+            uri.scheme?.lowercase()
+        ) {
 
             "http",
             "https" -> false
 
             "intent" -> {
 
-                val raw = uri.toString()
+                val raw =
+                    uri.toString()
 
                 val fallback =
                     Regex(
@@ -563,7 +851,9 @@ private class ShieldWebViewClient(
                         ?.groupValues
                         ?.getOrNull(1)
 
-                if (!fallback.isNullOrBlank()) {
+                if (
+                    !fallback.isNullOrBlank()
+                ) {
 
                     runCatching {
 
@@ -579,7 +869,9 @@ private class ShieldWebViewClient(
                                 ignoreCase = true
                             )
                         ) {
-                            view?.loadUrl(decoded)
+                            view?.loadUrl(
+                                decoded
+                            )
                         }
                     }
                 }
@@ -594,12 +886,15 @@ private class ShieldWebViewClient(
     override fun onPageStarted(
         view: WebView?,
         url: String?,
-        favicon: android.graphics.Bitmap?
+        favicon:
+            android.graphics.Bitmap?
     ) {
 
         vm.updateLoading(true)
 
-        url?.let(vm::updateUrl)
+        url?.let {
+            vm.updateUrl(it)
+        }
     }
 
     override fun onPageFinished(
@@ -614,7 +909,9 @@ private class ShieldWebViewClient(
             view?.canGoForward() == true
         )
 
-        url?.let(vm::updateUrl)
+        url?.let {
+            vm.updateUrl(it)
+        }
 
         view?.evaluateJavascript(
             JS_MEDIA_INTERCEPTOR,
@@ -634,10 +931,9 @@ private class ShieldWebViewClient(
             error
         )
 
-        // Do not append "?retry=true" to the user's URL.
-        // That can change the request and create
-        // endless/incorrect retries.
-        if (request?.isForMainFrame == true) {
+        if (
+            request?.isForMainFrame == true
+        ) {
             vm.updateLoading(false)
         }
     }
@@ -647,7 +943,8 @@ internal fun normalizeUrl(
     raw: String
 ): String {
 
-    val value = raw.trim()
+    val value =
+        raw.trim()
 
     if (value.isBlank()) {
         return "https://www.google.com"
@@ -665,9 +962,13 @@ internal fun normalizeUrl(
             ignoreCase = true
         ) -> value
 
-        value.contains("://") -> value
+        value.contains(
+            "://"
+        ) -> value
 
-        value.contains(".") ->
+        value.contains(
+            "."
+        ) ->
             "https://$value"
 
         else ->
