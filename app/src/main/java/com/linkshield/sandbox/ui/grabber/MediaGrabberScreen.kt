@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,7 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,57 +30,101 @@ import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun MediaGrabberScreen(
-    detectedMediaUrl: String = "",
-    licenseManager: LicenseManager? = null,
+    activeUrl: String = "",
+    capturedMedia: List<CapturedMediaItem> = emptyList(),
     dnsManager: DnsManager? = null,
-    onDownloadTriggered: () -> Unit = {},
-    onBack: () -> Unit = {}
+    licenseManager: LicenseManager? = null,
+    onBack: () -> Unit = {},
+    onClearCaptured: () -> Unit = {},
+    onUpgradeRequired: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var inputUrl by remember(detectedMediaUrl) { mutableStateOf(detectedMediaUrl) }
 
-    var remainingDownloads by remember(licenseManager) {
-        mutableIntStateOf(licenseManager?.getRemainingDownloads()?.coerceAtMost(20) ?: 20)
+    BackHandler(onBack = onBack)
+
+    val latest =
+        capturedMedia.lastOrNull()
+
+    var inputUrl by remember {
+        mutableStateOf(
+            latest?.url ?: activeUrl
+        )
     }
 
-    var isLoading by remember { mutableStateOf(false) }
-    var audioOnly by remember { mutableStateOf(false) }
-    var highQual by remember { mutableStateOf(true) }
+    var loading by remember {
+        mutableStateOf(false)
+    }
+
+    var audioOnly by remember {
+        mutableStateOf(false)
+    }
+
+    var highQuality by remember {
+        mutableStateOf(true)
+    }
+
+    var remaining by remember(
+        licenseManager
+    ) {
+        mutableIntStateOf(
+            licenseManager
+                ?.getRemainingDownloads()
+                ?.coerceAtMost(20)
+                ?: 20
+        )
+    }
+
+    LaunchedEffect(
+        latest?.url,
+        activeUrl
+    ) {
+        val detected =
+            latest?.url
+                ?.takeIf { it.isNotBlank() }
+                ?: activeUrl
+
+        if (detected.isNotBlank()) {
+            inputUrl = detected
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                MaterialTheme.colorScheme.background
+            )
     ) {
-        // TOP BAR: Back Arrow + Title
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(8.dp),
+            verticalAlignment =
+                Alignment.CenterVertically
         ) {
             IconButton(
                 onClick = onBack,
                 modifier = Modifier.size(40.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back to Shield",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(24.dp)
+                    Icons.Default.ArrowBack,
+                    contentDescription =
+                        "Back to WebView"
                 )
             }
+
             Text(
-                text = "Media Grabber",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = 4.dp)
+                "Media Grabber",
+                style =
+                    MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -85,206 +132,356 @@ fun MediaGrabberScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(
+                    rememberScrollState()
+                )
         ) {
-            // 1. TOP BANNER
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor =
+                        MaterialTheme.colorScheme
+                            .primaryContainer
                 )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "$remainingDownloads Free Downloads Remaining",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        "$remaining Free Downloads Remaining",
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "(Upgrade to Pro for Unlimited)",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        "Upgrade to Pro for Unlimited",
+                        fontSize = 12.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // 2. INPUT ADDRESS BAR
             OutlinedTextField(
                 value = inputUrl,
-                onValueChange = { inputUrl = it },
-                placeholder = { Text("Paste or Fetch Link...") },
+                onValueChange = {
+                    inputUrl = it
+                },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
+                placeholder = {
+                    Text("Paste or Fetch Link...")
+                },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        Icons.Default.Link,
+                        contentDescription = null
                     )
-                }
+                },
+                trailingIcon = {
+                    if (inputUrl.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                inputUrl = ""
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription =
+                                    "Clear URL"
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // 3. MEDIA PREVIEW AREA
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        RoundedCornerShape(12.dp)
-                    ),
-                contentAlignment = Alignment.Center
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.PlayCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(
+                                RoundedCornerShape(10.dp)
+                            )
+                            .background(
+                                MaterialTheme.colorScheme
+                                    .surfaceVariant
+                            )
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme
+                                    .outline.copy(
+                                        alpha = 0.3f
+                                    ),
+                                RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment =
+                            Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.PlayCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint =
+                                MaterialTheme.colorScheme
+                                    .primary.copy(
+                                        alpha = 0.65f
+                                    )
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
                     Text(
-                        text = "Media Preview Area",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        latest?.title
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "Media Preview",
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        latest?.pageUrl ?: activeUrl,
+                        fontSize = 11.sp,
+                        maxLines = 2
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(18.dp))
 
-            // 4. OPTIONS
             Text(
-                text = "Options:",
+                "Options",
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onBackground
+                fontSize = 16.sp
             )
-            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment =
+                    Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
                     Checkbox(
                         checked = audioOnly,
-                        onCheckedChange = { audioOnly = it }
+                        onCheckedChange = {
+                            audioOnly = it
+                            if (it) {
+                                highQuality = false
+                            }
+                        }
                     )
-                    Text(
-                        text = "Audio Only",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Text("Audio Only")
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment =
+                        Alignment.CenterVertically
+                ) {
                     Checkbox(
-                        checked = highQual,
-                        onCheckedChange = { highQual = it }
+                        checked = highQuality,
+                        onCheckedChange = {
+                            highQuality = it
+                            if (it) {
+                                audioOnly = false
+                            }
+                        }
                     )
-                    Text(
-                        text = "High Qual",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Text("High Quality")
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-                        // 5. PRIMARY DOWNLOAD BUTTON
+            Spacer(Modifier.height(20.dp))
+
             Button(
                 onClick = {
-                    if (inputUrl.isBlank()) {
-                        Toast.makeText(context, "Please enter a valid link", Toast.LENGTH_SHORT).show()
+                    val url = inputUrl.trim()
+
+                    if (url.isBlank()) {
+                        Toast.makeText(
+                            context,
+                            "Please enter a valid link",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         return@Button
                     }
 
-                    if (remainingDownloads <= 0) {
-                        Toast.makeText(context, "Download quota exceeded! Please upgrade to Pro.", Toast.LENGTH_LONG).show()
+                    if (remaining <= 0) {
+                        onUpgradeRequired()
                         return@Button
                     }
 
-                    isLoading = true
+                    loading = true
 
                     scope.launch {
                         try {
-                            val cobalt = CobaltApiService(context, dnsManager ?: DnsManager(context))
-                            val result = cobalt.fetchMediaUrl(inputUrl.trim())
+                            val manager =
+                                dnsManager
+                                    ?: DnsManager(context)
 
-                            if (result.success && result.url != null) {
-                                val request = DownloadManager.Request(Uri.parse(result.url)).apply {
-                                    setTitle(result.filename ?: "LinkShield_Download")
-                                    setDescription("Downloading via LinkShield")
-                                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                                    setDestinationInExternalPublicDir(
-                                        Environment.DIRECTORY_DOWNLOADS,
-                                        result.filename ?: "LinkShield_Video.mp4"
-                                    )
-                                    setAllowedOverMetered(true)
-                                    setAllowedOverRoaming(true)
+                            val cobalt =
+                                CobaltApiService(
+                                    context,
+                                    manager
+                                )
+
+                            val result =
+                                withContext(Dispatchers.IO) {
+                                    cobalt.fetchMediaUrl(url)
                                 }
 
-                                val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                                downloadManager.enqueue(request)
+                            if (
+                                result.success &&
+                                !result.url.isNullOrBlank()
+                            ) {
+                                enqueueDownload(
+                                    context = context,
+                                    url = result.url,
+                                    filename =
+                                        result.filename
+                                            ?.takeIf {
+                                                it.isNotBlank()
+                                            }
+                                            ?: if (audioOnly) {
+                                                "LinkShield_Audio.mp3"
+                                            } else {
+                                                "LinkShield_Video.mp4"
+                                            }
+                                )
 
-                                licenseManager?.incrementDownloadCount()
-                                remainingDownloads = licenseManager?.getRemainingDownloads()?.coerceAtMost(20)
-                                    ?: (remainingDownloads - 1)
+                                licenseManager
+                                    ?.incrementDownloadCount()
 
-                                onDownloadTriggered()
-                                Toast.makeText(context, "Download started! Check notifications.", Toast.LENGTH_SHORT).show()
+                                remaining =
+                                    licenseManager
+                                        ?.getRemainingDownloads()
+                                        ?.coerceAtMost(20)
+                                        ?: (remaining - 1)
+
+                                Toast.makeText(
+                                    context,
+                                    "Download started",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             } else {
-                                Toast.makeText(context, result.error ?: "Failed to fetch media", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    context,
+                                    result.error
+                                        ?: "Media extraction failed",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         } catch (e: Exception) {
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                context,
+                                e.message
+                                    ?: "Download failed",
+                                Toast.LENGTH_LONG
+                            ).show()
                         } finally {
-                            isLoading = false
+                            loading = false
                         }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                enabled = remainingDownloads > 0 && !isLoading
+                    .height(54.dp),
+                enabled =
+                    !loading && remaining > 0,
+                shape = RoundedCornerShape(14.dp)
             ) {
-                if (isLoading) {
+                if (loading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
+                        Icons.Default.Download,
+                        contentDescription = null
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Download Video (MP4)",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        "Download",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
                 }
             }
+                        Spacer(Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
+            if (capturedMedia.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = onClearCaptured,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Clear Captured Media")
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+private fun enqueueDownload(
+    context: Context,
+    url: String,
+    filename: String
+) {
+    val safeName =
+        filename
+            .substringAfterLast("/")
+            .substringBefore("?")
+            .ifBlank {
+                "LinkShield_Download.mp4"
+            }
+
+    val request =
+        DownloadManager.Request(
+            Uri.parse(url)
+        ).apply {
+            setTitle(safeName)
+            setDescription(
+                "Downloading via LinkShield"
+            )
+            setNotificationVisibility(
+                DownloadManager.Request
+                    .VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+            )
+            setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                "LinkShield/$safeName"
+            )
+            setAllowedOverMetered(true)
+            setAllowedOverRoaming(true)
+        }
+
+    val manager =
+        context.getSystemService(
+            Context.DOWNLOAD_SERVICE
+        ) as DownloadManager
+
+    manager.enqueue(request)
 }
