@@ -36,7 +36,7 @@ import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.screens.DisclaimerScreen
 import com.linkshield.sandbox.ui.screens.EnableShieldScreen
 import com.linkshield.sandbox.ui.screens.UpgradeScreen
-import com.linkshield.sandbox.ui.screens.isDefaultBrowser
+import com.linkshield.sandbox.ui.screens.checkIsDefaultBrowser
 import com.linkshield.sandbox.ui.screens.openDefaultBrowserSettings
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
@@ -110,7 +110,7 @@ private fun LinkShieldRoot(
     var step by remember {
         val initial = when {
             !disclaimerManager.hasAccepted() -> AppStep.DISCLAIMER
-            !context.isDefaultBrowser() -> AppStep.ENABLE_SHIELD
+            !checkIsDefaultBrowser(context) -> AppStep.ENABLE_SHIELD
             else -> AppStep.MAIN
         }
         mutableStateOf(initial)
@@ -120,7 +120,7 @@ private fun LinkShieldRoot(
         if (step == AppStep.ENABLE_SHIELD) {
             while (step == AppStep.ENABLE_SHIELD) {
                 delay(1000)
-                if (context.isDefaultBrowser()) {
+                if (checkIsDefaultBrowser(context)) {
                     disclaimerManager.markBrowserSet()
                     step = AppStep.MAIN
                 }
@@ -133,7 +133,7 @@ private fun LinkShieldRoot(
             DisclaimerScreen(
                 onAccept = {
                     disclaimerManager.accept()
-                    step = if (context.isDefaultBrowser()) AppStep.MAIN
+                    step = if (checkIsDefaultBrowser(context)) AppStep.MAIN
                     else AppStep.ENABLE_SHIELD
                 }
             )
@@ -217,9 +217,5 @@ fun MainScreen(
 
                 2 -> UpgradeScreen(
                     trialDaysLeft = licenseManager.getTrialDaysRemaining(),
-                    isTrialActive = licenseManager.isTrialActive()
-                )
-            }
-        }
-    }
-}
+                    isTrialActive = license
+                    
