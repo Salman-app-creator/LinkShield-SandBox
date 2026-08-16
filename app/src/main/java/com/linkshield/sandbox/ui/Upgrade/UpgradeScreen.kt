@@ -1,288 +1,279 @@
-package com.linkshield.sandbox.ui.screens
+package com.linkshield.sandbox.ui.Upgrade
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun UpgradeScreen(trialDaysLeft: Int = 30, isTrialActive: Boolean = true) {
-    var licenseKey by remember { mutableStateOf("") }
-    val context = LocalContext.current
-
+fun UpgradeScreen(
+    onUpgradeClick: () -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
             .verticalScroll(rememberScrollState())
+            .padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Status Section
+
+        Icon(
+            imageVector = Icons.Default.Star,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(52.dp)
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = "LinkShield Pro",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = "Browse, Check & Grab Safely",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(Modifier.height(18.dp))
+
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp)
+            ) {
                 Text(
-                    text = "Status: ${if (isTrialActive) "Free Trial Active" else "Trial Ended"}",
+                    text = "Everything you need for safer browsing",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = "Remaining: $trialDaysLeft Days Left",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+
+                ProFeature("🛡️", "Advanced suspicious-link detection")
+                ProFeature("🌐", "Sandbox browser")
+                ProFeature("🎵", "Advanced media detection")
+                ProFeature("📥", "Media download tools")
+                ProFeature("🔗", "Advanced URL expansion")
+                ProFeature("📸", "URL preview & snapshot")
+                ProFeature("🌍", "Network & IP information")
+                ProFeature("🔒", "Secure Network transport")
             }
         }
 
-        // 2. PRICING CARD
-        ProPricingCard()
+        Spacer(Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // 3. MANUAL PAYMENT SECTION
-        Text(
-            text = "Upgrade to Pro (Manual Payment):",
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        PaymentMethodCard(
-            name = "EasyPaisa",
-            holder = "Salman Latif",
-            number = "03136176616",
-            color = Color(0xFF4CAF50)
-        )
-
-        PaymentMethodCard(
-            name = "JazzCash",
-            holder = "Salman Latif",
-            number = "03061934345",
-            color = Color(0xFFF44336)
-        )
-
-        PaymentMethodCard(
-            name = "USDT (TRC20)",
-            holder = "Network: TRC20 (Tron)",
-            number = "TQhUtaU9sg2hKfEM5FdeB3VG...",
-            color = Color(0xFF4CAF50)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // WHATSAPP SUPPORT BUTTON (SINGLE)
-        Button(
-            onClick = {
-                val phone = "+923136176616"
-                val message = "Hi, I have sent the payment. Please verify and send my Pro License Key."
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    data = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=${Uri.encode(message)}")
-                }
-                context.startActivity(intent)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
-        ) {
-            Text(
-                text = "💬 Send Payment Proof on WhatsApp",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // 4. LICENSE ACTIVATION INPUT
-        Text(
-            text = "Activate Pro License:",
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        OutlinedTextField(
-            value = licenseKey,
-            onValueChange = { licenseKey = it },
-            placeholder = { Text("🔑 XXXX-XXXX-XXXX-XXXX") },
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = { /* Handle License Activation */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
+            shape = RoundedCornerShape(18.dp)
         ) {
-            Text(
-                text = "🚀 Activate License",
-                color = Color.Black,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-@Composable
-fun ProPricingCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2C))
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xFF00E5FF).copy(alpha = 0.15f)
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Text(
+                    text = "PRO",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = "Rs. 350",
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "One-time payment",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                Button(
+                    onClick = onUpgradeClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Star,
+                        imageVector = Icons.Default.Lock,
                         contentDescription = null,
-                        tint = Color(0xFF00E5FF),
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Spacer(Modifier.width(8.dp))
+
                     Text(
-                        text = "LIFETIME PRO LICENSE",
-                        color = Color(0xFF00E5FF),
-                        fontSize = 12.sp,
+                        text = "Unlock Pro",
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
+        }
 
-            Text(
-                text = "Upgrade to LinkShield Pro",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.padding(top = 10.dp)
-            )
+        Spacer(Modifier.height(18.dp))
 
+        Text(
+            text = "Why LinkShield Pro?",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(10.dp))
+        ProBenefit(
+            title = "Stronger link checking",
+            description = "Get more detailed analysis when checking suspicious or unfamiliar URLs."
+        )
+
+        ProBenefit(
+            title = "Safer sandbox browsing",
+            description = "Browse supported websites inside LinkShield's isolated browser environment."
+        )
+
+        ProBenefit(
+            title = "Media tools",
+            description = "Detect supported media and access convenient download options."
+        )
+
+        ProBenefit(
+            title = "URL intelligence",
+            description = "Expand shortened URLs and preview destinations before opening them."
+        )
+
+        ProBenefit(
+            title = "Network information",
+            description = "View useful network and IP information while checking a destination."
+        )
+
+        ProBenefit(
+            title = "Secure Network",
+            description = "Use the optional secure network transport when the feature is available."
+        )
+
+        Spacer(Modifier.height(18.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+        ) {
             Row(
-                verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.padding(vertical = 12.dp)
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Rs 350",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF00E5FF)
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
                 )
+
+                Spacer(Modifier.width(10.dp))
+
                 Text(
-                    text = " PKR / 1.25 USDT",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    text = "One payment • No monthly subscription",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
                 )
             }
-
-            Divider(color = Color.Gray.copy(alpha = 0.2f))
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            FeatureItem("Unlimited Media Downloads", "No daily limits on Grabber engine")
-            FeatureItem("4K Video & High-Speed Extraction", "Fast track server processing")
-            FeatureItem("Advanced DNS Guard & Ad-Blocker", "Strict tracking protection & custom rules")
-            FeatureItem("Restricted Website Unblocker", "Built-in sandboxed proxy tunnel")
         }
+
+        Spacer(Modifier.height(22.dp))
+
+        Text(
+            text = "LinkShield — Browse, Check & Grab Safely.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(Modifier.height(12.dp))
     }
 }
 
 @Composable
-fun FeatureItem(title: String, subtitle: String) {
+private fun ProFeature(
+    icon: String,
+    text: String
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Default.CheckCircle,
-            contentDescription = null,
-            tint = Color(0xFF00E5FF),
-            modifier = Modifier.size(18.dp)
+        Text(
+            text = icon,
+            fontSize = 18.sp,
+            modifier = Modifier.width(30.dp)
         )
-        Spacer(modifier = Modifier.width(10.dp))
-        Column {
-            Text(text = title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            Text(text = subtitle, fontSize = 11.sp, color = Color.Gray)
-        }
+
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
 @Composable
-fun PaymentMethodCard(name: String, holder: String, number: String, color: Color) {
-    val context = LocalContext.current
-
+private fun ProBenefit(
+    title: String,
+    description: String
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                alpha = 0.55f
+            )
+        )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(14.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = name, fontWeight = FontWeight.Bold, color = color)
-                Text(text = holder, fontSize = 12.sp)
-                Text(text = number, fontWeight = FontWeight.Medium)
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
 
-            IconButton(
-                onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Payment Details", number)
-                    clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "$name number copied!", Toast.LENGTH_SHORT).show()
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Copy Number",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
