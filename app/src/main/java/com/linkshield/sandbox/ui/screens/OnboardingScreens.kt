@@ -386,25 +386,30 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     }
 }
 
-// ── Helper functions ──
+// ── Helper functions ─//
 fun openDefaultBrowserSettings(context: Context) {
+    // Method 1: RoleManager direct picker (Android 10+)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         try {
             val roleManager = context.getSystemService(RoleManager::class.java)
-            if (roleManager != null &&
-                roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)
-            ) {
+            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
                 val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
                 context.startActivity(intent)
                 return
             }
         } catch (e: Exception) {
-            // RoleManager failed, fall through
+            // Fall through to next method
         }
     }
+    
+    // Method 2: Open THIS app's settings page → "Set as default" option
     try {
-        context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = android.net.Uri.fromParts("package", context.packageName, null)
+        }
+        context.startActivity(intent)
     } catch (e: Exception) {
+        // Method 3: Ultimate fallback
         context.startActivity(Intent(Settings.ACTION_SETTINGS))
     }
 }
@@ -416,7 +421,10 @@ fun Context.isDefaultBrowser(): Boolean {
             rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
         } else {
             val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
-            val resolveInfo = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            val resolveInfo = packageManager.resolveActivity(
+                intent, 
+                android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+            )
             resolveInfo?.activityInfo?.packageName == packageName
         }
     } catch (e: Exception) {
