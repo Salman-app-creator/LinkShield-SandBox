@@ -158,7 +158,6 @@ private fun LinkShieldRoot(
         }
     }
 }
-
 @Composable
 fun MainScreen(
     isDarkTheme: Boolean,
@@ -214,7 +213,8 @@ fun MainScreen(
 
                 1 -> MediaGrabberScreen(
                     licenseManager = licenseManager,
-                    dnsManager = dnsManager
+                    dnsManager = dnsManager,
+                    onBack = { selectedTab = 0 }
                 )
 
                 2 -> UpgradeScreen(
