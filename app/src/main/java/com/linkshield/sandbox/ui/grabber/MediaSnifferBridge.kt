@@ -5,18 +5,29 @@ import android.webkit.WebView
 object MediaSnifferBridge {
 
     fun attach(
-        webView: WebView
+        webView: WebView,
+        titleProvider: () -> String = {
+            webView.title.orEmpty()
+        },
+        urlProvider: () -> String = {
+            webView.url.orEmpty()
+        }
     ) {
-        WebSnifferManager.attach(
-            webView = webView
-        )
+        val sniffer =
+            WebSnifferManager { item ->
+                MediaSnifferState.publish(
+                    item
+                )
+            }
+
+        webView.webViewClient =
+            sniffer.createClient(
+                pageTitle = titleProvider,
+                pageUrl = urlProvider
+            )
     }
 
-    fun detach(
-        webView: WebView
-    ) {
-        WebSnifferManager.detach(
-            webView
-        )
+    fun clear() {
+        MediaSnifferState.clear()
     }
 }
