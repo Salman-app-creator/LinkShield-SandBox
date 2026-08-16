@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
         openDefaultBrowserSettings(this)
     }
 }
+
 @Composable
 private fun LinkShieldRoot(
     disclaimerManager: DisclaimerManager,
@@ -202,7 +203,7 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTab) {
+                  when (selectedTab) {
                 0 -> UnblockShieldScreen(
                     dnsManager = dnsManager,
                     onMediaFound = { },
@@ -217,5 +218,9 @@ fun MainScreen(
 
                 2 -> UpgradeScreen(
                     trialDaysLeft = licenseManager.getTrialDaysRemaining(),
-                    isTrialActive = license
-                    
+                    isTrialActive = licenseManager.isTrialActive()
+                )
+            }
+        }
+    }
+}
