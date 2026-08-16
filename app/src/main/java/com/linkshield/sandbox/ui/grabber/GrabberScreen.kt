@@ -42,8 +42,11 @@ fun GrabberScreen(
     onBack: () -> Unit,
     onDownload: (MediaQualityOption) -> Unit
 ) {
-    val state by viewModel.uiState.collectAsState()
-    val latestMedia by viewModel.latestMedia.collectAsState()
+    val state by
+        viewModel.uiState.collectAsState()
+
+    val latestMedia by
+        MediaSnifferState.latestMedia.collectAsState()
 
     LaunchedEffect(latestMedia) {
         latestMedia?.let {
@@ -62,24 +65,21 @@ fun GrabberScreen(
                         onClick = onBack
                     ) {
                         Icon(
-                            imageVector =
-                                Icons.Default.ArrowBack,
-                            contentDescription =
-                                "Back"
+                            Icons.Default.ArrowBack,
+                            "Back"
                         )
                     }
                 },
                 actions = {
                     IconButton(
                         onClick = {
-                            viewModel.refreshNetworkStatus()
+                            viewModel
+                                .refreshNetworkStatus()
                         }
                     ) {
                         Icon(
-                            imageVector =
-                                Icons.Default.Refresh,
-                            contentDescription =
-                                "Refresh network status"
+                            Icons.Default.Refresh,
+                            "Refresh"
                         )
                     }
                 }
@@ -98,16 +98,10 @@ fun GrabberScreen(
 
             item {
                 Spacer(
-                    modifier =
-                        Modifier.height(4.dp)
+                    Modifier.height(4.dp)
                 )
 
                 FreeDownloadsBanner()
-
-                Spacer(
-                    modifier =
-                        Modifier.height(4.dp)
-                )
             }
 
             item {
@@ -123,10 +117,8 @@ fun GrabberScreen(
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector =
-                                Icons.Default.Link,
-                            contentDescription =
-                                null
+                            Icons.Default.Link,
+                            null
                         )
                     }
                 )
@@ -139,6 +131,7 @@ fun GrabberScreen(
                     horizontalArrangement =
                         Arrangement.spacedBy(8.dp)
                 ) {
+
                     Button(
                         onClick = {
                             viewModel.inspectUrl(
@@ -152,7 +145,9 @@ fun GrabberScreen(
                                 !state.isCheckingThreat
                     ) {
                         Text(
-                            if (state.isCheckingThreat) {
+                            if (
+                                state.isCheckingThreat
+                            ) {
                                 "Checking..."
                             } else {
                                 "Check URL"
@@ -173,8 +168,10 @@ fun GrabberScreen(
                                 !state.isExtracting
                     ) {
                         Text(
-                            if (state.isExtracting) {
-                                "Extracting..."
+                            if (
+                                state.isExtracting
+                            ) {
+                                "Fetching..."
                             } else {
                                 "Fetch Media"
                             }
@@ -185,7 +182,8 @@ fun GrabberScreen(
 
             if (
                 state.isCheckingThreat ||
-                state.isExpanding
+                state.isExpanding ||
+                state.isExtracting
             ) {
                 item {
                     LinearProgressIndicator(
@@ -221,10 +219,12 @@ fun GrabberScreen(
                 }
             }
 
-            if (state.qualities.isNotEmpty()) {
+            if (
+                state.qualities.isNotEmpty()
+            ) {
                 item {
                     Text(
-                        text = "Available formats",
+                        "Available formats",
                         style =
                             MaterialTheme.typography
                                 .titleMedium
@@ -268,17 +268,14 @@ fun GrabberScreen(
                         selected != null
                 ) {
                     Icon(
-                        imageVector =
-                            Icons.Default.Download,
-                        contentDescription =
-                            null
+                        Icons.Default.Download,
+                        null
                     )
 
                     Spacer(
-                        modifier =
-                            Modifier.padding(
-                                horizontal = 4.dp
-                            )
+                        Modifier.padding(
+                            horizontal = 4.dp
+                        )
                     )
 
                     Text("Download")
@@ -295,22 +292,12 @@ fun GrabberScreen(
             state.error?.let { error ->
                 item {
                     Text(
-                        text = error,
+                        error,
                         color =
                             MaterialTheme.colorScheme
-                                .error,
-                        style =
-                            MaterialTheme.typography
-                                .bodyMedium
+                                .error
                     )
                 }
-            }
-
-            item {
-                Spacer(
-                    modifier =
-                        Modifier.height(16.dp)
-                )
             }
         }
     }
@@ -318,24 +305,20 @@ fun GrabberScreen(
 @Composable
 private fun FreeDownloadsBanner() {
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier =
-                Modifier.padding(16.dp)
+            Modifier.padding(16.dp)
         ) {
             Text(
-                text =
-                    "20 Free Downloads Remaining",
+                "20 Free Downloads Remaining",
                 style =
                     MaterialTheme.typography
                         .titleMedium
             )
 
             Text(
-                text =
-                    "Upgrade to Pro for more downloads.",
+                "Upgrade to Pro for more downloads.",
                 style =
                     MaterialTheme.typography
                         .bodySmall
@@ -351,17 +334,17 @@ private fun MediaPreviewCard(
     duration: String
 ) {
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier =
-                Modifier.padding(12.dp)
+            Modifier.padding(12.dp)
         ) {
+
             if (thumbnail.isNotBlank()) {
                 AsyncImage(
                     model = thumbnail,
-                    contentDescription = "Media thumbnail",
+                    contentDescription =
+                        "Media thumbnail",
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -370,15 +353,13 @@ private fun MediaPreviewCard(
             }
 
             Spacer(
-                modifier =
-                    Modifier.height(8.dp)
+                Modifier.height(8.dp)
             )
 
             Text(
-                text =
-                    title.ifBlank {
-                        "Media"
-                    },
+                title.ifBlank {
+                    "Media"
+                },
                 style =
                     MaterialTheme.typography
                         .titleMedium,
@@ -389,7 +370,7 @@ private fun MediaPreviewCard(
 
             if (duration.isNotBlank()) {
                 Text(
-                    text = duration,
+                    duration,
                     style =
                         MaterialTheme.typography
                             .bodySmall
@@ -406,41 +387,31 @@ private fun QualityOptionRow(
     onClick: () -> Unit
 ) {
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
+
             RadioButton(
                 selected = selected,
                 onClick = onClick
             )
 
             Column(
-                modifier =
-                    Modifier.weight(1f)
+                Modifier.weight(1f)
             ) {
                 Text(
-                    text =
-                        option.displayLabel,
-                    style =
-                        MaterialTheme.typography
-                            .bodyLarge
+                    option.displayLabel
                 )
 
                 val details =
                     listOfNotNull(
                         option.extension
-                            .takeIf {
-                                it.isNotBlank()
-                            },
-                        option.mimeType
                             .takeIf {
                                 it.isNotBlank()
                             },
@@ -452,7 +423,7 @@ private fun QualityOptionRow(
 
                 if (details.isNotBlank()) {
                     Text(
-                        text = details,
+                        details,
                         style =
                             MaterialTheme.typography
                                 .bodySmall
@@ -465,68 +436,46 @@ private fun QualityOptionRow(
 
 @Composable
 private fun ThreatCard(
-    threat: com.linkshield.sandbox.api.ThreatCheckResult,
+    threat:
+        com.linkshield.sandbox.api
+            .ThreatCheckResult,
     onDismiss: () -> Unit
 ) {
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier =
-                Modifier.padding(12.dp)
+            Modifier.padding(12.dp)
         ) {
+
             Text(
-                text =
-                    if (threat.isMalicious) {
-                        "⚠ Dangerous URL"
-                    } else if (threat.isSuspicious) {
-                        "⚠ Suspicious URL"
-                    } else {
-                        "✓ URL checked"
-                    },
+                if (threat.isMalicious) {
+                    "⚠ Dangerous URL"
+                } else if (
+                    threat.isSuspicious
+                ) {
+                    "⚠ Suspicious URL"
+                } else {
+                    "✓ URL Checked"
+                },
                 style =
                     MaterialTheme.typography
-                        .titleMedium,
-                color =
-                    if (
-                        threat.isMalicious ||
-                        threat.isSuspicious
-                    ) {
-                        MaterialTheme.colorScheme
-                            .error
-                    } else {
-                        MaterialTheme.colorScheme
-                            .primary
-                    }
+                        .titleMedium
             )
 
             Spacer(
-                modifier =
-                    Modifier.height(4.dp)
+                Modifier.height(4.dp)
             )
 
             Text(
-                text =
-                    threat.message.ifBlank {
-                        "No known threat detected."
-                    }
+                threat.message.ifBlank {
+                    "No known threat detected."
+                }
             )
-
-            if (threat.source.isNotBlank()) {
-                Text(
-                    text =
-                        "Source: ${threat.source}",
-                    style =
-                        MaterialTheme.typography
-                            .bodySmall
-                )
-            }
 
             if (threat.isMalicious) {
                 Spacer(
-                    modifier =
-                        Modifier.height(8.dp)
+                    Modifier.height(8.dp)
                 )
 
                 Button(
@@ -542,34 +491,31 @@ private fun ThreatCard(
 @Composable
 private fun NetworkBadge(
     status:
-        com.linkshield.sandbox.api.NetworkStatus
+        com.linkshield.sandbox.api
+            .NetworkStatus
 ) {
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(10.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
+
             Column(
-                modifier =
-                    Modifier.weight(1f)
+                Modifier.weight(1f)
             ) {
                 Text(
-                    text =
-                        if (status.publicIp.isBlank()) {
-                            "Network status unavailable"
-                        } else {
-                            "IP: ${status.publicIp}"
-                        },
-                    style =
-                        MaterialTheme.typography
-                            .bodyMedium
+                    if (
+                        status.publicIp.isBlank()
+                    ) {
+                        "Network unavailable"
+                    } else {
+                        "IP: ${status.publicIp}"
+                    }
                 )
 
                 if (
@@ -577,8 +523,7 @@ private fun NetworkBadge(
                         .isNotBlank()
                 ) {
                     Text(
-                        text =
-                            status.locationText,
+                        status.locationText,
                         style =
                             MaterialTheme.typography
                                 .bodySmall
@@ -587,12 +532,11 @@ private fun NetworkBadge(
             }
 
             Text(
-                text =
-                    if (status.encryptedDns) {
-                        "DNS Shield ✓"
-                    } else {
-                        "DNS Shield —"
-                    },
+                if (status.encryptedDns) {
+                    "DNS Shield ✓"
+                } else {
+                    "DNS Shield —"
+                },
                 style =
                     MaterialTheme.typography
                         .labelSmall
