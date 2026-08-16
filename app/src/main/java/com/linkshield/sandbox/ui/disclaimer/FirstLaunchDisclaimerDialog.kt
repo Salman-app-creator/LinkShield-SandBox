@@ -25,74 +25,94 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FirstLaunchDisclaimerDialog.kt — package com.linkshield.sandbox.ui.disclaimer
-//
-// Shown exactly once on first app launch via rememberSaveable state in
-// LinkShieldApp. Cannot be dismissed by tapping outside or pressing back.
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 fun FirstLaunchDisclaimerDialog(onAccept: () -> Unit) {
     Dialog(
-        onDismissRequest = { /* intentionally blocked — must accept */ },
-        properties       = DialogProperties(
-            dismissOnBackPress    = false,
+        onDismissRequest = { },
+        properties = DialogProperties(
+            dismissOnBackPress = false,
             dismissOnClickOutside = false
         )
     ) {
         Card(
-            shape    = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(20.dp),
             modifier = Modifier
                 .fillMaxWidth(0.95f)
                 .wrapContentHeight(),
-            colors   = CardDefaults.cardColors(
+            colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         ) {
             Column(
-                modifier            = Modifier.padding(24.dp),
+                modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    imageVector        = Icons.Default.Shield,
+                    imageVector = Icons.Default.Shield,
                     contentDescription = null,
-                    tint               = MaterialTheme.colorScheme.primary,
-                    modifier           = Modifier.size(56.dp)
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(56.dp)
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     "Welcome to LinkShield Sandbox",
-                    style      = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color      = MaterialTheme.colorScheme.primary,
-                    textAlign  = TextAlign.Center
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    "LinkShield Sandbox is a privacy-first browser and media tool.\n\n" +
-                    "• This app does NOT store browsing history, cookies, or personal data between sessions.\n" +
-                    "• All browsing data is kept in RAM and wiped when you close the app.\n" +
-                    "• Media downloads are for personal/backup use only. Ensure you have rights from the content creator before downloading.\n" +
-                    "• The DNS Shield feature routes DNS queries over HTTPS for privacy. It does not modify or inspect your traffic content.\n\n" +
-                    "By tapping Accept you confirm you understand and agree to use this app responsibly.",
-                    style     = MaterialTheme.typography.bodyMedium,
+                    "Browse, Check & Grab Safely",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    "• 🛡️ Check — detect suspicious links\n" +
+                    "• 🌐 Browse — use the sandbox browser\n" +
+                    "• 📥 Grab — detect and save media\n" +
+                    "• 🔒 Secure — optional secure network protection",
+                    style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Start,
-                    color     = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    "LinkShield does not store browsing history, " +
+                    "cookies, or personal data between sessions. " +
+                    "Browsing data is kept in RAM and wiped when " +
+                    "the app session ends.\n\n" +
+                    "Media downloads are for personal/backup use only. " +
+                    "Ensure you have rights from the content creator " +
+                    "before downloading.\n\n" +
+                    "The DNS Shield feature routes DNS queries over " +
+                    "HTTPS for privacy. It does not modify or inspect " +
+                    "your traffic content.\n\n" +
+                    "By tapping Accept you confirm you understand and " +
+                    "agree to use this app responsibly.",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Start,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
-                    onClick  = onAccept,
+                    onClick = onAccept,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
-                    shape    = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Text(
                         "Accept & Continue",
