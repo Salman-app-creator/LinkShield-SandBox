@@ -389,30 +389,37 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 // ── Helper functions ──
 fun openDefaultBrowserSettings(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val roleManager = context.getSystemService(RoleManager::class.java)
-        if (roleManager != null &&
-            roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER) &&
-            !roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)
-        ) {
-            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
-            // FIX: Removed FLAG_ACTIVITY_NEW_TASK — was breaking the intent
-            context.startActivity(intent)
-            return
+        try {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            if (roleManager != null &&
+                roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)
+            ) {
+                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+                context.startActivity(intent)
+                return
+            }
+        } catch (e: Exception) {
+            // RoleManager failed, fall through
         }
     }
-    // Fallback for older Android
-    context.startActivity(
-        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-    )
+    try {
+        context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+    } catch (e: Exception) {
+        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+    }
 }
 
 fun Context.isDefaultBrowser(): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val rm = getSystemService(RoleManager::class.java)
-        rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
-    } else {
-        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com"))
-        val resolveInfo = packageManager.resolveActivity(intent, 0)
-        resolveInfo?.activityInfo?.packageName == packageName
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val rm = getSystemService(RoleManager::class.java)
+            rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
+        } else {
+            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
+            val resolveInfo = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            resolveInfo?.activityInfo?.packageName == packageName
+        }
+    } catch (e: Exception) {
+        false
     }
 }
