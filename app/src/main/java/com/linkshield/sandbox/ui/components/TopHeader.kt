@@ -1,25 +1,16 @@
 package com.linkshield.sandbox.ui.components
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TopHeader.kt
+// TopHeader.kt — Build-fixed complete version
 //
-// Wireframe implemented EXACTLY:
-//
+// Wireframe:
 // ┌──────┬──────────────────────────────────────────────────────────────────┐
 // │      │ [🛡 Shield ON]  [🛡 DNS ▾]  [Trial: 30d Left]  [☀️ ──◯ 🌙]    │
 // │ LOGO │──────────────────────────────────────────────────────────────────│
 // │      │ [←] [→] [↻]    [🔒 https://example.com/sandbox...            ]  │
 // └──────┴──────────────────────────────────────────────────────────────────┘
-//
-// LOGO spans both rows via IntrinsicSize.Min on the outer Row.
-// All icon tints use MaterialTheme.colorScheme.onSurface → auto contrast
-// in both Dark and Light modes.
-//
-// Function signature is UNCHANGED from the original file so MainActivity.kt
-// and MainScreen.kt require ZERO modifications.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +41,6 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
@@ -63,13 +53,10 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,10 +67,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -93,7 +78,6 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopHeader(
-    // ── Exact same signature as the original — NO changes needed in callers ──
     currentUrl:     String,
     onUrlChange:    (String) -> Unit,
     isShieldActive: Boolean,
@@ -102,7 +86,6 @@ fun TopHeader(
     isDarkTheme:    Boolean,
     onThemeToggle:  (Boolean) -> Unit,
     onMenuClick:    () -> Unit = {},
-    // Optional extras used by UnblockShieldScreen (have defaults so old callers compile)
     canGoBack:      Boolean   = false,
     canGoForward:   Boolean   = false,
     onBack:         () -> Unit = {},
@@ -114,23 +97,8 @@ fun TopHeader(
     val context   = LocalContext.current
     val onSurface = MaterialTheme.colorScheme.onSurface
 
-    // Use ic_app_logo — the exact drawable declared in AndroidManifest.xml
-    // android:icon="@drawable/ic_app_logo"
-    val logoResId = remember(context) {
-        // Primary: ic_app_logo (drawable) — same resource Android uses for the launcher icon
-        val primary = context.resources.getIdentifier("ic_app_logo", "drawable", context.packageName)
-        if (primary != 0) primary
-        else {
-            // Fallback chain if project is renamed: try mipmap ic_launcher
-            val mipmap = context.resources.getIdentifier("ic_launcher", "mipmap", context.packageName)
-            if (mipmap != 0) mipmap
-            else context.resources.getIdentifier("ic_launcher_foreground", "drawable", context.packageName)
-        }
-    }
-
     var showDnsMenu by remember { mutableStateOf(false) }
 
-    // DNS providers list — kept self-contained so this file has no DnsManager dep
     val dnsProviders = listOf("Cloudflare", "WARP", "Google", "Quad9", "AdGuard")
     var selectedDns by remember { mutableStateOf(dnsProviders[0]) }
 
@@ -139,9 +107,6 @@ fun TopHeader(
         color           = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp
     ) {
-        // ── OUTER ROW: Logo (left, tall) + Stacked rows (right) ───────────────
-        // IntrinsicSize.Min on the Row makes the Logo Box match the height of
-        // the right-side Column automatically, producing the "merged cell" look.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -151,48 +116,35 @@ fun TopHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            // ── LOGO — spans both rows via fillMaxHeight ───────────────────────
+            // ── LOGO ──
             Box(
                 modifier = Modifier
-                    .fillMaxHeight()               // matches the stacked Column's height
+                    .fillMaxHeight()
                     .wrapContentWidth()
                     .padding(end = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (logoResId != 0) {
-                    Image(
-                        painter            = painterResource(id = logoResId),
-                        contentDescription = "LinkShield",
-                        modifier           = Modifier
-                            .size(52.dp)           // 52dp → visually large and symmetric
-                            .clip(CircleShape)
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector        = Icons.Default.Shield,
+                        contentDescription = "Logo",
+                        tint               = MaterialTheme.colorScheme.primary,
+                        modifier           = Modifier.size(30.dp)
                     )
-                } else {
-                    // Fallback shield icon if no logo drawable found
-                    Box(
-                        modifier         = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.Shield,
-                            contentDescription = "Logo",
-                            tint               = MaterialTheme.colorScheme.primary,
-                            modifier           = Modifier.size(30.dp)
-                        )
-                    }
                 }
             }
 
-            // ── RIGHT COLUMN: Row 1 + Row 2 stacked ───────────────────────────
+            // ── RIGHT COLUMN ──
             Column(modifier = Modifier.weight(1f)) {
 
                 // ══════════════════════════════════════════════════════════════
                 // ROW 1: [🛡 Shield ON] [🛡 DNS ▾] [Trial: 30d Left] [☀ ─◯ 🌙]
-                //         FilterChip     OutlinedBtn  Surface badge    Switch
-                // SpaceBetween so they spread to both edges naturally.
                 // ══════════════════════════════════════════════════════════════
                 Row(
                     modifier              = Modifier
@@ -202,7 +154,7 @@ fun TopHeader(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
 
-                    // 1a. Shield ON / OFF chip
+                    // Shield chip
                     FilterChip(
                         selected   = isShieldActive,
                         onClick    = onShieldToggle,
@@ -229,7 +181,7 @@ fun TopHeader(
                         )
                     )
 
-                    // 1b. DNS provider dropdown button
+                    // DNS dropdown
                     Box {
                         OutlinedButton(
                             onClick        = { showDnsMenu = true },
@@ -259,9 +211,7 @@ fun TopHeader(
                                             p,
                                             fontWeight = if (p == selectedDns) FontWeight.Bold else FontWeight.Normal,
                                             color      = if (p == selectedDns)
-                                                MaterialTheme.colorScheme.primary
-                                            else
-                                                onSurface
+                                                MaterialTheme.colorScheme.primary else onSurface
                                         )
                                     },
                                     leadingIcon = {
@@ -279,7 +229,7 @@ fun TopHeader(
                         }
                     }
 
-                    // 1c. Trial badge
+                    // Trial badge
                     val badgeColor = when {
                         trialDaysLeft > 7  -> MaterialTheme.colorScheme.secondaryContainer
                         trialDaysLeft > 0  -> MaterialTheme.colorScheme.tertiaryContainer
@@ -304,13 +254,11 @@ fun TopHeader(
                         )
                     }
 
-                    // 1d. Light/Dark Switch with sun ☀ and moon 🌙 icons on both ends
-                    // Scale 0.75f keeps it compact in the header row
+                    // Light/Dark Switch
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier         = Modifier.scale(0.78f)
                     ) {
-                        // Sun icon (Light mode indicator)
                         Icon(
                             imageVector        = Icons.Default.LightMode,
                             contentDescription = "Light mode",
@@ -334,7 +282,6 @@ fun TopHeader(
                                 .height(22.dp)
                         )
 
-                        // Moon icon (Dark mode indicator)
                         Icon(
                             imageVector        = Icons.Default.DarkMode,
                             contentDescription = "Dark mode",
@@ -347,8 +294,6 @@ fun TopHeader(
 
                 // ══════════════════════════════════════════════════════════════
                 // ROW 2: [←] [→] [↻]   [🔒 https://example.com/sandbox...  ]
-                //         nav buttons         horizontally scrollable URL bar
-                // Buttons are compact (size 28dp) to leave maximum space for bar.
                 // ══════════════════════════════════════════════════════════════
                 Row(
                     modifier          = Modifier.fillMaxWidth(),
@@ -390,17 +335,62 @@ fun TopHeader(
                         Icon(
                             imageVector        = Icons.Default.Refresh,
                             contentDescription = "Reload",
-                            tint               = onSurface,   // always full contrast
+                            tint               = onSurface,
                             modifier           = Modifier.size(16.dp)
                         )
                     }
 
                     Spacer(modifier = Modifier.width(3.dp))
 
-                    // ── Address bar pill ────────────────────────────────────────
-                    // Pill-shaped background, scrollable text, 🔒 lock prefix.
-                    // Uses BasicTextField so text color is always onSurface —
-                    // fixes the "invisible text in Light mode" bug.
+                    // ── Address bar pill ──
                     Row(
-                        modifier          = Modifier
-     
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(34.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector        = Icons.Default.Security,
+                            contentDescription = "Secure",
+                            tint               = MaterialTheme.colorScheme.primary,
+                            modifier           = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        BasicTextField(
+                            value         = currentUrl,
+                            onValueChange = onUrlChange,
+                            singleLine    = true,
+                            cursorBrush   = SolidColor(MaterialTheme.colorScheme.primary),
+                            textStyle     = TextStyle(
+                                fontSize = 12.sp,
+                                color    = onSurface
+                            ),
+                            keyboardOptions  = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions  = KeyboardActions(onGo = { onNavigate() }),
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(rememberScrollState())
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(3.dp))
+
+                    // Go button
+                    OutlinedButton(
+                        onClick        = onNavigate,
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        modifier       = Modifier.height(30.dp),
+                        shape          = RoundedCornerShape(6.dp)
+                    ) {
+                        Text("Go", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
