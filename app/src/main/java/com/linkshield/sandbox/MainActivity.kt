@@ -7,43 +7,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
-import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.license.LicenseManager
-import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
-import com.linkshield.sandbox.ui.screens.DisclaimerScreen
-import com.linkshield.sandbox.ui.screens.EnableShieldScreen
-import com.linkshield.sandbox.ui.screens.UpgradeScreen
+import com.linkshield.sandbox.ui.UnblockShieldScreen
+import com.linkshield.sandbox.ui.UnblockShieldViewModel
 import com.linkshield.sandbox.ui.screens.checkIsDefaultBrowser
 import com.linkshield.sandbox.ui.screens.openDefaultBrowserSettings
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
-import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
-import com.linkshield.sandbox.ui.UnblockShieldViewModel
+import com.linkshield.sandbox.dns.DnsManager
+import com.linkshield.sandbox.license.LicenseManager
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 
 private enum class AppStep {
     DISCLAIMER,
@@ -53,34 +29,16 @@ private enum class AppStep {
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var disclaimerManager:
-        DisclaimerManager
-
-    private lateinit var themeManager:
-        ThemeManager
-
-    /**
-     * Activity-scoped ViewModel.
-     *
-     * This survives Compose recomposition and tab changes,
-     * so the WebView instance remains owned by the same
-     * ViewModel instead of being recreated every time the
-     * Grabber tab is opened.
-     */
-    private val unblockShieldViewModel:
-        UnblockShieldViewModel by viewModels()
+    private lateinit var disclaimerManager: DisclaimerManager
+    private lateinit var themeManager: ThemeManager
 
     private val defaultBrowserLauncher =
         registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { }
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
-        super.onCreate(
-            savedInstanceState
-        )
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
         disclaimerManager =
             DisclaimerManager(this)
@@ -107,11 +65,8 @@ class MainActivity : ComponentActivity() {
                     isDarkTheme =
                         isDarkTheme,
 
-                    onThemeToggle = {
-                        newDark ->
-
-                        isDarkTheme =
-                            newDark
+                    onThemeToggle = { newDark ->
+                        isDarkTheme = newDark
 
                         themeManager.setTheme(
                             if (newDark) {
@@ -124,23 +79,10 @@ class MainActivity : ComponentActivity() {
 
                     onRequestBrowserRole = {
                         requestDefaultBrowserRole()
-                    },
-
-                    unblockShieldViewModel =
-                        unblockShieldViewModel
+                    }
                 )
             }
         }
-    }
-
-    override fun onDestroy() {
-        /**
-         * Do not manually destroy the ViewModel/WebView here.
-         *
-         * The Activity ViewModelStore owns the ViewModel and
-         * will call onCleared() at the correct lifecycle point.
-         */
-        super.onDestroy()
     }
 
     private fun requestDefaultBrowserRole() {
@@ -150,22 +92,22 @@ class MainActivity : ComponentActivity() {
             Build.VERSION_CODES.Q
         ) {
 
-            val rm =
+            val roleManager =
                 getSystemService(
                     Context.ROLE_SERVICE
                 ) as RoleManager
 
             if (
-                rm.isRoleAvailable(
+                roleManager.isRoleAvailable(
                     RoleManager.ROLE_BROWSER
                 ) &&
-                !rm.isRoleHeld(
+                !roleManager.isRoleHeld(
                     RoleManager.ROLE_BROWSER
                 )
             ) {
 
                 defaultBrowserLauncher.launch(
-                    rm.createRequestRoleIntent(
+                    roleManager.createRequestRoleIntent(
                         RoleManager.ROLE_BROWSER
                     )
                 )
@@ -174,31 +116,35 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        openDefaultBrowserSettings(
-            this
-        )
+        openDefaultBrowserSettings(this)
     }
 }
 
 @Composable
 private fun LinkShieldRoot(
-    disclaimerManager:
-        DisclaimerManager,
-
+    disclaimerManager: DisclaimerManager,
     isDarkTheme: Boolean,
-
-    onThemeToggle:
-        (Boolean) -> Unit,
-
-    onRequestBrowserRole:
-        () -> Unit,
-
-    unblockShieldViewModel:
-        UnblockShieldViewModel
+    onThemeToggle: (Boolean) -> Unit,
+    onRequestBrowserRole: () -> Unit
 ) {
 
     val context =
         LocalContext.current
+
+    /*
+     * IMPORTANT:
+     *
+     * The ViewModel is created at Activity/Composition scope.
+     *
+     * It is NOT recreated when the user switches between
+     * Shield and Grabber inside UnblockShieldScreen.
+     *
+     * Therefore the WebView stored inside the ViewModel
+     * remains alive.
+     */
+    val unblockShieldViewModel:
+        UnblockShieldViewModel =
+        viewModel()
 
     var step by remember {
 
@@ -208,18 +154,14 @@ private fun LinkShieldRoot(
                 !disclaimerManager.hasAccepted() ->
                     AppStep.DISCLAIMER
 
-                !checkIsDefaultBrowser(
-                    context
-                ) ->
+                !checkIsDefaultBrowser(context) ->
                     AppStep.ENABLE_SHIELD
 
                 else ->
                     AppStep.MAIN
             }
 
-        mutableStateOf(
-            initial
-        )
+        mutableStateOf(initial)
     }
 
     LaunchedEffect(step) {
@@ -256,29 +198,29 @@ private fun LinkShieldRoot(
 
         AppStep.DISCLAIMER -> {
 
-            DisclaimerScreen(
-                onAccept = {
+            com.linkshield.sandbox.ui.disclaimer
+                .FirstLaunchDisclaimerDialog {
 
-                    disclaimerManager
-                        .accept()
+                disclaimerManager.accept()
 
-                    step =
-                        if (
-                            checkIsDefaultBrowser(
-                                context
-                            )
-                        ) {
-                            AppStep.MAIN
-                        } else {
-                            AppStep.ENABLE_SHIELD
-                        }
-                }
-            )
+                step =
+                    if (
+                        checkIsDefaultBrowser(
+                            context
+                        )
+                    ) {
+                        AppStep.MAIN
+                    } else {
+                        AppStep.ENABLE_SHIELD
+                    }
+            }
         }
 
         AppStep.ENABLE_SHIELD -> {
 
-            EnableShieldScreen(
+            EnableShieldRootScreen(
+                onRequestBrowserRole =
+                    onRequestBrowserRole,
 
                 onBrowserSet = {
 
@@ -287,48 +229,57 @@ private fun LinkShieldRoot(
 
                     step =
                         AppStep.MAIN
-                },
-
-                onRequestBrowserRole =
-                    onRequestBrowserRole
+                }
             )
         }
 
         AppStep.MAIN -> {
 
+            /*
+             * DO NOT create another Scaffold here.
+             *
+             * UnblockShieldScreen already owns:
+             *
+             * - Top bar
+             * - WebView
+             * - Grabber tab
+             * - Upgrade tab
+             * - Bottom Navigation
+             *
+             * Keeping it as the single main screen prevents
+             * duplicate navigation UI.
+             */
             MainScreen(
+                unblockShieldViewModel =
+                    unblockShieldViewModel,
+
                 isDarkTheme =
                     isDarkTheme,
 
                 onThemeToggle =
-                    onThemeToggle,
-
-                unblockShieldViewModel =
-                    unblockShieldViewModel
+                    onThemeToggle
             )
         }
     }
 }
 @Composable
-fun MainScreen(
-    isDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit,
+private fun MainScreen(
     unblockShieldViewModel:
-        UnblockShieldViewModel
-) {
+        UnblockShieldViewModel,
 
-    /**
-     * This state only controls which existing screen is
-     * visible. It does NOT create/destroy the WebView.
-     */
-    var selectedTab by
-        remember {
-            mutableIntStateOf(0)
-        }
+    isDarkTheme: Boolean,
+
+    onThemeToggle:
+        (Boolean) -> Unit
+) {
 
     val context =
         LocalContext.current
 
+    /*
+     * These managers are remembered for the lifetime
+     * of the Main composition.
+     */
     val dnsManager =
         remember {
             DnsManager(context)
@@ -337,6 +288,11 @@ fun MainScreen(
     val licenseManager =
         remember {
             LicenseManager(context)
+        }
+
+    val disclaimerManager =
+        remember {
+            DisclaimerManager(context)
         }
 
     LaunchedEffect(Unit) {
@@ -348,172 +304,52 @@ fun MainScreen(
         }
     }
 
-    Scaffold(
+    /*
+     * IMPORTANT:
+     *
+     * UnblockShieldScreen already contains the complete
+     * existing UI and its own Shield / Grabber / Upgrade
+     * navigation.
+     *
+     * We therefore DO NOT wrap it in another Scaffold
+     * or NavigationBar.
+     */
+    UnblockShieldScreen(
 
-        bottomBar = {
+        dnsManager =
+            dnsManager,
 
-            NavigationBar {
+        viewModel =
+            unblockShieldViewModel,
 
-                NavigationBarItem(
+        licenseManager =
+            licenseManager,
 
-                    selected =
-                        selectedTab == 0,
+        disclaimerManager =
+            disclaimerManager,
 
-                    onClick = {
-                        selectedTab = 0
-                    },
+        isDarkTheme =
+            isDarkTheme,
 
-                    icon = {
-                        Icon(
-                            Icons.Default.Shield,
-                            contentDescription =
-                                "Shield"
-                        )
-                    },
+        onThemeToggle =
+            onThemeToggle,
 
-                    label = {
-                        Text("Shield")
-                    }
-                )
+        isVisible =
+            true
+    )
+}
 
-                NavigationBarItem(
+@Composable
+private fun EnableShieldRootScreen(
+    onRequestBrowserRole: () -> Unit,
+    onBrowserSet: () -> Unit
+) {
 
-                    selected =
-                        selectedTab == 1,
+    com.linkshield.sandbox.ui.EnableProtectionScreenWrapper(
+        onRequestBrowserRole =
+            onRequestBrowserRole,
 
-                    onClick = {
-                        selectedTab = 1
-                    },
-
-                    icon = {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription =
-                                "Grabber"
-                        )
-                    },
-
-                    label = {
-                        Text("Grabber")
-                    }
-                )
-
-                NavigationBarItem(
-
-                    selected =
-                        selectedTab == 2,
-
-                    onClick = {
-                        selectedTab = 2
-                    },
-
-                    icon = {
-                        Icon(
-                            Icons.Default.Star,
-                            contentDescription =
-                                "Upgrade"
-                        )
-                    },
-
-                    label = {
-                        Text("Upgrade")
-                    }
-                )
-            }
-        }
-
-    ) { innerPadding ->
-
-        Box(
-
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(
-                        innerPadding
-                    )
-        ) {
-
-            when (selectedTab) {
-
-                0 -> {
-
-                    /**
-                     * IMPORTANT:
-                     * The same Activity-scoped ViewModel
-                     * is passed every time.
-                     *
-                     * Therefore switching to Grabber and
-                     * back does not create a new browser
-                     * session.
-                     */
-                    UnblockShieldScreen(
-                        dnsManager =
-                            dnsManager,
-
-                        viewModel =
-                            unblockShieldViewModel,
-
-                        onMediaFound = {
-                            mediaItem ->
-                            unblockShieldViewModel
-                                .onMediaFound(
-                                    url =
-                                        mediaItem,
-                                    title =
-                                        unblockShieldViewModel.pageTitle,
-                                    pageUrl =
-                                        unblockShieldViewModel.currentUrl
-                                )
-                        },
-
-                        isDarkMode =
-                            isDarkTheme,
-
-                        onToggleTheme = {
-                            onThemeToggle(
-                                !isDarkTheme
-                            )
-                        }
-                    )
-                }
-
-                1 -> {
-
-                    /**
-                     * Existing Grabber UI remains unchanged.
-                     *
-                     * Back switches to the existing Shield
-                     * screen while the same ViewModel/WebView
-                     * instance remains alive.
-                     */
-                    MediaGrabberScreen(
-                        licenseManager =
-                            licenseManager,
-
-                        dnsManager =
-                            dnsManager,
-
-                        onBack = {
-                            selectedTab = 0
-                        }
-                    )
-                }
-
-                2 -> {
-
-                    UpgradeScreen(
-
-                        trialDaysLeft =
-                            licenseManager
-                                .getTrialDaysRemaining(),
-
-                        isTrialActive =
-                            licenseManager
-                                .isTrialActive()
-                    )
-                }
-            }
-        }
-    }
+        onBrowserSet =
+            onBrowserSet
+    )
 }
