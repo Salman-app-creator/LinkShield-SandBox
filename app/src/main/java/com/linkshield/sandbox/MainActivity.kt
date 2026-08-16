@@ -1,27 +1,24 @@
 package com.linkshield.sandbox
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MainActivity.kt — Phase 1 complete
+// MainActivity.kt — Build-fixed + UI Integrated
 //
-// App flow (enforced — no shortcuts):
-//
-//   FRESH INSTALL:
-//     DisclaimerScreen  →  EnableShieldScreen  →  MainScreen
-//        (scroll+accept)    (mandatory browser set)   (3 tabs)
-//
-//   SUBSEQUENT LAUNCHES:
-//     Both gates check their flags first. If already done → skip straight to
-//     MainScreen. But: isDefaultBrowser() is ALWAYS re-checked at runtime
-//     (user may have changed their default browser in Android settings).
-//     If default browser was revoked → EnableShieldScreen shown again.
-//
-// State machine (AppStep enum):
-//   DISCLAIMER      → user has NOT accepted disclaimer yet
-//   ENABLE_SHIELD   → disclaimer accepted, but NOT set as default browser
-//   MAIN            → both gates cleared → show full app
+// FIXES APPLIED:
+//  1. Added missing "import android.content.Context" (was causing unresolved
+//     reference on Context.ROLE_SERVICE).
+//  2. Removed the broken extension property "private val MainActivity.Context"
+//     at the bottom of the file.
+//  3. MainScreen now uses UnblockShieldScreen (full browser with URL bar,
+//     navigation, WebView, Shield badge, server dropdown, theme toggle)
+//     instead of the placeholder TopHeader + "Web Content Area" text.
+//  4. Grabber tab now uses MediaGrabberScreen (real download UI) instead
+//     of the placeholder GrabberScreen.
+//  5. Upgrade tab now receives live trial data from LicenseManager.
+//  6. DnsManager is initialized once and passed to both Shield & Grabber.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -29,7 +26,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -48,18 +44,21 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
-import com.linkshield.sandbox.ui.components.TopHeader
+import com.linkshield.sandbox.dns.DnsManager
+import com.linkshield.sandbox.license.LicenseManager
+import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.screens.DisclaimerScreen
 import com.linkshield.sandbox.ui.screens.EnableShieldScreen
-import com.linkshield.sandbox.ui.screens.GrabberScreen
 import com.linkshield.sandbox.ui.screens.UpgradeScreen
 import com.linkshield.sandbox.ui.screens.isDefaultBrowser
 import com.linkshield.sandbox.ui.screens.openDefaultBrowserSettings
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
+import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
+import kotlinx.coroutines.delay
 
 // ── App navigation state ──────────────────────────────────────────────────────
 private enum class AppStep {
@@ -107,11 +106,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Nothing explicit here — the composable's LaunchedEffect timer handles polling
-    }
-
     // ── Request default browser role (Android 10+ direct picker) ─────────────
     private fun requestDefaultBrowserRole() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -139,7 +133,7 @@ private fun LinkShieldRoot(
     onThemeToggle:        (Boolean) -> Unit,
     onRequestBrowserRole: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     // Compute initial step once — then update reactively
     var step by remember {
@@ -157,7 +151,7 @@ private fun LinkShieldRoot(
         if (step == AppStep.ENABLE_SHIELD) {
             // Keep checking every second while on this screen
             while (step == AppStep.ENABLE_SHIELD) {
-                kotlinx.coroutines.delay(1000)
+                delay(1000)
                 if (context.isDefaultBrowser()) {
                     disclaimerManager.markBrowserSet()
                     step = AppStep.MAIN
@@ -200,17 +194,24 @@ private fun LinkShieldRoot(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MainScreen — 3-tab scaffold (unchanged from existing structure)
+// MainScreen — 3-tab scaffold with real browser, grabber & upgrade
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun MainScreen(
     isDarkTheme:   Boolean,
     onThemeToggle: (Boolean) -> Unit
 ) {
-    var selectedTab    by remember { mutableIntStateOf(0) }
-    var currentUrl     by remember { mutableStateOf("https://www.google.com") }
-    var isShieldActive by remember { mutableStateOf(true) }
-    var trialDaysLeft  by remember { mutableIntStateOf(30) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val context     = LocalContext.current
+    val dnsManager  = remember { DnsManager(context) }
+    val licenseManager = remember { LicenseManager(context) }
+
+    // Ensure DoH is enabled by default on first launch
+    LaunchedEffect(Unit) {
+        if (!dnsManager.isDohEnabled()) {
+            dnsManager.enableDoh()
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -242,36 +243,26 @@ fun MainScreen(
                 .padding(innerPadding)
         ) {
             when (selectedTab) {
-                0 -> {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        TopHeader(
-                            currentUrl     = currentUrl,
-                            onUrlChange    = { currentUrl = it },
-                            isShieldActive = isShieldActive,
-                            onShieldToggle = { isShieldActive = !isShieldActive },
-                            trialDaysLeft  = trialDaysLeft,
-                            isDarkTheme    = isDarkTheme,
-                            onThemeToggle  = onThemeToggle,
-                            onMenuClick    = {}
-                        )
-                        Box(
-                            modifier         = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Web Content / WebView Area")
-                        }
-                    }
-                }
-                1 -> GrabberScreen()
+                // ── TAB 0: Shield / Browser ─────────────────────────────────────
+                0 -> UnblockShieldScreen(
+                    dnsManager    = dnsManager,
+                    onMediaFound  = { /* Media URL detected — can be passed to Grabber later */ },
+                    isDarkMode    = isDarkTheme,
+                    onToggleTheme = { onThemeToggle(!isDarkTheme) }
+                )
+
+                // ── TAB 1: Media Grabber ────────────────────────────────────────
+                1 -> MediaGrabberScreen(
+                    licenseManager = licenseManager,
+                    dnsManager     = dnsManager
+                )
+
+                // ── TAB 2: Upgrade ──────────────────────────────────────────────
                 2 -> UpgradeScreen(
-                    trialDaysLeft = trialDaysLeft,
-                    isTrialActive = trialDaysLeft > 0
+                    trialDaysLeft = licenseManager.getTrialDaysRemaining(),
+                    isTrialActive = licenseManager.isTrialActive()
                 )
             }
         }
     }
 }
-
-// Extension needed for MainActivity — Context.ROLE_SERVICE
-private val MainActivity.Context: android.content.Context
-    get() = this
