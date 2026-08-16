@@ -12,7 +12,6 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -86,6 +85,7 @@ internal const val JS_MEDIA_INTERCEPTOR = """
                 if (sources[i].src) report(sources[i].src);
             }
         }
+
         scan();
         el.addEventListener('loadedmetadata', scan);
         el.addEventListener('play', scan);
@@ -102,7 +102,11 @@ internal const val JS_MEDIA_INTERCEPTOR = """
         mutations.forEach(function(m) {
             m.addedNodes.forEach(function(n) {
                 if (!n || !n.tagName) return;
-                if (n.tagName === 'VIDEO' || n.tagName === 'AUDIO') hookMedia(n);
+
+                if (n.tagName === 'VIDEO' || n.tagName === 'AUDIO') {
+                    hookMedia(n);
+                }
+
                 if (n.querySelectorAll) {
                     n.querySelectorAll('video,audio').forEach(hookMedia);
                 }
@@ -111,7 +115,13 @@ internal const val JS_MEDIA_INTERCEPTOR = """
     });
 
     function start() {
-        if (document.body) observer.observe(document.body, {childList:true, subtree:true});
+        if (document.body) {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+
         scanAll();
     }
 
@@ -164,14 +174,19 @@ class UnblockShieldViewModel : ViewModel() {
     }
 
     fun updateUrl(url: String) {
-        if (url.isNotBlank()) currentUrl = url
+        if (url.isNotBlank()) {
+            currentUrl = url
+        }
     }
 
     fun updateLoading(loading: Boolean) {
         isLoading = loading
     }
 
-    fun updateNavigationState(back: Boolean, forward: Boolean) {
+    fun updateNavigationState(
+        back: Boolean,
+        forward: Boolean
+    ) {
         canGoBack = back
         canGoForward = forward
     }
@@ -180,17 +195,26 @@ class UnblockShieldViewModel : ViewModel() {
         pageTitle = title
     }
 
-    fun onMediaFound(url: String, title: String, pageUrl: String) {
+    fun onMediaFound(
+        url: String,
+        title: String,
+        pageUrl: String
+    ) {
         if (url.isBlank()) return
 
         val normalized = url.trim()
-        if (_mediaUrls.value.any { it.url == normalized }) return
 
-        _mediaUrls.value = (_mediaUrls.value + MediaItem(
-            url = normalized,
-            title = title,
-            pageUrl = pageUrl
-        )).takeLast(30)
+        if (_mediaUrls.value.any { it.url == normalized }) {
+            return
+        }
+
+        _mediaUrls.value = (
+            _mediaUrls.value + MediaItem(
+                url = normalized,
+                title = title,
+                pageUrl = pageUrl
+            )
+        ).takeLast(30)
     }
 
     fun clearMedia() {
@@ -216,8 +240,12 @@ class UnblockShieldViewModel : ViewModel() {
     }
 
     override fun onCleared() {
-        webViews.values.forEach { it.destroy() }
+        webViews.values.forEach {
+            it.destroy()
+        }
+
         webViews.clear()
+
         super.onCleared()
     }
 
@@ -226,22 +254,36 @@ class UnblockShieldViewModel : ViewModel() {
         context: Context,
         dnsManager: DnsManager
     ): WebView {
-        return WebView(context.applicationContext).apply {
+
+        // IMPORTANT:
+        // Use the Activity/Compose context instead of applicationContext.
+        // WebChromeClient needs an Activity-backed context to enter native
+        // fullscreen and attach the custom video view to the activity decor.
+        return WebView(context).apply {
+
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 databaseEnabled = true
+
                 javaScriptCanOpenWindowsAutomatically = true
                 setSupportMultipleWindows(true)
+
                 mediaPlaybackRequiresUserGesture = false
+
                 cacheMode = WebSettings.LOAD_DEFAULT
                 loadsImagesAutomatically = true
+
+                // Responsive viewport configuration.
                 useWideViewPort = true
                 loadWithOverviewMode = true
+
+                // Modern Chrome Mobile User-Agent.
                 userAgentString = CHROME_UA
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                    mixedContentMode =
+                        WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                 }
 
                 @Suppress("DEPRECATION")
@@ -251,64 +293,105 @@ class UnblockShieldViewModel : ViewModel() {
             }
 
             CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
+            CookieManager.getInstance()
+                .setAcceptThirdPartyCookies(this, true)
 
             addJavascriptInterface(
                 object {
+
                     @JavascriptInterface
-                    fun onVideoFound(url: String, title: String, pageUrl: String) {
-                        onMediaFound(url, title, pageUrl)
+                    fun onVideoFound(
+                        url: String,
+                        title: String,
+                        pageUrl: String
+                    ) {
+                        onMediaFound(
+                            url,
+                            title,
+                            pageUrl
+                        )
                     }
+
                 },
                 "LinkShieldBridge"
             )
 
-            webChromeClient = LinkShieldWebChromeClient(this@UnblockShieldViewModel)
+            webChromeClient =
+                LinkShieldWebChromeClient(
+                    this@UnblockShieldViewModel
+                )
 
-
-            // Let WebView use Android's native DNS/TLS stack. DoH is used by
-            // app-owned OkHttp requests, not by WebView internals.
-            webViewClient = ShieldWebViewClient(dnsManager, this@UnblockShieldViewModel)
+            // Let WebView use Android's native DNS/TLS stack.
+            // DoH is used by app-owned OkHttp requests,
+            // not by WebView internals.
+            webViewClient =
+                ShieldWebViewClient(
+                    dnsManager,
+                    this@UnblockShieldViewModel
+                )
 
             loadUrl(currentUrl)
         }
     }
 }
-
 /**
- * Handles WebView-native video fullscreen (e.g. YouTube HTML5 player).
+ * Handles WebView-native video fullscreen
+ * (e.g. YouTube HTML5 player).
  *
- * The fullscreen view is attached to the activity decor view so it can cover
- * the Compose hierarchy, while immersive system UI is applied for a Chrome-like
- * experience. State is restored in onHideCustomView().
+ * The fullscreen view is attached to the activity decor view
+ * so it can cover the Compose hierarchy, while immersive system
+ * UI is applied for a Chrome-like experience.
+ *
+ * State is restored in onHideCustomView().
  */
 private class LinkShieldWebChromeClient(
     private val vm: UnblockShieldViewModel
 ) : android.webkit.WebChromeClient() {
 
     private var customView: View? = null
+
     private var originalSystemUiVisibility: Int = 0
 
-    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+    override fun onProgressChanged(
+        view: WebView?,
+        newProgress: Int
+    ) {
         vm.updateLoading(newProgress < 100)
-        super.onProgressChanged(view, newProgress)
+
+        super.onProgressChanged(
+            view,
+            newProgress
+        )
     }
 
-    override fun onReceivedTitle(view: WebView?, title: String?) {
+    override fun onReceivedTitle(
+        view: WebView?,
+        title: String?
+    ) {
         vm.updatePageTitle(title.orEmpty())
-        super.onReceivedTitle(view, title)
+
+        super.onReceivedTitle(
+            view,
+            title
+        )
     }
 
-    override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+    override fun onShowCustomView(
+        view: View?,
+        callback: CustomViewCallback?
+    ) {
         if (view == null) {
             callback?.onCustomViewHidden()
             return
         }
 
-        val activity = view.context.findActivity() ?: run {
-            callback.onCustomViewHidden()
-            return
-        }
+        val activity =
+            view.context.findActivity()
+                ?: run {
+                    callback.onCustomViewHidden()
+                    return
+                }
 
         if (customView != null) {
             callback.onCustomViewHidden()
@@ -316,9 +399,13 @@ private class LinkShieldWebChromeClient(
         }
 
         customView = view
-        originalSystemUiVisibility = activity.window.decorView.systemUiVisibility
 
-        val decor = activity.window.decorView as? ViewGroup
+        originalSystemUiVisibility =
+            activity.window.decorView.systemUiVisibility
+
+        val decor =
+            activity.window.decorView as? ViewGroup
+
         decor?.addView(
             view,
             ViewGroup.LayoutParams(
@@ -331,10 +418,16 @@ private class LinkShieldWebChromeClient(
     }
 
     override fun onHideCustomView() {
-        val view = customView ?: return
-        val activity = view.context.findActivity()
 
-        (view.parent as? ViewGroup)?.removeView(view)
+        val view = customView
+            ?: return
+
+        val activity =
+            view.context.findActivity()
+
+        (view.parent as? ViewGroup)
+            ?.removeView(view)
+
         customView = null
 
         activity?.let {
@@ -342,16 +435,25 @@ private class LinkShieldWebChromeClient(
         }
     }
 
-    private fun enterFullscreen(window: Window) {
+    private fun enterFullscreen(
+        window: Window
+    ) {
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+
             window.setDecorFitsSystemWindows(false)
+
             window.insetsController?.hide(
                 android.view.WindowInsets.Type.statusBars() or
                     android.view.WindowInsets.Type.navigationBars()
             )
+
             window.insetsController?.systemBarsBehavior =
-                android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                android.view.WindowInsetsController
+                    .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
         } else {
+
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility =
                 View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -363,25 +465,42 @@ private class LinkShieldWebChromeClient(
         }
     }
 
-    private fun restoreSystemUi(window: Window) {
+    private fun restoreSystemUi(
+        window: Window
+    ) {
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+
             window.setDecorFitsSystemWindows(true)
+
             window.insetsController?.show(
                 android.view.WindowInsets.Type.statusBars() or
                     android.view.WindowInsets.Type.navigationBars()
             )
+
         } else {
+
             @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = originalSystemUiVisibility
+            window.decorView.systemUiVisibility =
+                originalSystemUiVisibility
         }
     }
 
     private fun Context.findActivity(): Activity? {
+
         var current: Context = this
+
         while (current is android.content.ContextWrapper) {
-            if (current is Activity) return current
-            current.baseContext?.let { current = it } ?: break
+
+            if (current is Activity) {
+                return current
+            }
+
+            current.baseContext?.let {
+                current = it
+            } ?: break
         }
+
         return current as? Activity
     }
 }
@@ -395,35 +514,79 @@ private class ShieldWebViewClient(
         view: WebView?,
         request: WebResourceRequest?
     ): Boolean {
-        val uri = request?.url ?: return false
-        return handleScheme(view, uri)
+
+        val uri =
+            request?.url
+                ?: return false
+
+        return handleScheme(
+            view,
+            uri
+        )
     }
 
     @Deprecated("Deprecated in Java")
-    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-        return if (url == null) false else handleScheme(view, Uri.parse(url))
+    override fun shouldOverrideUrlLoading(
+        view: WebView?,
+        url: String?
+    ): Boolean {
+
+        return if (url == null) {
+            false
+        } else {
+            handleScheme(
+                view,
+                Uri.parse(url)
+            )
+        }
     }
 
-    private fun handleScheme(view: WebView?, uri: Uri): Boolean {
+    private fun handleScheme(
+        view: WebView?,
+        uri: Uri
+    ): Boolean {
+
         return when (uri.scheme?.lowercase()) {
-            "http", "https" -> false
+
+            "http",
+            "https" -> false
+
             "intent" -> {
+
                 val raw = uri.toString()
-                val fallback = Regex(";S\\.browser_fallback_url=([^;]+)")
-                    .find(raw)
-                    ?.groupValues
-                    ?.getOrNull(1)
+
+                val fallback =
+                    Regex(
+                        ";S\\.browser_fallback_url=([^;]+)"
+                    )
+                        .find(raw)
+                        ?.groupValues
+                        ?.getOrNull(1)
 
                 if (!fallback.isNullOrBlank()) {
+
                     runCatching {
-                        val decoded = URLDecoder.decode(fallback, "UTF-8")
-                        if (decoded.startsWith("http", ignoreCase = true)) {
+
+                        val decoded =
+                            URLDecoder.decode(
+                                fallback,
+                                "UTF-8"
+                            )
+
+                        if (
+                            decoded.startsWith(
+                                "http",
+                                ignoreCase = true
+                            )
+                        ) {
                             view?.loadUrl(decoded)
                         }
                     }
                 }
+
                 true
             }
+
             else -> true
         }
     }
@@ -433,18 +596,30 @@ private class ShieldWebViewClient(
         url: String?,
         favicon: android.graphics.Bitmap?
     ) {
+
         vm.updateLoading(true)
+
         url?.let(vm::updateUrl)
     }
 
-    override fun onPageFinished(view: WebView?, url: String?) {
+    override fun onPageFinished(
+        view: WebView?,
+        url: String?
+    ) {
+
         vm.updateLoading(false)
+
         vm.updateNavigationState(
             view?.canGoBack() == true,
             view?.canGoForward() == true
         )
+
         url?.let(vm::updateUrl)
-        view?.evaluateJavascript(JS_MEDIA_INTERCEPTOR, null)
+
+        view?.evaluateJavascript(
+            JS_MEDIA_INTERCEPTOR,
+            null
+        )
     }
 
     override fun onReceivedError(
@@ -452,28 +627,55 @@ private class ShieldWebViewClient(
         request: WebResourceRequest?,
         error: WebResourceError?
     ) {
-        super.onReceivedError(view, request, error)
 
-        // Do not append "?retry=true" to the user's URL. That can change the
-        // request and creates endless/incorrect retries. Native WebView will
-        // perform its own network retry behavior.
+        super.onReceivedError(
+            view,
+            request,
+            error
+        )
+
+        // Do not append "?retry=true" to the user's URL.
+        // That can change the request and create
+        // endless/incorrect retries.
         if (request?.isForMainFrame == true) {
             vm.updateLoading(false)
         }
     }
 }
 
-internal fun normalizeUrl(raw: String): String {
+internal fun normalizeUrl(
+    raw: String
+): String {
+
     val value = raw.trim()
-    if (value.isBlank()) return "https://www.google.com"
+
+    if (value.isBlank()) {
+        return "https://www.google.com"
+    }
 
     return when {
-        value.startsWith("https://", ignoreCase = true) -> value
-        value.startsWith("http://", ignoreCase = true) -> value
+
+        value.startsWith(
+            "https://",
+            ignoreCase = true
+        ) -> value
+
+        value.startsWith(
+            "http://",
+            ignoreCase = true
+        ) -> value
+
         value.contains("://") -> value
-        value.contains(".") -> "https://$value"
-        else -> "https://www.google.com/search?q=${
-            URLEncoder.encode(value, "UTF-8")
-        }"
+
+        value.contains(".") ->
+            "https://$value"
+
+        else ->
+            "https://www.google.com/search?q=${
+                URLEncoder.encode(
+                    value,
+                    "UTF-8"
+                )
+            }"
     }
 }
