@@ -145,7 +145,8 @@ private fun LinkShieldRoot(
                 onBrowserSet = {
                     disclaimerManager.markBrowserSet()
                     step = AppStep.MAIN
-                }
+                },
+                onRequestBrowserRole = onRequestBrowserRole
             )
         }
 
@@ -203,7 +204,7 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-                  when (selectedTab) {
+            when (selectedTab) {
                 0 -> UnblockShieldScreen(
                     dnsManager = dnsManager,
                     onMediaFound = { },
