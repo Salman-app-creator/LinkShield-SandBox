@@ -2,55 +2,50 @@ package com.linkshield.sandbox.ui.browser
 
 import android.webkit.WebView
 
-object SandboxWebViewSession {
+object SamdboxWebViewSession {
 
     private var webView: WebView? = null
 
-    fun attach(
-        instance: WebView
-    ) {
-        webView = instance
+    fun attach(view: WebView) {
+        webView = view
     }
 
-    fun get():
-        WebView? {
+    fun get(): WebView? {
         return webView
     }
 
-    fun hasSession():
-        Boolean {
-        return webView != null
-    }
-
-    fun currentUrl():
-        String {
+    fun currentUrl(): String {
         return webView?.url.orEmpty()
     }
 
-    fun goBack():
-        Boolean {
-        val instance =
-            webView ?: return false
-
-        if (instance.canGoBack()) {
-            instance.goBack()
-            return true
-        }
-
-        return false
+    fun canGoBack(): Boolean {
+        return webView?.canGoBack() == true
     }
 
-    fun goForward():
-        Boolean {
-        val instance =
-            webView ?: return false
+    fun canGoForward(): Boolean {
+        return webView?.canGoForward() == true
+    }
 
-        if (instance.canGoForward()) {
-            instance.goForward()
-            return true
+    fun goBack(): Boolean {
+        val view = webView ?: return false
+
+        if (!view.canGoBack()) {
+            return false
         }
 
-        return false
+        view.goBack()
+        return true
+    }
+
+    fun goForward(): Boolean {
+        val view = webView ?: return false
+
+        if (!view.canGoForward()) {
+            return false
+        }
+
+        view.goForward()
+        return true
     }
 
     fun reload() {
@@ -60,21 +55,19 @@ object SandboxWebViewSession {
     fun clearReference() {
         webView = null
     }
-
-    fun destroy() {
-        val instance =
-            webView ?: return
+        fun destroy() {
+        val view = webView ?: return
 
         webView = null
 
         try {
-            instance.stopLoading()
-            instance.webChromeClient = null
-            instance.webViewClient = null
-            instance.loadUrl("about:blank")
-            instance.clearHistory()
-            instance.removeAllViews()
-            instance.destroy()
+            view.stopLoading()
+            view.webChromeClient = null
+            view.webViewClient = null
+            view.loadUrl("about:blank")
+            view.clearHistory()
+            view.removeAllViews()
+            view.destroy()
         } catch (_: Exception) {
         }
     }
