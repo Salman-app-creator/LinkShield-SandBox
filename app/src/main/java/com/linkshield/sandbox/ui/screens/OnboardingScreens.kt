@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -77,7 +78,6 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // FIX: App logo instead of generic shield
                 Image(
                     painter = painterResource(id = R.drawable.ic_app_logo),
                     contentDescription = null,
@@ -249,7 +249,6 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // FIX: App logo instead of generic shield icon
             Box(
                 modifier = Modifier
                     .size(160.dp)
@@ -323,7 +322,10 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 
             if (!isDefault) {
                 Button(
-                    onClick = { openDefaultBrowserSettings(context) },
+                    onClick = {
+                        Toast.makeText(context, "Opening settings...", Toast.LENGTH_SHORT).show()
+                        openDefaultBrowserSettings(context)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -386,31 +388,32 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     }
 }
 
-// ── Helper functions ─//
+// ── Helper functions ──
 fun openDefaultBrowserSettings(context: Context) {
-    // Method 1: RoleManager direct picker (Android 10+)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        try {
-            val roleManager = context.getSystemService(RoleManager::class.java)
-            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
-                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
-                context.startActivity(intent)
-                return
-            }
-        } catch (e: Exception) {
-            // Fall through to next method
-        }
-    }
-    
-    // Method 2: Open THIS app's settings page → "Set as default" option
+    // Method 1: Open this app's details settings where "Set as default" is available
     try {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = android.net.Uri.fromParts("package", context.packageName, null)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        return
+    } catch (e: Exception) {
+        // Fall through
+    }
+
+    // Method 2: Default apps settings
+    try {
+        val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
     } catch (e: Exception) {
-        // Method 3: Ultimate fallback
-        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+        // Method 3: General settings
+        val intent = Intent(Settings.ACTION_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 }
 
@@ -422,7 +425,7 @@ fun Context.isDefaultBrowser(): Boolean {
         } else {
             val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
             val resolveInfo = packageManager.resolveActivity(
-                intent, 
+                intent,
                 android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
             )
             resolveInfo?.activityInfo?.packageName == packageName
