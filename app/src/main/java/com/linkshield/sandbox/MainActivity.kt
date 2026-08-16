@@ -7,25 +7,34 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
+import com.linkshield.sandbox.dns.DnsManager
+import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.UnblockShieldScreen
 import com.linkshield.sandbox.ui.UnblockShieldViewModel
+import com.linkshield.sandbox.ui.disclaimer.FirstLaunchDisclaimerDialog
+import com.linkshield.sandbox.ui.screens.EnableShieldScreen
 import com.linkshield.sandbox.ui.screens.checkIsDefaultBrowser
 import com.linkshield.sandbox.ui.screens.openDefaultBrowserSettings
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
-import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.license.LicenseManager
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
+
 
 private enum class AppStep {
     DISCLAIMER,
     ENABLE_SHIELD,
     MAIN
 }
+
 
 class MainActivity : ComponentActivity() {
 
@@ -37,7 +46,10 @@ class MainActivity : ComponentActivity() {
             ActivityResultContracts.StartActivityForResult()
         ) { }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
 
         disclaimerManager =
@@ -66,7 +78,9 @@ class MainActivity : ComponentActivity() {
                         isDarkTheme,
 
                     onThemeToggle = { newDark ->
-                        isDarkTheme = newDark
+
+                        isDarkTheme =
+                            newDark
 
                         themeManager.setTheme(
                             if (newDark) {
@@ -84,6 +98,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 
     private fun requestDefaultBrowserRole() {
 
@@ -120,6 +135,20 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+/**
+ * Root application flow.
+ *
+ * ViewModel is created at Activity/Composition scope.
+ *
+ * The same UnblockShieldViewModel instance is passed
+ * into UnblockShieldScreen for the complete lifetime
+ * of this Activity.
+ *
+ * Therefore the WebView stored inside the ViewModel
+ * is NOT recreated merely because the user changes
+ * between Shield / Grabber / Upgrade.
+ */
 @Composable
 private fun LinkShieldRoot(
     disclaimerManager: DisclaimerManager,
@@ -131,24 +160,23 @@ private fun LinkShieldRoot(
     val context =
         LocalContext.current
 
-    /*
+
+    /**
      * IMPORTANT:
      *
-     * The ViewModel is created at Activity/Composition scope.
+     * Activity-scoped ViewModel.
      *
-     * It is NOT recreated when the user switches between
-     * Shield and Grabber inside UnblockShieldScreen.
-     *
-     * Therefore the WebView stored inside the ViewModel
-     * remains alive.
+     * Do NOT create this ViewModel inside
+     * UnblockShieldScreen.
      */
     val unblockShieldViewModel:
         UnblockShieldViewModel =
         viewModel()
 
+
     var step by remember {
 
-        val initial =
+        val initialStep =
             when {
 
                 !disclaimerManager.hasAccepted() ->
@@ -161,9 +189,21 @@ private fun LinkShieldRoot(
                     AppStep.MAIN
             }
 
-        mutableStateOf(initial)
+        mutableStateOf(
+            initialStep
+        )
     }
 
+
+    /**
+     * Keep checking whether the user has selected
+     * LinkShield as the default browser.
+     *
+     * This is only the application flow state.
+     *
+     * The actual Enable Shield UI itself is provided
+     * by EnableShieldScreen().
+     */
     LaunchedEffect(step) {
 
         if (
@@ -189,17 +229,24 @@ private fun LinkShieldRoot(
 
                     step =
                         AppStep.MAIN
+
+                    break
                 }
             }
         }
     }
 
+
     when (step) {
 
+        /**
+         * ------------------------------------------------
+         * STEP 1 - DISCLAIMER
+         * ------------------------------------------------
+         */
         AppStep.DISCLAIMER -> {
 
-            com.linkshield.sandbox.ui.disclaimer
-                .FirstLaunchDisclaimerDialog {
+            FirstLaunchDisclaimerDialog {
 
                 disclaimerManager.accept()
 
@@ -216,11 +263,35 @@ private fun LinkShieldRoot(
             }
         }
 
+
+        /**
+         * ------------------------------------------------
+         * STEP 2 - ENABLE SHIELD
+         * ------------------------------------------------
+         *
+         * IMPORTANT FIX:
+         *
+         * Previous code used:
+         *
+         * EnableProtectionScreenWrapper(...)
+         *
+         * That composable does NOT exist in the repo.
+         *
+         * The existing correct screen is:
+         *
+         * EnableShieldScreen(...)
+         *
+         * from:
+         *
+         * ui/screens/OnboardingScreens.kt
+         */
         AppStep.ENABLE_SHIELD -> {
 
-            EnableShieldRootScreen(
-                onRequestBrowserRole =
-                    onRequestBrowserRole,
+            EnableShieldScreen(
+
+                onRequestBrowserRole = {
+                    onRequestBrowserRole()
+                },
 
                 onBrowserSet = {
 
@@ -233,22 +304,14 @@ private fun LinkShieldRoot(
             )
         }
 
+
+        /**
+         * ------------------------------------------------
+         * STEP 3 - MAIN APP
+         * ------------------------------------------------
+         */
         AppStep.MAIN -> {
 
-            /*
-             * DO NOT create another Scaffold here.
-             *
-             * UnblockShieldScreen already owns:
-             *
-             * - Top bar
-             * - WebView
-             * - Grabber tab
-             * - Upgrade tab
-             * - Bottom Navigation
-             *
-             * Keeping it as the single main screen prevents
-             * duplicate navigation UI.
-             */
             MainScreen(
                 unblockShieldViewModel =
                     unblockShieldViewModel,
@@ -262,6 +325,30 @@ private fun LinkShieldRoot(
         }
     }
 }
+
+
+/**
+ * Main application screen.
+ *
+ * IMPORTANT:
+ *
+ * We do NOT create another Scaffold here.
+ *
+ * UnblockShieldScreen already owns:
+ *
+ * - Top bar
+ * - Address bar
+ * - Back / Forward
+ * - Refresh
+ * - DNS controls
+ * - Theme button
+ * - Shield tab
+ * - Grabber tab
+ * - Upgrade tab
+ * - WebView
+ *
+ * This keeps the existing UI completely unchanged.
+ */
 @Composable
 private fun MainScreen(
     unblockShieldViewModel:
@@ -276,9 +363,10 @@ private fun MainScreen(
     val context =
         LocalContext.current
 
-    /*
-     * These managers are remembered for the lifetime
-     * of the Main composition.
+
+    /**
+     * Managers remain remembered for this
+     * Main composition.
      */
     val dnsManager =
         remember {
@@ -295,24 +383,28 @@ private fun MainScreen(
             DisclaimerManager(context)
         }
 
+
+    /**
+     * Enable existing DNS-over-HTTPS protection
+     * if it is currently disabled.
+     */
     LaunchedEffect(Unit) {
 
         if (
             !dnsManager.isDohEnabled()
         ) {
+
             dnsManager.enableDoh()
         }
     }
 
-    /*
-     * IMPORTANT:
+
+    /**
+     * SINGLE existing application UI.
      *
-     * UnblockShieldScreen already contains the complete
-     * existing UI and its own Shield / Grabber / Upgrade
-     * navigation.
+     * The same ViewModel is passed here.
      *
-     * We therefore DO NOT wrap it in another Scaffold
-     * or NavigationBar.
+     * This is important for WebView session retention.
      */
     UnblockShieldScreen(
 
@@ -336,20 +428,5 @@ private fun MainScreen(
 
         isVisible =
             true
-    )
-}
-
-@Composable
-private fun EnableShieldRootScreen(
-    onRequestBrowserRole: () -> Unit,
-    onBrowserSet: () -> Unit
-) {
-
-    com.linkshield.sandbox.ui.EnableProtectionScreenWrapper(
-        onRequestBrowserRole =
-            onRequestBrowserRole,
-
-        onBrowserSet =
-            onBrowserSet
     )
 }
