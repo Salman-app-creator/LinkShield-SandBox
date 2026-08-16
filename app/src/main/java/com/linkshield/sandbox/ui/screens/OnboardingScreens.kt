@@ -221,10 +221,12 @@ private fun DisclaimerSection(number: String, title: String, body: String) {
 }
 // ── SCREEN 2: EnableShieldScreen ──
 @Composable
-fun EnableShieldScreen(onBrowserSet: () -> Unit) {
+fun EnableShieldScreen(
+    onBrowserSet: () -> Unit,
+    onRequestBrowserRole: () -> Unit = {}
+) {
     val context = LocalContext.current
 
-    // FIX: Use explicit MutableState instead of delegate to avoid ambiguity
     val isDefaultState: MutableState<Boolean> = remember { mutableStateOf(checkIsDefaultBrowser(context)) }
 
     LaunchedEffect(Unit) {
@@ -324,7 +326,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                 Button(
                     onClick = {
                         Toast.makeText(context, "Opening settings...", Toast.LENGTH_SHORT).show()
-                        openDefaultBrowserSettings(context)
+                        onRequestBrowserRole()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -388,10 +390,9 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     }
 }
 
-// ── Helper functions (NOT extension functions - avoids ambiguity) ──
+// ── Helper functions ──
 
 fun openDefaultBrowserSettings(context: Context) {
-    // Method 1: Android 10+ direct system picker dialog
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         try {
             val roleManager = context.getSystemService(RoleManager::class.java)
@@ -405,7 +406,6 @@ fun openDefaultBrowserSettings(context: Context) {
         }
     }
 
-    // Method 2: Open Default browser app settings page directly
     try {
         val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
         context.startActivity(intent)
@@ -414,7 +414,6 @@ fun openDefaultBrowserSettings(context: Context) {
         // Fall through
     }
 
-    // Method 3: Ultimate fallback - app info page
     try {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = android.net.Uri.fromParts("package", context.packageName, null)
@@ -425,7 +424,6 @@ fun openDefaultBrowserSettings(context: Context) {
     }
 }
 
-// FIX: Regular function instead of Context extension - avoids "Overload resolution ambiguity"
 fun checkIsDefaultBrowser(context: Context): Boolean {
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
