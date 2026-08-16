@@ -1,30 +1,5 @@
 package com.linkshield.sandbox.ui.screens
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OnboardingScreens.kt  — Build-fixed version
-//
-// ERRORS FIXED:
-//  1. "Unresolved reference: mipmap" lines 81 & 301
-//     → Removed ALL references to R.mipmap and R.drawable from this file.
-//       The logo is rendered using Icons.Default.Shield (Material icon) so
-//       no drawable resource lookup is needed here at all.
-//
-//  2. "Unresolved reference: isDefaultBrowser" lines 288, 294
-//  3. "Unresolved reference: openDefaultBrowserSettings" line 376
-//     → Both functions are now DEFINED IN THIS FILE (bottom section).
-//       MainActivity.kt imports them from here using the package import.
-//       Previously the file was truncated mid-comment so these functions
-//       were never written — now they are complete.
-//
-//  4. "Unclosed comment" line 448
-//     → The file was cut off at "Opens th" (truncated comment).
-//       Now complete — no unclosed comment blocks.
-//
-//  5. "Not enough information to infer type variable T" line 288
-//     → Was caused by the truncated file confusing the Kotlin parser.
-//       Fixed by completing the file properly.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -77,56 +52,51 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 1: DisclaimerScreen
-// Full-screen T&C — back button disabled — Accept only after scrolling
-// ─────────────────────────────────────────────────────────────────────────────
+// ── SCREEN 1: DisclaimerScreen ──
 @Composable
 fun DisclaimerScreen(onAccept: () -> Unit) {
     val scrollState = rememberScrollState()
     val hasScrolledToBottom = scrollState.value >= (scrollState.maxValue - 100).coerceAtLeast(0)
 
-    BackHandler(enabled = true) { /* blocked — must accept */ }
+    BackHandler(enabled = true) { }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Fixed header
         Surface(
-            modifier        = Modifier.fillMaxWidth(),
-            color           = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 4.dp
         ) {
             Column(
-                modifier            = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    imageVector        = Icons.Default.Shield,
+                    imageVector = Icons.Default.Shield,
                     contentDescription = null,
-                    tint               = MaterialTheme.colorScheme.primary,
-                    modifier           = Modifier.size(40.dp)
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text       = "🛡️ LinkShield Setup",
-                    style      = MaterialTheme.typography.headlineSmall,
+                    text = "🛡️ LinkShield Setup",
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color      = MaterialTheme.colorScheme.primary,
-                    textAlign  = TextAlign.Center
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
                 )
                 Text(
-                    text      = "Please read and accept the terms to continue",
-                    style     = MaterialTheme.typography.bodySmall,
-                    color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "Please read and accept the terms to continue",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
         }
 
-        // Scrollable T&C content
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -167,60 +137,59 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
 
             if (!hasScrolledToBottom) {
                 Surface(
-                    shape    = RoundedCornerShape(8.dp),
-                    color    = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text      = "↓  Scroll down to read all terms",
-                        style     = MaterialTheme.typography.labelMedium,
-                        color     = MaterialTheme.colorScheme.primary,
+                        text = "↓  Scroll down to read all terms",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
-                        modifier  = Modifier.padding(vertical = 10.dp)
+                        modifier = Modifier.padding(vertical = 10.dp)
                     )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Fixed bottom accept button
         Surface(
-            modifier        = Modifier.fillMaxWidth(),
-            color           = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 8.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                 AnimatedVisibility(
                     visible = hasScrolledToBottom,
-                    enter   = fadeIn() + slideInVertically { it / 2 }
+                    enter = fadeIn() + slideInVertically { it / 2 }
                 ) {
                     Column {
                         Text(
-                            text      = "By tapping Accept, you confirm that you have read, understood, " +
-                                        "and agree to all the terms above.",
-                            style     = MaterialTheme.typography.bodySmall,
-                            color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = "By tapping Accept, you confirm that you have read, understood, " +
+                                    "and agree to all the terms above.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
-                            modifier  = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                     }
                 }
                 Button(
-                    onClick  = onAccept,
+                    onClick = onAccept,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
-                    shape    = RoundedCornerShape(14.dp),
-                    enabled  = hasScrolledToBottom,
-                    colors   = ButtonDefaults.buttonColors(
-                        containerColor         = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = hasScrolledToBottom,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Text(
-                        text       = if (hasScrolledToBottom) "Accept & Continue" else "Scroll to read all terms",
-                        style      = MaterialTheme.typography.labelLarge,
+                        text = if (hasScrolledToBottom) "Accept & Continue" else "Scroll to read all terms",
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -233,14 +202,14 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
 private fun DisclaimerSection(number: String, title: String, body: String) {
     Column(modifier = Modifier.padding(bottom = 20.dp)) {
         Text(
-            text       = "$number. $title",
-            style      = MaterialTheme.typography.titleMedium,
+            text = "$number. $title",
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color      = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text  = body,
+            text = body,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -248,17 +217,11 @@ private fun DisclaimerSection(number: String, title: String, body: String) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 2: EnableShieldScreen
-// Shows app logo as a large button — clicking opens default browser settings
-// Mandatory: cannot skip. Polls isDefaultBrowser() every second.
-// ─────────────────────────────────────────────────────────────────────────────
+// ── SCREEN 2: EnableShieldScreen ──
 @Composable
 fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     val context = LocalContext.current
 
-    // Explicit type annotation — fixes "Not enough information to infer type variable T"
     var isDefault: Boolean by remember { mutableStateOf(context.isDefaultBrowser()) }
 
     LaunchedEffect(Unit) {
@@ -268,22 +231,21 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
         }
     }
 
-    BackHandler(enabled = true) { /* blocked — cannot skip */ }
+    BackHandler(enabled = true) { }
 
     Box(
-        modifier         = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier            = Modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Large shield circle — acts as the visual "button" per wireframe
             Box(
                 modifier = Modifier
                     .size(160.dp)
@@ -302,9 +264,9 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector        = if (isDefault) Icons.Default.CheckCircle else Icons.Default.Shield,
+                    imageVector = if (isDefault) Icons.Default.CheckCircle else Icons.Default.Shield,
                     contentDescription = "Shield",
-                    tint               = if (isDefault)
+                    tint = if (isDefault)
                         MaterialTheme.colorScheme.primary
                     else
                         MaterialTheme.colorScheme.onSurfaceVariant,
@@ -315,36 +277,36 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text      = if (isDefault) "" else "(TAP SHIELD TO ENABLE)",
-                fontSize  = 11.sp,
-                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = if (isDefault) "" else "(TAP SHIELD TO ENABLE)",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text       = if (isDefault) "Shield Enabled!" else "Enable Shield Protection",
-                style      = MaterialTheme.typography.headlineMedium,
+                text = if (isDefault) "Shield Enabled!" else "Enable Shield Protection",
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color      = if (isDefault)
+                color = if (isDefault)
                     MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.onBackground,
-                textAlign  = TextAlign.Center
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text      = if (isDefault)
+                text = if (isDefault)
                     "LinkShield is now your default browser.\n" +
                     "Every link you open from WhatsApp, Gmail, and other apps will be protected."
                 else
                     "LinkShield must be set as your default browser to protect every link you open.\n\n" +
                     "Tap the button below, then select LinkShield as your default browser.",
-                style     = MaterialTheme.typography.bodyLarge,
-                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
@@ -352,19 +314,19 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 
             if (!isDefault) {
                 Button(
-                    onClick  = { openDefaultBrowserSettings(context) },
+                    onClick = { openDefaultBrowserSettings(context) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    shape    = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Shield, null, Modifier.size(22.dp))
                     Spacer(modifier = Modifier.size(10.dp))
                     Text(
-                        text       = "Enable Shield Protection",
-                        style      = MaterialTheme.typography.labelLarge,
+                        text = "Enable Shield Protection",
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        fontSize   = 16.sp
+                        fontSize = 16.sp
                     )
                 }
 
@@ -377,36 +339,36 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text(
-                        text      = "⚠ This step is mandatory and cannot be skipped.\n" +
-                                    "LinkShield cannot protect your links without being set as default browser.",
-                        style     = MaterialTheme.typography.bodySmall,
-                        color     = MaterialTheme.colorScheme.onErrorContainer,
+                        text = "⚠ This step is mandatory and cannot be skipped.\n" +
+                                "LinkShield cannot protect your links without being set as default browser.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
                         textAlign = TextAlign.Center,
-                        modifier  = Modifier.padding(12.dp)
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
             } else {
                 AnimatedVisibility(
                     visible = isDefault,
-                    enter   = fadeIn() + slideInVertically { it / 3 }
+                    enter = fadeIn() + slideInVertically { it / 3 }
                 ) {
                     Button(
-                        onClick  = onBrowserSet,
+                        onClick = onBrowserSet,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape    = RoundedCornerShape(16.dp),
-                        colors   = ButtonDefaults.buttonColors(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
                         Icon(Icons.Default.CheckCircle, null, Modifier.size(22.dp))
                         Spacer(modifier = Modifier.size(10.dp))
                         Text(
-                            text       = "Continue to LinkShield",
-                            style      = MaterialTheme.typography.labelLarge,
+                            text = "Continue to LinkShield",
+                            style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
-                            fontSize   = 16.sp
+                            fontSize = 16.sp
                         )
                     }
                 }
@@ -415,16 +377,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper functions — defined HERE so both OnboardingScreens.kt and
-// MainActivity.kt can import them from com.linkshield.sandbox.ui.screens
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Opens the system UI for selecting the default browser.
- * Android 10+ → uses RoleManager for a direct picker dialog.
- * Android 9 and below → opens the general Default Apps settings page.
- */
+// ── Helper functions ──
 fun openDefaultBrowserSettings(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = context.getSystemService(RoleManager::class.java)
@@ -438,23 +391,19 @@ fun openDefaultBrowserSettings(context: Context) {
             return
         }
     }
-    // Fallback — works on all versions
     context.startActivity(
         Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
-            addFlags(Intent.Flag_
-    Activity_New_Task)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        )
+    )
 }
+
 fun Context.isDefaultBrowser(): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val rm = getSystemService(RoleManager::class.java)
         rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
     } else {
-        val intent = Intent(
-            Intent.ACTION_VIEW,
-            android.net.Uri.parse("http://example.com")
-        )
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com"))
         val resolveInfo = packageManager.resolveActivity(intent, 0)
         resolveInfo?.activityInfo?.packageName == packageName
     }
