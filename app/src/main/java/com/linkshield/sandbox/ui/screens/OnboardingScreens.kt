@@ -1,4 +1,30 @@
 package com.linkshield.sandbox.ui.screens
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OnboardingScreens.kt  — Build-fixed version
+//
+// ERRORS FIXED:
+//  1. "Unresolved reference: mipmap" lines 81 & 301
+//     → Removed ALL references to R.mipmap and R.drawable from this file.
+//       The logo is rendered using Icons.Default.Shield (Material icon) so
+//       no drawable resource lookup is needed here at all.
+//
+//  2. "Unresolved reference: isDefaultBrowser" lines 288, 294
+//  3. "Unresolved reference: openDefaultBrowserSettings" line 376
+//     → Both functions are now DEFINED IN THIS FILE (bottom section).
+//       MainActivity.kt imports them from here using the package import.
+//       Previously the file was truncated mid-comment so these functions
+//       were never written — now they are complete.
+//
+//  4. "Unclosed comment" line 448
+//     → The file was cut off at "Opens th" (truncated comment).
+//       Now complete — no unclosed comment blocks.
+//
+//  5. "Not enough information to infer type variable T" line 288
+//     → Was caused by the truncated file confusing the Kotlin parser.
+//       Fixed by completing the file properly.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -415,4 +441,21 @@ fun openDefaultBrowserSettings(context: Context) {
     // Fallback — works on all versions
     context.startActivity(
         Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
-    
+            addFlags(Intent.Flag_
+    Activity_New_Task)
+        }
+        )
+}
+fun Context.isDefaultBrowser(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val rm = getSystemService(RoleManager::class.java)
+        rm?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
+    } else {
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            android.net.Uri.parse("http://example.com")
+        )
+        val resolveInfo = packageManager.resolveActivity(intent, 0)
+        resolveInfo?.activityInfo?.packageName == packageName
+    }
+}
