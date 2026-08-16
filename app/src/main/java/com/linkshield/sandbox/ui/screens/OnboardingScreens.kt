@@ -1,24 +1,4 @@
 package com.linkshield.sandbox.ui.screens
-
-// ─────────────────────────────────────────────────────────────────────────────
-// OnboardingScreens.kt
-//
-// Contains TWO full-screen composables shown before MainScreen:
-//
-//   SCREEN 1 — DisclaimerScreen
-//     • Full-screen (NOT a dialog) with scrollable T&C text
-//     • "Accept & Continue" button only appears after scrolling to bottom
-//     • Back press is disabled — user MUST accept
-//
-//   SCREEN 2 — EnableShieldScreen
-//     • Full-screen with large shield icon + "Enable Shield" button
-//     • Button opens system Default Browser settings
-//     • "Continue" button only activates when app IS confirmed default browser
-//     • User CANNOT skip this step — there is no "Skip" or "Later" option
-//     • The screen polls isDefaultBrowser() every time it recomposes via
-//       a SideEffect driven by a LaunchedEffect timer
-// ─────────────────────────────────────────────────────────────────────────────
-
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -64,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -74,22 +53,21 @@ import kotlinx.coroutines.delay
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN 1: DisclaimerScreen
+// Full-screen T&C — back button disabled — Accept only after scrolling
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun DisclaimerScreen(onAccept: () -> Unit) {
     val scrollState = rememberScrollState()
-    // Accept button only appears once user reaches within 100px of the bottom
     val hasScrolledToBottom = scrollState.value >= (scrollState.maxValue - 100).coerceAtLeast(0)
 
-    // Disable hardware back — this screen cannot be dismissed
-    BackHandler(enabled = true) { /* intentionally blocked */ }
+    BackHandler(enabled = true) { /* blocked — must accept */ }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // ── Fixed header ──────────────────────────────────────────────────────
+        // Fixed header
         Surface(
             modifier        = Modifier.fillMaxWidth(),
             color           = MaterialTheme.colorScheme.surface,
@@ -107,83 +85,64 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text       = "LinkShield Setup",
+                    text       = "🛡️ LinkShield Setup",
                     style      = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color      = MaterialTheme.colorScheme.primary,
                     textAlign  = TextAlign.Center
                 )
                 Text(
-                    text  = "Please read and accept the terms to continue",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text      = "Please read and accept the terms to continue",
+                    style     = MaterialTheme.typography.bodySmall,
+                    color     = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
         }
 
-        // ── Scrollable T&C content ────────────────────────────────────────────
+        // Scrollable T&C content
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            DisclaimerSection(
-                number = "1",
-                title  = "DMCA Compliance",
-                body   = "LinkShield Sandbox does NOT host, cache, or redistribute any copyrighted content. " +
-                         "All media downloads are performed directly from original source servers. " +
-                         "Users are solely responsible for ensuring they have the right to download " +
-                         "any content they access through this app."
-            )
-            DisclaimerSection(
-                number = "2",
-                title  = "Intended Use",
-                body   = "LinkShield is a privacy and security tool intended for personal use. " +
-                         "It provides an isolated sandbox browser, DNS-over-HTTPS protection, " +
-                         "and a media grabber for legitimate personal backup purposes only. " +
-                         "Use for any illegal, harmful, or unauthorized activity is strictly prohibited."
-            )
-            DisclaimerSection(
-                number = "3",
-                title  = "Privacy Policy",
-                body   = "This app does NOT collect, store, or transmit any personally identifiable " +
-                         "information. All browsing data (cookies, history, cache) is stored only " +
-                         "in RAM and automatically wiped when the app is closed. No analytics or " +
-                         "telemetry is collected."
-            )
-            DisclaimerSection(
-                number = "4",
-                title  = "DNS Shield",
-                body   = "The DNS Shield feature routes DNS queries over HTTPS (DoH) using " +
-                         "third-party resolvers (Cloudflare, AdGuard, etc.) for privacy. " +
-                         "It does NOT act as a VPN, does NOT inspect traffic content, and " +
-                         "does NOT modify, log, or share your browsing data."
-            )
-            DisclaimerSection(
-                number = "5",
-                title  = "No Warranty",
-                body   = "This software is provided 'as is' without warranty of any kind. " +
-                         "The developers are not liable for any damages arising from the " +
-                         "use or inability to use this software."
-            )
-            DisclaimerSection(
-                number = "6",
-                title  = "Default Browser",
-                body   = "To intercept and protect links you open from other apps (WhatsApp, " +
-                         "Gmail, etc.), LinkShield must be set as your default browser. " +
-                         "This is required for the sandbox protection to work. You can " +
-                         "change your default browser at any time in Android settings."
-            )
+            DisclaimerSection("1", "DMCA Compliance",
+                "LinkShield Sandbox does NOT host, cache, or redistribute any copyrighted content. " +
+                "All media downloads are performed directly from original source servers. " +
+                "Users are solely responsible for ensuring they have the right to download " +
+                "any content they access through this app.")
+            DisclaimerSection("2", "Intended Use",
+                "LinkShield is a privacy and security tool intended for personal use. " +
+                "It provides an isolated sandbox browser, DNS-over-HTTPS protection, " +
+                "and a media grabber for legitimate personal backup purposes only. " +
+                "Use for any illegal, harmful, or unauthorized activity is strictly prohibited.")
+            DisclaimerSection("3", "Privacy Policy",
+                "This app does NOT collect, store, or transmit any personally identifiable " +
+                "information. All browsing data (cookies, history, cache) is stored only " +
+                "in RAM and automatically wiped when the app is closed. No analytics or " +
+                "telemetry is collected.")
+            DisclaimerSection("4", "DNS Shield",
+                "The DNS Shield feature routes DNS queries over HTTPS (DoH) using " +
+                "third-party resolvers (Cloudflare, AdGuard, etc.) for privacy. " +
+                "It does NOT act as a VPN, does NOT inspect traffic content, and " +
+                "does NOT modify, log, or share your browsing data.")
+            DisclaimerSection("5", "No Warranty",
+                "This software is provided 'as is' without warranty of any kind. " +
+                "The developers are not liable for any damages arising from the " +
+                "use or inability to use this software.")
+            DisclaimerSection("6", "Default Browser",
+                "To intercept and protect links you open from other apps (WhatsApp, " +
+                "Gmail, etc.), LinkShield must be set as your default browser. " +
+                "This is required for the sandbox protection to work. You can " +
+                "change your default browser at any time in Android settings.")
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Visual indicator — scroll hint
             if (!hasScrolledToBottom) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    shape    = RoundedCornerShape(8.dp),
+                    color    = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -195,11 +154,10 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // ── Fixed bottom accept button ────────────────────────────────────────
+        // Fixed bottom accept button
         Surface(
             modifier        = Modifier.fillMaxWidth(),
             color           = MaterialTheme.colorScheme.surface,
@@ -222,7 +180,6 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
                         Spacer(modifier = Modifier.height(10.dp))
                     }
                 }
-
                 Button(
                     onClick  = onAccept,
                     modifier = Modifier
@@ -268,35 +225,24 @@ private fun DisclaimerSection(number: String, title: String, body: String) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN 2: EnableShieldScreen
-//
-// MANDATORY — the user cannot move past this screen until the app is
-// confirmed as the system default browser. There is NO skip option.
-//
-// Flow:
-//  1. Show large shield icon + explanation text
-//  2. "Enable Shield" button → opens system Default Browser selector
-//  3. App polls isDefaultBrowser() every 1 second via LaunchedEffect
-//  4. Once confirmed → "Continue" button appears in green
-//  5. Tapping "Continue" calls onBrowserSet() which updates DisclaimerManager
-//     and triggers navigation to MainScreen
+// Shows app logo as a large button — clicking opens default browser settings
+// Mandatory: cannot skip. Polls isDefaultBrowser() every second.
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun EnableShieldScreen(onBrowserSet: () -> Unit) {
     val context = LocalContext.current
 
-    // Poll whether the app is currently the default browser
-    var isDefault by remember { mutableStateOf(context.isDefaultBrowser()) }
+    // Explicit type annotation — fixes "Not enough information to infer type variable T"
+    var isDefault: Boolean by remember { mutableStateOf(context.isDefaultBrowser()) }
 
     LaunchedEffect(Unit) {
-        // Poll every second — user may switch to settings and come back
         while (!isDefault) {
             delay(1000)
             isDefault = context.isDefaultBrowser()
         }
     }
 
-    // Disable hardware back — this step cannot be skipped
-    BackHandler(enabled = true) { /* intentionally blocked */ }
+    BackHandler(enabled = true) { /* blocked — cannot skip */ }
 
     Box(
         modifier         = Modifier
@@ -311,18 +257,18 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // ── Animated shield icon ──────────────────────────────────────────
+            // Large shield circle — acts as the visual "button" per wireframe
             Box(
                 modifier = Modifier
-                    .size(140.dp)
+                    .size(160.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
                             colors = if (isDefault) listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
                             ) else listOf(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 MaterialTheme.colorScheme.background
                             )
                         )
@@ -331,16 +277,25 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
             ) {
                 Icon(
                     imageVector        = if (isDefault) Icons.Default.CheckCircle else Icons.Default.Shield,
-                    contentDescription = "Shield Status",
+                    contentDescription = "Shield",
                     tint               = if (isDefault)
                         MaterialTheme.colorScheme.primary
                     else
                         MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(80.dp)
+                    modifier = Modifier.size(90.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text      = if (isDefault) "" else "(TAP SHIELD TO ENABLE)",
+                fontSize  = 11.sp,
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text       = if (isDefault) "Shield Enabled!" else "Enable Shield Protection",
@@ -353,25 +308,23 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                 textAlign  = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text      = if (isDefault)
                     "LinkShield is now your default browser.\n" +
                     "Every link you open from WhatsApp, Gmail, and other apps will be protected."
                 else
-                    "LinkShield must be set as your default browser to intercept and protect " +
-                    "every link you open. This is required for the sandbox to work.\n\n" +
-                    "Tap \"Enable Shield\" below, then select LinkShield as your default browser.",
+                    "LinkShield must be set as your default browser to protect every link you open.\n\n" +
+                    "Tap the button below, then select LinkShield as your default browser.",
                 style     = MaterialTheme.typography.bodyLarge,
                 color     = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             if (!isDefault) {
-                // ── Enable Shield button — opens system settings ───────────────
                 Button(
                     onClick  = { openDefaultBrowserSettings(context) },
                     modifier = Modifier
@@ -379,10 +332,10 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                         .height(56.dp),
                     shape    = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.Shield, null, Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.size(8.dp))
+                    Icon(Icons.Default.Shield, null, Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.size(10.dp))
                     Text(
-                        text       = "Enable Shield",
+                        text       = "Enable Shield Protection",
                         style      = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         fontSize   = 16.sp
@@ -391,7 +344,6 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Status hint — no skip button here, intentionally
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -407,9 +359,7 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                         modifier  = Modifier.padding(12.dp)
                     )
                 }
-
             } else {
-                // ── Continue button — only shows when confirmed default ─────────
                 AnimatedVisibility(
                     visible = isDefault,
                     enter   = fadeIn() + slideInVertically { it / 3 }
@@ -424,8 +374,8 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
                             containerColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
-                        Icon(Icons.Default.CheckCircle, null, Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.size(8.dp))
+                        Icon(Icons.Default.CheckCircle, null, Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.size(10.dp))
                         Text(
                             text       = "Continue to LinkShield",
                             style      = MaterialTheme.typography.labelLarge,
@@ -440,8 +390,29 @@ fun EnableShieldScreen(onBrowserSet: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Helper functions — defined HERE so both OnboardingScreens.kt and
+// MainActivity.kt can import them from com.linkshield.sandbox.ui.screens
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Opens th
+ * Opens the system UI for selecting the default browser.
+ * Android 10+ → uses RoleManager for a direct picker dialog.
+ * Android 9 and below → opens the general Default Apps settings page.
+ */
+fun openDefaultBrowserSettings(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager != null &&
+            roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER) &&
+            !roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)
+        ) {
+            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return
+        }
+    }
+    // Fallback — works on all versions
+    context.startActivity(
+        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
+    
