@@ -20,7 +20,8 @@ data class GrabberUiState(
     val title: String = "",
     val thumbnail: String = "",
     val duration: String = "",
-    val qualities: List<MediaQualityOption> = emptyList(),
+    val qualities: List<MediaQualityOption> =
+        emptyList(),
     val selectedQualityId: String? = null,
     val isExtracting: Boolean = false,
     val isExpanding: Boolean = false,
@@ -32,20 +33,29 @@ data class GrabberUiState(
 )
 
 class GrabberViewModel(
-    private val extractor: MediaExtractorRepository,
-    private val security: SecurityApiService = SecurityApiService(),
-    private val network: NetworkStatusRepository =
-        NetworkStatusRepository()
+    private val extractor:
+        MediaExtractorRepository,
+    private val security:
+        SecurityApiService =
+            SecurityApiService(),
+    private val network:
+        NetworkStatusRepository =
+            NetworkStatusRepository()
 ) : ViewModel() {
 
     private val _uiState =
-        MutableStateFlow(GrabberUiState())
+        MutableStateFlow(
+            GrabberUiState()
+        )
 
-    val uiState: StateFlow<GrabberUiState> =
+    val uiState:
+        StateFlow<GrabberUiState> =
         _uiState.asStateFlow()
 
     private val _latestMedia =
-        MutableStateFlow<CapturedMediaItem?>(null)
+        MutableStateFlow<
+            CapturedMediaItem?
+        >(null)
 
     val latestMedia:
         StateFlow<CapturedMediaItem?> =
@@ -66,17 +76,20 @@ class GrabberViewModel(
     ) {
         _latestMedia.value = item
 
-        if (
-            item != null &&
-            item.url.isNotBlank()
-        ) {
-            _uiState.value =
-                _uiState.value.copy(
-                    address = item.url,
-                    title = item.title,
-                    error = null
-                )
+        if (item == null) {
+            return
         }
+
+        if (item.url.isBlank()) {
+            return
+        }
+
+        _uiState.value =
+            _uiState.value.copy(
+                address = item.url,
+                title = item.title,
+                error = null
+            )
     }
 
     fun selectQuality(
@@ -105,12 +118,14 @@ class GrabberViewModel(
     fun inspectUrl(
         rawUrl: String
     ) {
-        val url = rawUrl.trim()
+        val url =
+            rawUrl.trim()
 
         if (url.isBlank()) {
             _uiState.value =
                 _uiState.value.copy(
-                    error = "Enter a URL first"
+                    error =
+                        "Enter a URL first"
                 )
             return
         }
@@ -124,11 +139,14 @@ class GrabberViewModel(
                 threat = null
             )
 
-        viewModelScope.launch(Dispatchers.IO) {
-
+        viewModelScope.launch(
+            Dispatchers.IO
+        ) {
             try {
                 val result =
-                    security.checkAndExpand(url)
+                    security.checkAndExpand(
+                        url
+                    )
 
                 val threat =
                     result.first
@@ -139,7 +157,8 @@ class GrabberViewModel(
                 val target =
                     if (
                         expanded.success &&
-                        expanded.expandedUrl.isNotBlank()
+                        expanded.expandedUrl
+                            .isNotBlank()
                     ) {
                         expanded.expandedUrl
                     } else {
@@ -171,12 +190,14 @@ class GrabberViewModel(
         rawUrl: String =
             _uiState.value.address
     ) {
-        val url = rawUrl.trim()
+        val url =
+            rawUrl.trim()
 
         if (url.isBlank()) {
             _uiState.value =
                 _uiState.value.copy(
-                    error = "Enter a URL first"
+                    error =
+                        "Enter a URL first"
                 )
             return
         }
@@ -190,11 +211,14 @@ class GrabberViewModel(
                 selectedQualityId = null
             )
 
-        viewModelScope.launch(Dispatchers.IO) {
-
+        viewModelScope.launch(
+            Dispatchers.IO
+        ) {
             try {
                 val result =
-                    extractor.extract(url)
+                    extractor.extract(
+                        url
+                    )
 
                 applyExtraction(
                     result
@@ -212,7 +236,8 @@ class GrabberViewModel(
     }
 
     private fun applyExtraction(
-        result: MediaExtractionResult
+        result:
+            MediaExtractionResult
     ) {
         if (!result.success) {
             _uiState.value =
@@ -232,10 +257,9 @@ class GrabberViewModel(
         _uiState.value =
             _uiState.value.copy(
                 title =
-                    result.title
-                        .ifBlank {
-                            _uiState.value.title
-                        },
+                    result.title.ifBlank {
+                        _uiState.value.title
+                    },
                 thumbnail =
                     result.thumbnail,
                 duration =
@@ -258,8 +282,9 @@ class GrabberViewModel(
                     )
             )
 
-        viewModelScope.launch(Dispatchers.IO) {
-
+        viewModelScope.launch(
+            Dispatchers.IO
+        ) {
             try {
                 val status =
                     network.fetchStatus()
@@ -285,7 +310,6 @@ class GrabberViewModel(
 
     fun latestOption():
         MediaQualityOption? {
-
         val state =
             _uiState.value
 
@@ -294,7 +318,8 @@ class GrabberViewModel(
                 it.id ==
                     state.selectedQualityId
             }
-            ?: state.qualities.firstOrNull()
+            ?: state.qualities
+                .firstOrNull()
     }
 
     fun downloadUrl():
@@ -302,11 +327,11 @@ class GrabberViewModel(
         return latestOption()?.url
     }
 
-    fun isThreatBlocked(): Boolean {
-        val threat =
-            _uiState.value.threat
-
-        return threat?.isMalicious == true
+    fun isThreatBlocked():
+        Boolean {
+        return _uiState.value
+            .threat
+            ?.isMalicious == true
     }
 
     fun resetExtraction() {
@@ -320,5 +345,21 @@ class GrabberViewModel(
                 isExtracting = false,
                 error = null
             )
+    }
+
+    fun syncLatestCapturedMedia() {
+        val item =
+            MediaSnifferState
+                .latestMedia
+                .value
+
+        if (item != null) {
+            setLatestMedia(item)
+        }
+    }
+
+    override fun onCleared() {
+        _latestMedia.value = null
+        super.onCleared()
     }
 }
