@@ -23,26 +23,18 @@ object MediaSnifferState {
     fun publish(
         item: CapturedMediaItem
     ) {
-        if (item.url.isBlank()) {
-            return
-        }
+        if (item.url.isBlank()) return
 
         _latestMedia.value = item
 
-        val current =
-            _mediaUrls.value
+        val current = _mediaUrls.value
 
-        if (
-            current.any {
-                it.url == item.url
-            }
-        ) {
+        if (current.any { it.url == item.url }) {
             return
         }
 
         _mediaUrls.value =
-            (listOf(item) + current)
-                .take(50)
+            (listOf(item) + current).take(50)
     }
 
     fun publish(
@@ -52,9 +44,7 @@ object MediaSnifferState {
         mimeType: String = "",
         extension: String = ""
     ) {
-        if (url.isBlank()) {
-            return
-        }
+        if (url.isBlank()) return
 
         publish(
             CapturedMediaItem(
