@@ -82,7 +82,7 @@ class LinkShieldBridge(private val onMediaDetected: (String) -> Unit) {
     }
 }
 
-// Custom Animated Theme Toggle — Smooth sliding switch with icon cross-fade
+// Custom Animated Theme Toggle
 @Composable
 private fun AnimatedThemeToggle(
     isDarkMode: Boolean,
@@ -212,10 +212,10 @@ fun UnblockShieldScreen(
                     )
                 }
 
-                // RIGHT: Two rows of controls
+                // RIGHT: Controls
                 Column(modifier = Modifier.weight(1f)) {
 
-                    // ROW 1: Shield chip | DNS dropdown | Trial badge | Theme toggle
+                    // ROW 1: Shield | DNS | Trial | Theme
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -322,7 +322,7 @@ fun UnblockShieldScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // ROW 2: Back | Forward | Refresh | URL Bar | Go
+                    // ROW 2: Nav + URL
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -426,39 +426,7 @@ fun UnblockShieldScreen(
                     }, "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
-
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): Boolean {
-                            val url = request?.url ?: return false
-                            val scheme = url.scheme?.lowercase() ?: return false
-
-                            if (scheme == "http" || scheme == "https") return false
-
-                            if (scheme.startsWith("snssdk") || scheme == "intent" || scheme == "market" ||
-                                scheme.startsWith("instagram") || scheme.startsWith("fb") ||
-                                scheme.startsWith("tiktok")
-                            ) {
-                                return true
-                            }
-
-                            return true
-                        }
-
-                        override fun shouldInterceptRequest(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): WebResourceResponse? {
-                            val url = request?.url?.toString() ?: return null
-                            val lowerUrl = url.lowercase()
-
-                            // LAYER 1: AdBlock Engine — ALWAYS active
-                            if (adBlockEngine.shouldBlock(url)) {
-                                return WebResourceResponse(
-                                                  webViewClient = object : WebViewClient() {
-
-                        override fun shouldOverrideUrlLoading(
+                                              override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?
                         ): Boolean {
@@ -597,5 +565,4 @@ fun UnblockShieldScreen(
             }
         )
     }
-                        }
-                        
+}
