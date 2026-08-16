@@ -1,43 +1,45 @@
 package com.linkshield.sandbox.ui.grabber
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import android.webkit.WebView
 
-@Composable
-fun MediaSnifferLifecycle(
-    onResume: () -> Unit,
-    onPause: () -> Unit = {}
-) {
-    val lifecycleOwner =
-        LocalLifecycleOwner.current
+class MediaSnifferLifecycle(
+    private val webViewProvider: () -> WebView?
+) : DefaultLifecycleObserver {
 
-    DisposableEffect(
-        lifecycleOwner
+    override fun onStart(
+        owner: LifecycleOwner
     ) {
-        val observer =
-            LifecycleEventObserver {
-                    _, event ->
+        super.onStart(owner)
 
-                when (event) {
-                    Lifecycle.Event.ON_RESUME ->
-                        onResume()
-
-                    Lifecycle.Event.ON_PAUSE ->
-                        onPause()
-
-                    else -> Unit
-                }
-            }
-
-        lifecycleOwner.lifecycle
-            .addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle
-                .removeObserver(observer)
+        webViewProvider()?.let { webView ->
+            MediaSnifferBridge.attach(
+                webView = webView
+            )
         }
+    }
+
+    override fun onStop(
+        owner: LifecycleOwner
+    ) {
+        super.onStop(owner)
+
+        webViewProvider()?.let { webView ->
+            webView.stopLoading()
+        }
+    }
+
+    override fun onDestroy(
+        owner: LifecycleOwner
+    ) {
+        super.onDestroy(owner)
+
+        webViewProvider()?.let { webView ->
+            webView.stopLoading()
+            webView.webViewClient = null
+        }
+
+        MediaSnifferBridge.clear()
     }
 }
