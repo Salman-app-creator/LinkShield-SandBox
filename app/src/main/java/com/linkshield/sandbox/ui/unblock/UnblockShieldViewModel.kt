@@ -223,7 +223,6 @@ class UnblockShieldViewModel : ViewModel() {
         webViews.values.forEach { webView ->
             runCatching {
                 webView.stopLoading()
-                webView.webViewClient = null
                 webView.webChromeClient = null
                 webView.removeAllViews()
                 webView.destroy()
@@ -338,16 +337,6 @@ private class LinkShieldWebViewClient(
     private val dnsManager: DnsManager
 ) : WebViewClient() {
 
-    /*
-     * IMPORTANT:
-     * WebSnifferManager requires a callback in its constructor.
-     * The old code incorrectly called sniffer.inject(...),
-     * which caused:
-     *
-     * Unresolved reference: inject
-     *
-     * This version uses the actual WebSnifferManager API.
-     */
     private val sniffer = WebSnifferManager { item ->
         vm.onMediaFound(
             url = item.url,
@@ -486,14 +475,6 @@ private class LinkShieldWebViewClient(
         )
 
         url?.let(vm::updateUrl)
-
-        /*
-         * FIX:
-         * Removed the invalid sniffer.inject(...) call.
-         *
-         * WebSnifferManager already performs URL interception
-         * through its callback-based implementation.
-         */
 
         super.onPageFinished(
             view,
