@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -16,56 +17,54 @@ fun SandboxWebViewHolder(
     initialUrl: String,
     onUrlChanged: (String) -> Unit = {}
 ) {
-    val webView =
-        remember {
-            WebView(
-                androidx.compose.ui.platform
-                    .LocalContext.current
-            ).apply {
-                layoutParams =
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
+    // IMPORTANT:
+    // LocalContext.current is a composable value, so it must be
+    // obtained outside remember{}.
+    val context = LocalContext.current
 
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.mediaPlaybackRequiresUserGesture =
-                    false
+    val webView = remember(context) {
+        WebView(context).apply {
+            layoutParams =
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
 
-                webViewClient =
-                    createSandboxWebViewClient(
-                        onPageChanged =
-                            onUrlChanged
-                    )
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture =
+                false
 
-                if (initialUrl.isNotBlank()) {
-                    loadUrl(initialUrl)
-                }
+            webViewClient =
+                createSandboxWebViewClient(
+                    onPageChanged =
+                        onUrlChanged
+                )
+                            if (initialUrl.isNotBlank()) {
+                loadUrl(initialUrl)
             }
         }
+    }
 
     AndroidView(
         modifier = modifier,
         factory = {
             webView
         },
-        update = {
+        update = { view ->
             if (
                 initialUrl.isNotBlank() &&
-                it.url.isNullOrBlank()
+                view.url.isNullOrBlank()
             ) {
-                it.loadUrl(initialUrl)
+                view.loadUrl(initialUrl)
             }
         }
     )
 
     DisposableEffect(Unit) {
         onDispose {
-            // Keep the WebView instance alive while
-            // the navigation/session owner is active.
-            // Final destruction is handled by the
-            // owning browser container.
+            // Do not destroy the WebView here.
+            // Browser session owns its lifetime.
         }
     }
 }
