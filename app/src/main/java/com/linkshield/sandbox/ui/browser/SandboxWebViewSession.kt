@@ -1,29 +1,46 @@
 package com.linkshield.sandbox.ui.browser
 
 import android.webkit.WebView
+import android.webkit.WebViewClient
 
-object SamdboxWebViewSession {
+/**
+ * Owns the single WebView used by the sandbox browser session.
+ *
+ * The session survives Compose/navigation changes and is destroyed
+ * only when explicitly requested.
+ */
+object SandboxWebViewSession {
 
     private var webView: WebView? = null
 
+    @Synchronized
     fun attach(view: WebView) {
+        if (webView === view) {
+            return
+        }
+
+        webView?.let { old ->
+            try {
+                old.stopLoading()
+            } catch (_: Exception) {
+            }
+        }
+
         webView = view
     }
 
+    @Synchronized
     fun get(): WebView? {
         return webView
     }
 
+    @Synchronized
+    fun hasSession(): Boolean {
+        return webView != null
+    }
+
     fun currentUrl(): String {
         return webView?.url.orEmpty()
-    }
-
-    fun canGoBack(): Boolean {
-        return webView?.canGoBack() == true
-    }
-
-    fun canGoForward(): Boolean {
-        return webView?.canGoForward() == true
     }
 
     fun goBack(): Boolean {
@@ -47,23 +64,25 @@ object SamdboxWebViewSession {
         view.goForward()
         return true
     }
-
-    fun reload() {
+        fun reload() {
         webView?.reload()
     }
 
-    fun clearReference() {
-        webView = null
-    }
-        fun destroy() {
+    @Synchronized
+    fun destroy() {
         val view = webView ?: return
 
         webView = null
 
         try {
             view.stopLoading()
+
             view.webChromeClient = null
-            view.webViewClient = null
+
+            // WebViewClient is non-null in the Kotlin API.
+            // Never assign null here.
+            view.webViewClient = WebViewClient()
+
             view.loadUrl("about:blank")
             view.clearHistory()
             view.removeAllViews()
