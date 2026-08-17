@@ -271,9 +271,9 @@ fun UnblockShieldScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Image(
-                        painter = painterResource(
-                            R.mipmap.ic_launcher
-                        ),
+    painter = painterResource(
+        R.drawable.ic_app_logo
+    ),
                         contentDescription = "LinkShield Logo",
                         modifier = Modifier
                             .size(52.dp)
