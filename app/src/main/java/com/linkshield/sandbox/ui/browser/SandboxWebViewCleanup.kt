@@ -1,6 +1,7 @@
 package com.linkshield.sandbox.ui.browser
 
 import android.webkit.WebView
+import android.webkit.WebViewClient
 
 object SandboxWebViewCleanup {
 
@@ -22,11 +23,20 @@ object SandboxWebViewCleanup {
 
         try {
             webView.stopLoading()
+
             webView.webChromeClient = null
-            webView.webViewClient = null
-            webView.loadUrl("about:blank")
+
+            // webViewClient cannot be null.
+            webView.webViewClient =
+                WebViewClient()
+                            webView.loadUrl(
+                "about:blank"
+            )
+
             webView.clearHistory()
+
             webView.removeAllViews()
+
             webView.destroy()
         } catch (_: Exception) {
         }
