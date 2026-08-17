@@ -1,6 +1,7 @@
 package com.linkshield.sandbox.ui.grabber
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,8 +13,7 @@ data class MediaExtractorState(
     val isLoading: Boolean = false,
     val options: List<MediaQualityOption> =
         emptyList(),
-    val selected:
-        MediaQualityOption? = null,
+    val selected: MediaQualityOption? = null,
     val error: String? = null
 )
 
@@ -67,7 +67,7 @@ class MediaExtractorViewModel(
                         selected =
                             options.firstOrNull()
                     )
-            } catch (e: Exception) {
+                                } catch (e: Exception) {
                 _state.value =
                     _state.value.copy(
                         isLoading = false,
@@ -93,10 +93,6 @@ class MediaExtractorViewModel(
             MediaExtractorState()
     }
 }
-package com.linkshield.sandbox.ui.grabber
-
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 
 class MediaExtractorViewModelFactory(
     private val repository:
@@ -107,7 +103,6 @@ class MediaExtractorViewModelFactory(
     override fun <T : ViewModel> create(
         modelClass: Class<T>
     ): T {
-
         if (
             modelClass.isAssignableFrom(
                 MediaExtractorViewModel::class.java
