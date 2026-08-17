@@ -50,6 +50,18 @@
                 <data android:scheme="https" />
             </intent-filter>
         </activity>
-        </application>
+        <!-- Official WireGuard userspace VPN service -->
+        <service
+            android:name="com.wireguard.android.backend.GoBackend$VpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+
+        </service>
+
+    </application>
 
 </manifest>
