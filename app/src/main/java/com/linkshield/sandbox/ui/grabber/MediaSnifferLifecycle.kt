@@ -1,11 +1,13 @@
 package com.linkshield.sandbox.ui.grabber
 
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import android.webkit.WebView
 
 class MediaSnifferLifecycle(
-    private val webViewProvider: () -> WebView?
+    private val webViewProvider:
+        () -> WebView?
 ) : DefaultLifecycleObserver {
 
     override fun onStart(
@@ -29,15 +31,17 @@ class MediaSnifferLifecycle(
             webView.stopLoading()
         }
     }
-
-    override fun onDestroy(
+        override fun onDestroy(
         owner: LifecycleOwner
     ) {
         super.onDestroy(owner)
 
         webViewProvider()?.let { webView ->
             webView.stopLoading()
-            webView.webViewClient = null
+
+            // WebViewClient is non-null.
+            webView.webViewClient =
+                WebViewClient()
         }
 
         MediaSnifferBridge.clear()
