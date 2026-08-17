@@ -1,6 +1,5 @@
 package com.linkshield.sandbox.ui.browser
 
-import android.annotation.SuppressLint
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.compose.runtime.Composable
@@ -10,14 +9,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun SandboxWebViewHolder(
-    modifier: Modifier = Modifier,
     initialUrl: String,
-    onUrlChanged: (String) -> Unit = {}
+    modifier: Modifier = Modifier,
+    onUrlChanged: (String) -> Unit
 ) {
-    // IMPORTANT:
     // LocalContext.current is a composable value, so it must be
     // obtained outside remember{}.
     val context = LocalContext.current
@@ -32,15 +29,16 @@ fun SandboxWebViewHolder(
 
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture =
-                false
+            settings.mediaPlaybackRequiresUserGesture = false
 
-            webViewClient =
-                createSandboxWebViewClient(
-                    onPageChanged =
-                        onUrlChanged
-                )
-                            if (initialUrl.isNotBlank()) {
+            webViewClient = createSandboxWebViewClient(
+                onStarted = onUrlChanged,
+                onFinished = { url, _, _, _ ->
+                    onUrlChanged(url)
+                }
+            )
+
+            if (initialUrl.isNotBlank()) {
                 loadUrl(initialUrl)
             }
         }
