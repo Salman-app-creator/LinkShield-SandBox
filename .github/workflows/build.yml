@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,10 +21,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.5
+      - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: "8.5"
+          gradle-version: "8.7"
 
       - name: Verify Gradle version
         run: gradle --version
@@ -39,4 +39,3 @@ jobs:
           name: LinkShield-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
-          
