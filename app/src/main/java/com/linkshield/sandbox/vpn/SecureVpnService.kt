@@ -2,20 +2,34 @@ package com.linkshield.sandbox.vpn
 
 import android.content.Intent
 import android.net.VpnService
-import android.os.ParcelFileDescriptor
+import android.os.IBinder
+import com.wireguard.android.backend.GoBackend
+import com.wireguard.android.backend.Tunnel
+import com.wireguard.config.Config
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class SecureVpnService : VpnService() {
-
-    private var vpnInterface: ParcelFileDescriptor? = null
 
     private val serviceScope =
         CoroutineScope(
             SupervisorJob() + Dispatchers.IO
         )
+
+    private lateinit var wireGuardBackend: GoBackend
+
+    private val tunnel =
+        LinkShieldTunnel()
+
+    override fun onCreate() {
+        super.onCreate()
+
+        wireGuardBackend =
+            GoBackend(applicationContext)
+    }
 
     override fun onStartCommand(
         intent: Intent?,
@@ -24,91 +38,124 @@ class SecureVpnService : VpnService() {
     ): Int {
 
         when (intent?.action) {
-            ACTION_CONNECT -> startVpn()
-            ACTION_DISCONNECT -> stopVpn()
+            ACTION_CONNECT -> {
+                val configText =
+                    intent.getStringExtra(
+                        EXTRA_CONFIG
+                    )
+
+                if (!configText.isNullOrBlank()) {
+                    startTunnel(configText)
+                }
+            }
+
+            ACTION_DISCONNECT -> {
+                stopTunnel()
+            }
         }
 
         return START_STICKY
     }
 
-    private fun startVpn() {
-        if (vpnInterface != null) return
+    private fun startTunnel(
+        configText: String
+    ) {
+        serviceScope.launch {
+            runCatching {
+                val config =
+                    Config.parse(
+                        configText.byteInputStream()
+                    )
 
-        vpnInterface =
-            Builder()
-                .setSession("LinkShield Secure Network")
-                .setMtu(DEFAULT_MTU)
-                .addAddress(
-                    VPN_ADDRESS,
-                    VPN_PREFIX
+                wireGuardBackend.setState(
+                    tunnel,
+                    Tunnel.State.UP,
+                    config
                 )
-                .addRoute(
-                    VPN_ROUTE,
-                    VPN_ROUTE_PREFIX
-                )
-                .addDnsServer(
-                    DNS_SERVER
-                )
-                .establish()
 
-        if (vpnInterface == null) {
-            stopSelf()
-            return
+                val state =
+                    wireGuardBackend.getState(
+                        tunnel
+                    )
+
+                if (state != Tunnel.State.UP) {
+                    stopSelf()
+                }
+            }.onFailure {
+                stopSelf()
+            }
         }
+    }
+    private fun stopTunnel() {
+        serviceScope.launch {
+            runCatching {
+                if (
+                    wireGuardBackend.getState(
+                        tunnel
+                    ) == Tunnel.State.UP
+                ) {
+                    wireGuardBackend.setState(
+                        tunnel,
+                        Tunnel.State.DOWN,
+                        null
+                    )
+                }
+            }
 
-        // Remote tunnel transport will be attached here.
-        // The VPN interface itself must not be advertised
-        // as an active Internet tunnel until the remote
-        // transport is connected.
+            stopSelf()
+        }
     }
 
-    private fun stopVpn() {
-        runCatching {
-            vpnInterface?.close()
-        }
-
-        vpnInterface = null
-
-        stopSelf()
+    override fun onBind(
+        intent: Intent?
+    ): IBinder? {
+        return super.onBind(intent)
     }
 
     override fun onDestroy() {
         runCatching {
-            vpnInterface?.close()
+            if (
+                ::wireGuardBackend.isInitialized &&
+                wireGuardBackend.getState(
+                    tunnel
+                ) == Tunnel.State.UP
+            ) {
+                wireGuardBackend.setState(
+                    tunnel,
+                    Tunnel.State.DOWN,
+                    null
+                )
+            }
         }
-
-        vpnInterface = null
 
         serviceScope.cancel()
 
         super.onDestroy()
     }
 
-    override fun onRevoke() {
-        stopVpn()
-        super.onRevoke()
-    }
+    private class LinkShieldTunnel :
+        Tunnel {
 
-    companion object {
+        override fun getName(): String {
+            return "LinkShield"
+        }
+
+        override fun onStateChange(
+            newState: Tunnel.State
+        ) {
+            // WireGuard backend owns the actual
+            // tunnel state.
+        }
+        }
+        companion object {
+
         const val ACTION_CONNECT =
             "com.linkshield.sandbox.vpn.CONNECT"
 
         const val ACTION_DISCONNECT =
             "com.linkshield.sandbox.vpn.DISCONNECT"
 
-        private const val DEFAULT_MTU = 1500
-
-        private const val VPN_ADDRESS =
-            "10.8.0.2"
-
-        private const val VPN_PREFIX = 24
-
-        private const val VPN_ROUTE =
-            "0.0.0.0"
-
-        private const val VPN_ROUTE_PREFIX = 0
-
-        private const val DNS_SERVER =
-            "1.1.1.1"
+        const val EXTRA_CONFIG =
+            "wireguard_config"
     }
 }
