@@ -17,13 +17,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            LinkShieldApp()
+            MainAppContent()
         }
     }
 }
 
 @Composable
-fun LinkShieldApp() {
+fun MainAppContent() {
     LinkShieldSandboxTheme {
         val unblockViewModel: UnblockShieldViewModel = viewModel()
 
