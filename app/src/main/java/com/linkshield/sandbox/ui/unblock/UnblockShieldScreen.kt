@@ -54,11 +54,12 @@ fun UnblockShieldScreen(
 
     var showMediaSheet by remember { mutableStateOf(false) }
 
+    // Yahan hum ne 'mimeType' use kiya hai taa ke aapki original class se match kare
     val capturedMediaList = viewModel.capturedMediaList.map { item ->
         CapturedMediaItem(
             url = item.url,
-            mediaType = item.type,
-            title = item.title ?: "Media File"
+            title = item.title ?: "Media File",
+            mimeType = item.type
         )
     }
 
@@ -183,12 +184,12 @@ fun UnblockShieldScreen(
                                     if (lowerUrl.contains(".mp4") || lowerUrl.contains(".m3u8") ||
                                         lowerUrl.contains(".mp3") || lowerUrl.contains(".webm")
                                     ) {
-                                        val mediaType = when {
+                                        val mType = when {
                                             lowerUrl.contains(".mp3") -> "Audio"
                                             lowerUrl.contains(".m3u8") -> "HLS Stream"
                                             else -> "Video"
                                         }
-                                        viewModel.addCapturedMedia(reqUrl, mediaType, view?.title)
+                                        viewModel.addCapturedMedia(reqUrl, mType, view?.title)
                                     }
                                 }
                                 return super.shouldInterceptRequest(view, request)
@@ -290,7 +291,7 @@ fun UnblockShieldScreen(
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 SuggestionChip(
                                                     onClick = {},
-                                                    label = { Text(item.mediaType, fontSize = 10.sp) }
+                                                    label = { Text(if(item.mimeType.isNotEmpty()) item.mimeType else "Media", fontSize = 10.sp) }
                                                 )
                                             }
 
