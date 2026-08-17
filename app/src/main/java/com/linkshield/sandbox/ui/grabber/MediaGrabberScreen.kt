@@ -21,7 +21,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.api.CobaltApiService
-import com.linkshield.sandbox.ui.grabber.MediaExtractorViewModel.ExtractionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +47,7 @@ fun MediaGrabberScreen(
 
     LaunchedEffect(extractionState) {
         when (val state = extractionState) {
-            is ExtractionState.Success -> {
+            is MediaExtractorViewModel.ExtractionState.Success -> {
                 val result = state.data
                 if (result.status == "stream" || result.status == "redirect" || result.status == "tunnel") {
                     val downloadUrl = result.url ?: ""
@@ -63,7 +62,7 @@ fun MediaGrabberScreen(
                     }
                 }
             }
-            is ExtractionState.Error -> {
+            is MediaExtractorViewModel.ExtractionState.Error -> {
                 Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
             }
             else -> {}
@@ -125,10 +124,10 @@ fun MediaGrabberScreen(
                 Button(
                     onClick = { processUrl(inputUrl) },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = inputUrl.isNotBlank() && extractionState !is ExtractionState.Loading,
+                    enabled = inputUrl.isNotBlank() && extractionState !is MediaExtractorViewModel.ExtractionState.Loading,
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    if (extractionState is ExtractionState.Loading) {
+                    if (extractionState is MediaExtractorViewModel.ExtractionState.Loading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
