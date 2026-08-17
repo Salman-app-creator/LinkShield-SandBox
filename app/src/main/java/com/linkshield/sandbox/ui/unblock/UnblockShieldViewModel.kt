@@ -1,6 +1,5 @@
 package com.linkshield.sandbox.ui
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -37,13 +36,10 @@ internal const val CHROME_UA =
 
 class UnblockShieldViewModel : ViewModel() {
 
-    private val webViews =
-        mutableMapOf<Int, WebView>()
+    private val webViews = mutableMapOf<Int, WebView>()
 
     private val _mediaUrls =
-        MutableStateFlow<List<CapturedMediaItem>>(
-            emptyList()
-        )
+        MutableStateFlow<List<CapturedMediaItem>>(emptyList())
 
     val mediaUrls: StateFlow<List<CapturedMediaItem>> =
         _mediaUrls.asStateFlow()
@@ -54,9 +50,7 @@ class UnblockShieldViewModel : ViewModel() {
     val latestMedia: StateFlow<CapturedMediaItem?> =
         _latestMedia.asStateFlow()
 
-    var currentUrl by mutableStateOf(
-        "https://www.google.com"
-    )
+    var currentUrl by mutableStateOf("https://www.google.com")
         private set
 
     var isLoading by mutableStateOf(false)
@@ -86,9 +80,7 @@ class UnblockShieldViewModel : ViewModel() {
 
     fun getExistingWebView(
         tabIndex: Int = 0
-    ): WebView? {
-        return webViews[tabIndex]
-    }
+    ): WebView? = webViews[tabIndex]
 
     fun updateUrl(url: String) {
         if (url.isNotBlank()) {
@@ -96,9 +88,7 @@ class UnblockShieldViewModel : ViewModel() {
         }
     }
 
-    fun updateLoading(
-        loading: Boolean
-    ) {
+    fun updateLoading(loading: Boolean) {
         isLoading = loading
     }
 
@@ -110,9 +100,7 @@ class UnblockShieldViewModel : ViewModel() {
         canGoForward = forward
     }
 
-    fun updatePageTitle(
-        title: String
-    ) {
+    fun updatePageTitle(title: String) {
         pageTitle = title
     }
 
@@ -121,66 +109,43 @@ class UnblockShieldViewModel : ViewModel() {
         title: String = "",
         pageUrl: String = currentUrl
     ) {
-        val cleanUrl =
-            url.trim()
+        val cleanUrl = url.trim()
 
-        if (cleanUrl.isBlank()) {
-            return
-        }
+        if (cleanUrl.isBlank()) return
 
-        val item =
-            CapturedMediaItem(
-                url = cleanUrl,
-                title = title.ifBlank {
-                    pageTitle
-                },
-                pageUrl = pageUrl.ifBlank {
-                    currentUrl
-                }
-            )
+        val item = CapturedMediaItem(
+            url = cleanUrl,
+            title = title.ifBlank { pageTitle },
+            pageUrl = pageUrl.ifBlank { currentUrl }
+        )
 
-        val existing =
-            _mediaUrls.value
+        val existing = _mediaUrls.value
 
-        if (
-            existing.any {
-                it.url == item.url
-            }
-        ) {
+        if (existing.any { it.url == item.url }) {
             _latestMedia.value =
-                existing.lastOrNull {
-                    it.url == item.url
-                } ?: item
+                existing.lastOrNull { it.url == item.url } ?: item
             return
         }
 
-        val updated =
-            (existing + item).takeLast(30)
+        val updated = (existing + item).takeLast(30)
 
         _mediaUrls.value = updated
         _latestMedia.value = item
     }
 
     fun clearMedia() {
-        _mediaUrls.value =
-            emptyList()
-
-        _latestMedia.value =
-            null
+        _mediaUrls.value = emptyList()
+        _latestMedia.value = null
     }
 
     fun consumeLatestMedia() {
         _latestMedia.value = null
     }
 
-    fun loadUrl(
-        rawUrl: String
-    ) {
-        val url =
-            normalizeUrl(rawUrl)
+    fun loadUrl(rawUrl: String) {
+        val url = normalizeUrl(rawUrl)
 
         currentUrl = url
-
         webViews[0]?.loadUrl(url)
     }
 
@@ -223,29 +188,21 @@ class UnblockShieldViewModel : ViewModel() {
                 loadWithOverviewMode = true
                 userAgentString = CHROME_UA
 
-                if (
-                    Build.VERSION.SDK_INT >=
-                    Build.VERSION_CODES.LOLLIPOP
-                ) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     mixedContentMode =
-                        WebSettings
-                            .MIXED_CONTENT_COMPATIBILITY_MODE
+                        WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                 }
 
                 @Suppress("DEPRECATION")
                 allowFileAccess = false
             }
 
-            CookieManager
-                .getInstance()
-                .setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptCookie(true)
 
-            CookieManager
-                .getInstance()
-                .setAcceptThirdPartyCookies(
-                    this,
-                    true
-                )
+            CookieManager.getInstance().setAcceptThirdPartyCookies(
+                this,
+                true
+            )
 
             webChromeClient =
                 LinkShieldChromeClient(
@@ -277,6 +234,7 @@ class UnblockShieldViewModel : ViewModel() {
         super.onCleared()
     }
 }
+
 private class LinkShieldChromeClient(
     private val vm: UnblockShieldViewModel
 ) : WebChromeClient() {
@@ -309,16 +267,14 @@ private class LinkShieldChromeClient(
             return
         }
 
-        val activity =
-            view.context.findActivity()
+        val activity = view.context.findActivity()
 
         if (activity == null || customView != null) {
-            callback.onCustomViewHidden()
+            callback?.onCustomViewHidden()
             return
         }
 
         customView = view
-
         oldUiVisibility =
             activity.window.decorView.systemUiVisibility
 
@@ -333,11 +289,9 @@ private class LinkShieldChromeClient(
             )
         )
 
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.R
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             activity.window.setDecorFitsSystemWindows(false)
+
             activity.window.insetsController?.hide(
                 android.view.WindowInsets.Type.statusBars() or
                     android.view.WindowInsets.Type.navigationBars()
@@ -352,14 +306,10 @@ private class LinkShieldChromeClient(
     }
 
     override fun onHideCustomView() {
-        val view =
-            customView ?: return
+        val view = customView ?: return
+        val activity = view.context.findActivity()
 
-        val activity =
-            view.context.findActivity()
-
-        (view.parent as? ViewGroup)
-            ?.removeView(view)
+        (view.parent as? ViewGroup)?.removeView(view)
 
         customView = null
 
@@ -368,14 +318,10 @@ private class LinkShieldChromeClient(
         }
     }
 
-    private fun restoreWindow(
-        window: Window
-    ) {
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.R
-        ) {
+    private fun restoreWindow(window: Window) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(true)
+
             window.insetsController?.show(
                 android.view.WindowInsets.Type.statusBars() or
                     android.view.WindowInsets.Type.navigationBars()
@@ -387,18 +333,30 @@ private class LinkShieldChromeClient(
         }
     }
 }
-
 private class LinkShieldWebViewClient(
     private val vm: UnblockShieldViewModel,
     private val dnsManager: DnsManager
 ) : WebViewClient() {
 
-    private val sniffer =
-        WebSnifferManager()
+    /*
+     * IMPORTANT:
+     * WebSnifferManager requires a callback in its constructor.
+     * The old code incorrectly called sniffer.inject(...),
+     * which caused:
+     *
+     * Unresolved reference: inject
+     *
+     * This version uses the actual WebSnifferManager API.
+     */
+    private val sniffer = WebSnifferManager { item ->
+        vm.onMediaFound(
+            url = item.url,
+            title = item.title,
+            pageUrl = item.pageUrl
+        )
+    }
 
-    private fun capture(
-        url: String?
-    ) {
+    private fun capture(url: String?) {
         if (url.isNullOrBlank()) return
 
         if (sniffer.isMediaUrl(url)) {
@@ -462,9 +420,8 @@ private class LinkShieldWebViewClient(
     ): Boolean {
         uri ?: return false
 
-        return when (
-            uri.scheme?.lowercase()
-        ) {
+        return when (uri.scheme?.lowercase()) {
+
             "http", "https" -> false
 
             "intent" -> {
@@ -530,12 +487,13 @@ private class LinkShieldWebViewClient(
 
         url?.let(vm::updateUrl)
 
-        sniffer.inject(
-            view,
-            vm.pageTitle,
-            vm.currentUrl,
-            vm::onMediaFound
-        )
+        /*
+         * FIX:
+         * Removed the invalid sniffer.inject(...) call.
+         *
+         * WebSnifferManager already performs URL interception
+         * through its callback-based implementation.
+         */
 
         super.onPageFinished(
             view,
