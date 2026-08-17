@@ -39,7 +39,6 @@ class WireGuardVpnController(
                     Tunnel.State.UP,
                     config
                 )
-
                 check(
                     backend.getState(tunnel) ==
                         Tunnel.State.UP
@@ -48,14 +47,21 @@ class WireGuardVpnController(
                 }
             }
         }
-        suspend fun disconnect(): Result<Unit> =
+
+    suspend fun disconnect(): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                backend.setState(
-                    tunnel,
-                    Tunnel.State.DOWN,
-                    null
-                )
+
+                if (
+                    backend.getState(tunnel) ==
+                    Tunnel.State.UP
+                ) {
+                    backend.setState(
+                        tunnel,
+                        Tunnel.State.DOWN,
+                        null
+                    )
+                }
 
                 check(
                     backend.getState(tunnel) ==
@@ -72,12 +78,12 @@ class WireGuardVpnController(
                 Tunnel.State.UP
         }.getOrDefault(false)
     }
-
     fun version(): String {
         return runCatching {
             backend.getVersion()
         }.getOrDefault("unknown")
     }
+
     private class LinkShieldTunnel :
         Tunnel {
 
@@ -88,7 +94,7 @@ class WireGuardVpnController(
         override fun onStateChange(
             newState: Tunnel.State
         ) {
-            // WireGuard backend reports the state.
+            // WireGuard backend owns tunnel state.
         }
     }
 }
