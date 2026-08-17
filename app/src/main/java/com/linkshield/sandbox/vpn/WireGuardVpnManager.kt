@@ -22,29 +22,40 @@ class WireGuardVpnManager(
 
             state.setConnecting()
 
-            repository.loadConfig()
-                .fold(
-                    onSuccess = { config ->
-                        controller.connect(config)
-                            .onSuccess {
-                                state.setConnected()
-                            }
-                            .onFailure { error ->
-                                state.setError(
-                                    error.message
-                                        ?: "Unable to connect"
-                                )
-                            }
-                    },
-                    onFailure = { error ->
-                        state.setError(
-                            error.message
-                                ?: "WireGuard configuration missing"
-                        )
-                    }
+            repository.loadConfig().fold(
+                onSuccess = { config ->
+
+                    controller.connect(config)
+                        .onSuccess {
+                            state.setConnected()
+                        }
+                        .onFailure { error ->
+                            state.setError(
+                                error.message
+                                    ?: "Unable to connect"
+                            )
+                        }
+                },
+                onFailure = { error ->
+
+                    state.setError(
+                        error.message
+                            ?: "WireGuard configuration missing"
+                    )
+                }
+            )
+
+            if (controller.isConnected()) {
+                Result.success(Unit)
+            } else {
+                Result.failure(
+                    IllegalStateException(
+                        "WireGuard tunnel is not connected"
+                    )
                 )
+            }
         }
-        suspend fun disconnect(): Result<Unit> =
+       suspend fun disconnect(): Result<Unit> =
         withContext(Dispatchers.IO) {
 
             state.setDisconnecting()
@@ -76,13 +87,14 @@ class WireGuardVpnManager(
         return repository.saveConfig(
             configText
         )
-    }
- suspend fun removeConfiguration() {
-        repository.deleteConfig()
+    } 
+    suspend fun removeConfiguration() {
 
         if (controller.isConnected()) {
             disconnect()
         }
+
+        repository.deleteConfig()
 
         state.setDisconnected()
     }
@@ -90,4 +102,4 @@ class WireGuardVpnManager(
     fun clearError() {
         state.clearError()
     }
-}   
+}
