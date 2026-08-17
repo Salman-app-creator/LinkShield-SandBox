@@ -1,43 +1,27 @@
 package com.linkshield.sandbox.ui.grabber
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.api.CobaltApiService
-
-data class CapturedMediaItem(
-    val url: String,
-    val type: String,
-    val title: String
-)
+import com.linkshield.sandbox.ui.grabber.MediaExtractorViewModel.ExtractionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +48,7 @@ fun MediaGrabberScreen(
 
     LaunchedEffect(extractionState) {
         when (val state = extractionState) {
-            is MediaExtractorViewModel.ExtractionState.Success -> {
+            is ExtractionState.Success -> {
                 val result = state.data
                 if (result.status == "stream" || result.status == "redirect" || result.status == "tunnel") {
                     val downloadUrl = result.url ?: ""
@@ -79,7 +63,7 @@ fun MediaGrabberScreen(
                     }
                 }
             }
-            is MediaExtractorViewModel.ExtractionState.Error -> {
+            is ExtractionState.Error -> {
                 Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
             }
             else -> {}
@@ -121,7 +105,7 @@ fun MediaGrabberScreen(
                             }
                         } else {
                             IconButton(onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                 val clipData = clipboard.primaryClip
                                 if (clipData != null && clipData.itemCount > 0) {
                                     val text = clipData.getItemAt(0).text?.toString() ?: ""
@@ -141,10 +125,10 @@ fun MediaGrabberScreen(
                 Button(
                     onClick = { processUrl(inputUrl) },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = inputUrl.isNotBlank() && extractionState !is MediaExtractorViewModel.ExtractionState.Loading,
+                    enabled = inputUrl.isNotBlank() && extractionState !is ExtractionState.Loading,
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    if (extractionState is MediaExtractorViewModel.ExtractionState.Loading) {
+                    if (extractionState is ExtractionState.Loading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
