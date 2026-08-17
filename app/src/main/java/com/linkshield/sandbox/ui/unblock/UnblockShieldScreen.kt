@@ -1,662 +1,328 @@
-package com.linkshield.sandbox.ui
+package com.linkshield.sandbox.ui.unblock
 
-import android.app.role.RoleManager
+import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.provider.Settings
+import android.graphics.Bitmap
+import android.net.Uri
+import android.view.ViewGroup
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
-import androidx.compose.foundation.Image
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.linkshield.sandbox.R
-import com.linkshield.sandbox.disclaimer.DisclaimerManager
-import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.dns.DohProvider
-import com.linkshield.sandbox.license.LicenseManager
-import com.linkshield.sandbox.ui.Upgrade.UpgradeScreen
-import com.linkshield.sandbox.ui.disclaimer.FirstLaunchDisclaimerDialog
-import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
+import com.linkshield.sandbox.ui.grabber.CapturedMediaItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnblockShieldScreen(
-    dnsManager: DnsManager,
-    viewModel: UnblockShieldViewModel,
-    licenseManager: LicenseManager,
-    disclaimerManager: DisclaimerManager,
-    isDarkTheme: Boolean,
-    onThemeToggle: () -> Unit,
-    isVisible: Boolean = true
+    viewModel: UnblockShieldViewModel = viewModel()
 ) {
-    if (!isVisible) return
-
     val context = LocalContext.current
-    val focusManager = LocalFocusManager.current
-    val clipboardManager = LocalClipboardManager.current
-    val capturedMedia by viewModel.mediaUrls.collectAsState()
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    var hasAcceptedDisclaimer by remember {
-        mutableStateOf(disclaimerManager.hasAccepted())
-    }
+    var webView: WebView? by remember { mutableStateOf(null) }
+    var urlInput by remember { mutableStateOf(viewModel.currentUrl) }
+    var isLoading by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
 
-    var isFirstLaunchComplete by remember {
-        mutableStateOf(licenseManager.isFirstLaunchComplete())
-    }
+    var showMediaSheet by remember { mutableStateOf(false) }
 
-    var selectedTab by remember {
-        mutableIntStateOf(0)
-    }
-
-    var showRestrictionDialog by remember {
-        mutableStateOf(false)
-    }
-
-    var showServerMenu by remember {
-        mutableStateOf(false)
-    }
-
-    var addressBarText by remember {
-        mutableStateOf(viewModel.currentUrl)
-    }
-
-    val addressFocusRequester = remember {
-        FocusRequester()
-    }
-
-    LaunchedEffect(viewModel.currentUrl) {
-        addressBarText = viewModel.currentUrl
-    }
-
-    LaunchedEffect(Unit) {
-        if (!licenseManager.isAccessAllowed()) {
-            showRestrictionDialog = true
-            selectedTab = 2
-        }
-    }
-
-    if (!hasAcceptedDisclaimer) {
-        FirstLaunchDisclaimerDialog {
-            disclaimerManager.accept()
-            hasAcceptedDisclaimer = true
-        }
-        return
-    }
-
-    if (!isFirstLaunchComplete) {
-        EnableProtectionScreen {
-            openDefaultBrowserSettings(context)
-            licenseManager.setFirstLaunchComplete()
-            isFirstLaunchComplete = true
-        }
-        return
-    }
-
-    if (showRestrictionDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showRestrictionDialog = false
-            },
-            title = {
-                Text(
-                    "Upgrade Required",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    licenseManager.getRestrictionReason()
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showRestrictionDialog = false
-                        selectedTab = 2
-                    }
-                ) {
-                    Text("Upgrade")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showRestrictionDialog = false
-                    }
-                ) {
-                    Text("Later")
-                }
-            }
+    val capturedMediaList = viewModel.capturedMediaList.map { item ->
+        CapturedMediaItem(
+            url = item.url,
+            type = item.type,
+            title = item.title ?: "Media File"
         )
+    }
+
+    BackHandler(enabled = canGoBack) {
+        webView?.goBack()
     }
 
     Scaffold(
         topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    .padding(
-                        horizontal = 8.dp,
-                        vertical = 5.dp
-                    )
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Image(
-                        painter = painterResource(
-                            id = R.mipmap.ic_launcher
-                        ),
-                        contentDescription = "App Logo",
-                        modifier = Modifier.size(40.dp)
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        val shieldOn =
-                            dnsManager.isShieldPersistedOn()
-
-                        IconButton(
-                            onClick = {
-                                if (shieldOn) {
-                                    dnsManager.disableDoh()
-                                } else {
-                                    dnsManager.enableDoh()
-                                }
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector =
-                                    if (shieldOn) {
-                                        Icons.Default.Shield
-                                    } else {
-                                        Icons.Default.ShieldMoon
-                                    },
-                                contentDescription = "Shield Toggle",
-                                tint =
-                                    if (shieldOn) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        Color.Red
-                                    }
-                            )
-                        }
-
-                        Text(
-                            text = if (shieldOn) "ON" else "OFF",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-
-                        Box {
-                            IconButton(
-                                onClick = {
-                                    showServerMenu = true
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = "DNS Server"
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded = showServerMenu,
-                                onDismissRequest = {
-                                    showServerMenu = false
-                                }
-                            ) {
-                                DohProvider.entries.forEach { provider ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(provider.displayName)
-                                        },
-                                        onClick = {
-                                            dnsManager.enableDoh(provider)
-                                            showServerMenu = false
-
-                                            Toast.makeText(
-                                                context,
-                                                "DNS: ${provider.displayName}",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        },
-                                        leadingIcon = {
-                                            if (
-                                                dnsManager.getCurrentProvider() ==
-                                                provider
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Check,
-                                                    null
-                                                )
-                                            }
-                                        }
-                                    )
-                                }
-
-                                HorizontalDivider()
-
-                                DropdownMenuItem(
-                                    text = {
-                                        Text("Use Android DNS")
-                                    },
-                                    onClick = {
-                                        dnsManager.disableDoh()
-                                        showServerMenu = false
-                                    }
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = onThemeToggle,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector =
-                                    if (isDarkTheme) {
-                                        Icons.Default.DarkMode
-                                    } else {
-                                        Icons.Default.LightMode
-                                    },
-                                contentDescription = "Theme Toggle"
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = when {
-                                licenseManager.isProUser() ->
-                                    MaterialTheme.colorScheme.primaryContainer
-
-                                licenseManager.isTrialActive() ->
-                                    MaterialTheme.colorScheme.secondaryContainer
-
-                                else ->
-                                    MaterialTheme.colorScheme.errorContainer
-                            }
-                        ) {
-                            Text(
-                                text =
-                                    licenseManager.getStatusBadgeText(),
-                                modifier = Modifier.padding(
-                                    horizontal = 7.dp,
-                                    vertical = 3.dp
-                                ),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-
-                Spacer(
-                    Modifier.height(5.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            viewModel.goBack()
-                        },
-                        enabled = viewModel.canGoBack,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            "Back"
-                        )
+                    IconButton(onClick = { webView?.goBack() }, enabled = canGoBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-
-                    IconButton(
-                        onClick = {
-                            viewModel.goForward()
-                        },
-                        enabled = viewModel.canGoForward,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            "Forward"
-                        )
+                    IconButton(onClick = { webView?.goForward() }, enabled = canGoForward) {
+                        Icon(Icons.Default.ArrowForward, contentDescription = "Forward")
                     }
-
-                    IconButton(
-                        onClick = {
-                            viewModel.reload()
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            "Refresh"
-                        )
+                    IconButton(onClick = { webView?.reload() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reload")
                     }
 
                     OutlinedTextField(
-                        value = addressBarText,
-                        onValueChange = {
-                            addressBarText = it
-                        },
+                        value = urlInput,
+                        onValueChange = { urlInput = it },
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 52.dp)
-                            .focusRequester(
-                                addressFocusRequester
-                            ),
+                            .padding(horizontal = 4.dp),
                         singleLine = true,
-                        textStyle = LocalTextStyle.current.copy(
-                            fontSize = 12.sp
-                        ),
-                        placeholder = {
-                            Text(
-                                "Enter URL or search...",
-                                fontSize = 12.sp
-                            )
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Go
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onGo = {
-                                viewModel.loadUrl(addressBarText)
-                                focusManager.clearFocus()
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                        shape = RoundedCornerShape(24.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = {
+                            keyboardController?.hide()
+                            var target = urlInput.trim()
+                            if (!target.startsWith("http://") && !target.startsWith("https://")) {
+                                target = "https://$target"
                             }
-                        ),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor =
-                                MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor =
-                                MaterialTheme.colorScheme.surface
-                        )
+                            viewModel.updateUrl(target)
+                            webView?.loadUrl(target)
+                        }),
+                        trailingIcon = {
+                            if (urlInput.isNotEmpty()) {
+                                IconButton(onClick = { urlInput = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
                     )
 
-                    IconButton(
-                        onClick = {
-                            clipboardManager.setText(
-                                AnnotatedString(
-                                    viewModel.currentUrl
-                                )
-                            )
-
-                            Toast.makeText(
-                                context,
-                                "URL copied",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        modifier = Modifier.size(36.dp)
+                    BadgedBox(
+                        badge = {
+                            if (capturedMediaList.isNotEmpty()) {
+                                Badge { Text("${capturedMediaList.size}") }
+                            }
+                        }
                     ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            "Copy URL"
-                        )
+                        IconButton(onClick = { showMediaSheet = true }) {
+                            Icon(Icons.Default.Download, contentDescription = "Media Sniffer")
+                        }
                     }
                 }
-            }
-        },
-                bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = {
-                        selectedTab = 0
-                    },
-                    icon = {
-                        Icon(
-                            Icons.Default.Shield,
-                            "Shield"
-                        )
-                    },
-                    label = {
-                        Text("Shield")
-                    }
-                )
 
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        if (!licenseManager.canDownload()) {
-                            selectedTab = 2
-
-                            Toast.makeText(
-                                context,
-                                licenseManager.getRestrictionReason(),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            selectedTab = 1
-                        }
-                    },
-                    icon = {
-                        Icon(
-                            Icons.Default.Download,
-                            "Grabber"
-                        )
-                    },
-                    label = {
-                        Text("Grabber")
-                    }
-                )
-
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = {
-                        selectedTab = 2
-                    },
-                    icon = {
-                        Icon(
-                            Icons.Default.Star,
-                            "Upgrade"
-                        )
-                    },
-                    label = {
-                        Text("Upgrade")
-                    }
-                )
+                if (isLoading) {
+                    LinearProgressIndicator(
+                        progress = { progress / 100f },
+                        modifier = Modifier.fillMaxWidth().height(2.dp)
+                    )
+                }
             }
         }
-    ) { padding ->
+    ) { innerPadding ->
         Box(
             modifier = Modifier
-                .padding(padding)
                 .fillMaxSize()
+                .padding(innerPadding)
         ) {
-            when (selectedTab) {
-                0 -> ShieldWebView(
-                    viewModel = viewModel,
-                    dnsManager = dnsManager
-                )
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
 
-                1 -> MediaGrabberScreen(
-                    dnsManager = dnsManager,
-                    licenseManager = licenseManager,
-                    activeUrl = viewModel.currentUrl,
-                    capturedMedia = capturedMedia,
-                    onClearCaptured = viewModel::clearMedia,
-                    onUpgradeRequired = {
-                        selectedTab = 2
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
+                        settings.allowFileAccess = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                super.onPageStarted(view, url, favicon)
+                                isLoading = true
+                                url?.let {
+                                    urlInput = it
+                                    viewModel.updateUrl(it)
+                                }
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                isLoading = false
+                                canGoBack = view?.canGoBack() ?: false
+                                canGoForward = view?.canGoForward() ?: false
+                            }
+
+                            override fun shouldInterceptRequest(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): WebResourceResponse? {
+                                request?.url?.toString()?.let { reqUrl ->
+                                    val lowerUrl = reqUrl.lowercase()
+                                    if (lowerUrl.contains(".mp4") || lowerUrl.contains(".m3u8") ||
+                                        lowerUrl.contains(".mp3") || lowerUrl.contains(".webm")
+                                    ) {
+                                        val type = when {
+                                            lowerUrl.contains(".mp3") -> "Audio"
+                                            lowerUrl.contains(".m3u8") -> "HLS Stream"
+                                            else -> "Video"
+                                        }
+                                        viewModel.addCapturedMedia(reqUrl, type, view?.title)
+                                    }
+                                }
+                                return super.shouldInterceptRequest(view, request)
+                            }
+                        }
+
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                progress = newProgress
+                            }
+
+                            override fun onShowCustomView(view: android.view.View?, callback: CustomViewCallback?) {
+                                viewModel.showCustomView(callback)
+                            }
+
+                            override fun onHideCustomView() {
+                                viewModel.hideCustomView()
+                            }
+                        }
+
+                        loadUrl(viewModel.currentUrl)
+                        webView = this
                     }
-                )
-
-                2 -> UpgradeScreen(
-                    licenseManager = licenseManager
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnableProtectionScreen(
-    onEnable: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor =
-                    MaterialTheme.colorScheme.surface
+                },
+                update = {
+                    webView = it
+                }
             )
-        ) {
-            Column(
-                modifier = Modifier.padding(32.dp),
-                horizontalAlignment =
-                    Alignment.CenterHorizontally,
-                verticalArrangement =
-                    Arrangement.spacedBy(16.dp)
-            ) {
-                Icon(
-                    Icons.Default.Security,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
 
-                Text(
-                    "Enable LinkShield Protection",
-                    style =
-                        MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text(
-                    "Set LinkShield as the default browser to enable the sandbox.",
-                    style =
-                        MaterialTheme.typography.bodyMedium
-                )
-
-                Button(
-                    onClick = onEnable,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp)
+            if (showMediaSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showMediaSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
                 ) {
-                    Icon(
-                        Icons.Default.OpenInBrowser,
-                        null
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Sniffed Media Links (${capturedMediaList.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (capturedMediaList.isNotEmpty()) {
+                                TextButton(onClick = { viewModel.clearCapturedMedia() }) {
+                                    Text("Clear All")
+                                }
+                            }
+                        }
 
-                    Spacer(
-                        Modifier.width(8.dp)
-                    )
+                        if (capturedMediaList.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No media links intercepted yet.")
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.heightIn(max = 400.dp)
+                            ) {
+                                items(capturedMediaList) { item ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.title,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = item.url,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                SuggestionChip(
+                                                    onClick = {},
+                                                    label = { Text(item.type, fontSize = 10.sp) }
+                                                )
+                                            }
 
-                    Text(
-                        "Enable Protection",
-                        fontWeight = FontWeight.Bold
-                    )
+                                            IconButton(onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                val clip = ClipData.newPlainText("Media Link", item.url)
+                                                clipboard.setPrimaryClip(clip)
+                                                Toast.makeText(context, "Link copied!", Toast.LENGTH_SHORT).show()
+                                            }) {
+                                                Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy Link")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
-
-@Composable
-fun ShieldWebView(
-    viewModel: UnblockShieldViewModel,
-    dnsManager: DnsManager
-) {
-    val context = LocalContext.current
-
-    val webView = remember {
-        viewModel.getOrCreateWebView(
-            context,
-            0,
-            dnsManager
-        )
-    }
-
-    AndroidView(
-        factory = {
-            webView
-        },
-        update = { view ->
-            view.layoutParams =
-                view.layoutParams.apply {
-                    width =
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-
-                    height =
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
-}
-private fun openDefaultBrowserSettings(
-    context: Context
-) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val roleManager =
-            context.getSystemService(
-                RoleManager::class.java
-            )
-
-        if (
-            roleManager?.isRoleAvailable(
-                RoleManager.ROLE_BROWSER
-            ) == true
-        ) {
-            context.startActivity(
-                roleManager.createRequestRoleIntent(
-                    RoleManager.ROLE_BROWSER
-                )
-            )
-
-            return
-        }
-    }
-
-    context.startActivity(
-        Intent(
-            Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
-        )
-    )
-}
-        
