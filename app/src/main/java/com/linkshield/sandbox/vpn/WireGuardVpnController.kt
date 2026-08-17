@@ -1,9 +1,7 @@
 package com.linkshield.sandbox.vpn
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.net.VpnService
+import com.wireguard.android.backend.Backend
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
@@ -14,25 +12,20 @@ class WireGuardVpnController(
     context: Context
 ) {
 
-    companion object {
-        const val VPN_PERMISSION_REQUEST = 9102
-    }
-
-    private val appContext =
-        context.applicationContext
-
-    private val backend =
-        GoBackend(appContext)
+    private val backend: Backend =
+        GoBackend(context.applicationContext)
 
     private val tunnel =
         LinkShieldTunnel()
 
     suspend fun connect(
         configText: String
-    ): Result<Boolean> =
+    ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                require(configText.isNotBlank()) {
+                require(
+                    configText.isNotBlank()
+                ) {
                     "WireGuard configuration is empty"
                 }
 
@@ -41,58 +34,46 @@ class WireGuardVpnController(
                         configText.byteInputStream()
                     )
 
-                val state =
-                    backend.setState(
-                        tunnel,
-                        Tunnel.State.UP,
-                        config
-                    )
+                backend.setState(
+                    tunnel,
+                    Tunnel.State.UP,
+                    config
+                )
 
-                state == Tunnel.State.UP
+                check(
+                    backend.getState(tunnel) ==
+                        Tunnel.State.UP
+                ) {
+                    "WireGuard tunnel failed to start"
+                }
             }
         }
-        suspend fun disconnect(): Result<Boolean> =
+        suspend fun disconnect(): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val state =
-                    backend.setState(
-                        tunnel,
-                        Tunnel.State.DOWN,
-                        null
-                    )
+                backend.setState(
+                    tunnel,
+                    Tunnel.State.DOWN,
+                    null
+                )
 
-                state == Tunnel.State.DOWN
+                check(
+                    backend.getState(tunnel) ==
+                        Tunnel.State.DOWN
+                ) {
+                    "WireGuard tunnel failed to stop"
+                }
             }
         }
 
     fun isConnected(): Boolean {
         return runCatching {
-            backend.getState(
-                tunnel
-            ) == Tunnel.State.UP
+            backend.getState(tunnel) ==
+                Tunnel.State.UP
         }.getOrDefault(false)
     }
 
-    fun prepareVpn(
-        activity: Activity
-    ): Boolean {
-
-        val intent =
-            VpnService.prepare(activity)
-
-        if (intent != null) {
-            activity.startActivityForResult(
-                intent,
-                VPN_PERMISSION_REQUEST
-            )
-
-            return false
-        }
-
-        return true
-    }
-
-    fun getBackendVersion(): String {
+    fun version(): String {
         return runCatching {
             backend.getVersion()
         }.getOrDefault("unknown")
@@ -107,7 +88,7 @@ class WireGuardVpnController(
         override fun onStateChange(
             newState: Tunnel.State
         ) {
-            // WireGuard backend owns tunnel state.
+            // WireGuard backend reports the state.
         }
     }
 }
