@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
@@ -21,7 +22,6 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -34,7 +34,6 @@
                 <data android:scheme="http" />
                 <data android:scheme="https" />
             </intent-filter>
-
         </activity>
 
         <activity
@@ -50,20 +49,7 @@
                 <data android:scheme="http" />
                 <data android:scheme="https" />
             </intent-filter>
-
         </activity>
-
-        <service
-            android:name=".vpn.SecureVpnService"
-            android:permission="android.permission.BIND_VPN_SERVICE"
-            android:exported="false">
-
-            <intent-filter>
-                <action android:name="android.net.VpnService" />
-            </intent-filter>
-
-        </service>
-
-    </application>
+        </application>
 
 </manifest>
