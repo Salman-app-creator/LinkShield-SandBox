@@ -27,12 +27,28 @@ class WireGuardPermissionManager(
 
         return false
     }
-
     fun handleResult(
         requestCode: Int,
         resultCode: Int
     ): Boolean {
-        return requestCode == REQUEST_CODE &&
-            resultCode == Activity.RESULT_OK
+
+        if (requestCode != REQUEST_CODE) {
+            return false
+        }
+
+        return resultCode == Activity.RESULT_OK
+    }
+
+    fun isPrepared(): Boolean {
+        return runCatching {
+            GoBackend.VpnService
+                .prepare(activity) == null
+        }.getOrDefault(false)
+    }
+    fun getPermissionIntent(): Intent? {
+        return runCatching {
+            GoBackend.VpnService
+                .prepare(activity)
+        }.getOrNull()
     }
 }
