@@ -15,54 +15,72 @@ fun SandboxWebViewHolder(
     modifier: Modifier = Modifier,
     onUrlChanged: (String) -> Unit
 ) {
-    // LocalContext.current is a composable value, so it must be
-    // obtained outside remember{}.
-    val context = LocalContext.current
+    val context =
+        LocalContext.current
 
-    val webView = remember(context) {
-        WebView(context).apply {
-            layoutParams =
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
+    val webView =
+        remember(context) {
 
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
+            WebView(context).apply {
 
-            webViewClient = createSandboxWebViewClient(
-                onStarted = onUrlChanged,
-                onFinished = { url, _, _, _ ->
-                    onUrlChanged(url)
+                layoutParams =
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+
+                settings.javaScriptEnabled =
+                    true
+
+                settings.domStorageEnabled =
+                    true
+
+                settings.mediaPlaybackRequiresUserGesture =
+                    false
+
+                webViewClient =
+                    createSandboxWebViewClient(
+                        onPageChanged = { url ->
+                            onUrlChanged(url)
+                        }
+                    )
+
+                if (
+                    initialUrl.isNotBlank()
+                ) {
+                    loadUrl(initialUrl)
                 }
-            )
-
-            if (initialUrl.isNotBlank()) {
-                loadUrl(initialUrl)
             }
         }
-    }
 
     AndroidView(
         modifier = modifier,
+
         factory = {
             webView
         },
+
         update = { view ->
+
             if (
                 initialUrl.isNotBlank() &&
                 view.url.isNullOrBlank()
             ) {
-                view.loadUrl(initialUrl)
+                view.loadUrl(
+                    initialUrl
+                )
             }
         }
     )
-
     DisposableEffect(Unit) {
+
         onDispose {
-            // Do not destroy the WebView here.
-            // Browser session owns its lifetime.
+
+            // Browser session owns
+            // the WebView lifetime.
+            //
+            // Do not destroy the WebView
+            // when Compose recomposes.
         }
     }
 }
