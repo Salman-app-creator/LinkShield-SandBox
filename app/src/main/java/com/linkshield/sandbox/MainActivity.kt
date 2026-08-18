@@ -1,5 +1,3 @@
-// ========================= PART 1 =========================
-
 package com.linkshield.sandbox
 
 import android.os.Bundle
@@ -8,9 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -20,11 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -62,14 +55,30 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppContent() {
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context =
+        androidx.compose.ui.platform.LocalContext.current
 
     val disclaimerManager = remember(context) {
         DisclaimerManager(context)
     }
 
+    /*
+     * Startup flow:
+     *
+     * 1. Disclaimer not accepted
+     *       -> DISCLAIMER
+     *
+     * 2. Disclaimer accepted but LinkShield
+     *    is not default browser
+     *       -> ENABLE_SHIELD
+     *
+     * 3. Both conditions satisfied
+     *       -> MAIN
+     */
     val initialScreen = remember(context) {
+
         when {
+
             !disclaimerManager.hasAccepted() ->
                 AppStartScreen.DISCLAIMER
 
@@ -85,49 +94,14 @@ fun MainAppContent() {
         mutableStateOf(initialScreen)
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     /*
-     * Android settings se wapas aane ke baad browser role
-     * dobara check karna zaroori hai.
+     * Android settings se wapas aane ke baad
+     * default-browser status check hota rahe.
      *
-     * Is se Enable Shield screen automatically Main Screen
-     * par move ho jayegi jab LinkShield default browser set
-     * ho chuka ho.
-     */
-    androidx.compose.runtime.DisposableEffect(
-        lifecycleOwner,
-        currentScreen
-    ) {
-
-        val observer = LifecycleEventObserver { _, event ->
-
-            if (
-                event == Lifecycle.Event.ON_RESUME &&
-                currentScreen == AppStartScreen.ENABLE_SHIELD
-            ) {
-
-                if (checkIsDefaultBrowser(context)) {
-                    currentScreen = AppStartScreen.MAIN
-                }
-            }
-        }
-
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-
-    /*
-     * Enable Shield screen ko current Android role status
-     * ke saath synchronized rakhne ke liye lightweight polling.
-     *
-     * Agar user settings se wapas aaye ya default browser
-     * kisi aur tareeqe se set ho jaye to screen automatically
-     * change ho jayegi.
+     * LocalLifecycleOwner ki zarurat nahi hai.
+     * Isse lifecycle-compose dependency/import ka
+     * compile issue bhi eliminate ho jata hai.
      */
     LaunchedEffect(currentScreen) {
 
@@ -137,11 +111,15 @@ fun MainAppContent() {
 
                 if (checkIsDefaultBrowser(context)) {
 
-                    currentScreen = AppStartScreen.MAIN
+                    disclaimerManager.markBrowserSet()
+
+                    currentScreen =
+                        AppStartScreen.MAIN
+
                     break
                 }
 
-                delay(1000)
+                delay(750)
             }
         }
     }
@@ -159,14 +137,17 @@ fun MainAppContent() {
                 AppStartScreen.DISCLAIMER -> {
 
                     DisclaimerScreen(
+
                         onAccept = {
 
+                            /*
+                             * Acceptance permanently save hoti hai.
+                             */
                             disclaimerManager.accept()
 
                             /*
-                             * Disclaimer accept hone ke baad
-                             * hamesha Enable Shield screen show
-                             * karni hai.
+                             * Disclaimer ke baad direct
+                             * Enable Shield screen.
                              */
                             currentScreen =
                                 AppStartScreen.ENABLE_SHIELD
@@ -181,13 +162,14 @@ fun MainAppContent() {
 
                         onBrowserSet = {
 
-                            /*
-                             * Existing onboarding screen already
-                             * browser status verify karti hai.
-                             */
-                            if (checkIsDefaultBrowser(context)) {
+                            if (
+                                checkIsDefaultBrowser(
+                                    context
+                                )
+                            ) {
 
-                                disclaimerManager.markBrowserSet()
+                                disclaimerManager
+                                    .markBrowserSet()
 
                                 currentScreen =
                                     AppStartScreen.MAIN
@@ -196,11 +178,9 @@ fun MainAppContent() {
 
                         onRequestBrowserRole = {
 
-                            /*
-                             * Existing helper Android RoleManager /
-                             * default-app settings open karta hai.
-                             */
-                            openDefaultBrowserSettings(context)
+                            openDefaultBrowserSettings(
+                                context
+                            )
                         }
                     )
                 }
@@ -212,35 +192,42 @@ fun MainAppContent() {
                         UnblockShieldViewModel = viewModel()
 
                     /*
-                     * Main screen ko outer Column mein rakha gaya hai
-                     * taa ke top aur bottom borders/dividers clearly
-                     * visible rahen.
+                     * Main UI full screen mein rahega.
+                     *
+                     * Top aur bottom borders ko overlay kiya
+                     * gaya hai, isliye Modifier.weight() ki
+                     * zarurat nahi.
                      */
-                    Column(
+                    Box(
                         modifier = Modifier.fillMaxSize()
                     ) {
 
-                        HorizontalDivider(
-                            color =
-                                MaterialTheme.colorScheme.outline
-                                    .copy(alpha = 0.35f)
+                        UnblockShieldScreen(
+                            viewModel = unblockViewModel
                         )
 
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxSize()
-                        ) {
-
-                            UnblockShieldScreen(
-                                viewModel = unblockViewModel
-                            )
-                        }
-
+                        /*
+                         * TOP BORDER
+                         */
                         HorizontalDivider(
-                            color =
-                                MaterialTheme.colorScheme.outline
-                                    .copy(alpha = 0.35f)
+                            modifier = Modifier
+                                .align(Alignment.TopCenter),
+                            color = MaterialTheme
+                                .colorScheme
+                                .outline
+                                .copy(alpha = 0.35f)
+                        )
+
+                        /*
+                         * BOTTOM BORDER
+                         */
+                        HorizontalDivider(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter),
+                            color = MaterialTheme
+                                .colorScheme
+                                .outline
+                                .copy(alpha = 0.35f)
                         )
                     }
                 }
@@ -248,58 +235,88 @@ fun MainAppContent() {
         }
     }
 }
-
-
-// ========================= PART 2 =========================
-
-
 /*
- * IMPORTANT:
+ * MainActivity.kt
  *
- * Yeh file existing onboarding implementation ko replace nahi
- * karti. DisclaimerScreen aur EnableShieldScreen already
- * OnboardingScreens.kt mein defined hain.
+ * Startup navigation:
  *
- * MainActivity sirf un dono ke beech correct navigation/state
- * control karti hai.
+ * Fresh installation:
  *
- * Flow:
- *
- * Fresh install:
- *
- *     Disclaimer
- *         ↓
+ *     DISCLAIMER
+ *          ↓
  *     Accept & Continue
- *         ↓
- *     Enable Shield
- *         ↓
+ *          ↓
+ *     ENABLE_SHIELD
+ *          ↓
  *     Android Default Browser Settings
- *         ↓
+ *          ↓
  *     LinkShield selected
- *         ↓
- *     Main Screen
+ *          ↓
+ *     MAIN
  *
  *
- * Already accepted + browser not enabled:
+ * Returning user:
  *
- *     Enable Shield
- *         ↓
- *     Main Screen
+ *     Disclaimer accepted
+ *          ↓
+ *     Browser enabled?
+ *       ↙       ↘
+ *     YES        NO
+ *      ↓          ↓
+ *     MAIN    ENABLE_SHIELD
  *
  *
- * Already accepted + browser already enabled:
+ * Important:
  *
- *     Main Screen
+ * - DisclaimerManager handles the saved acceptance state.
+ * - checkIsDefaultBrowser() handles browser-role detection.
+ * - EnableShieldScreen remains responsible for its own UI.
+ * - UnblockShieldScreen remains responsible for the main UI.
+ * - This file only controls startup navigation.
  *
  *
- * Iska matlab agar app ko close/open kiya jaye to disclaimer
- * dobara nahi aayega, kyun ke DisclaimerManager acceptance
- * SharedPreferences mein save karta hai.
+ * UI border fix:
  *
- * Main screen par UnblockShieldScreen ka existing UI intact
- * rahega. Sirf uske outer edge par top aur bottom divider
- * restore kiye gaye hain.
+ * The previous implementation used:
+ *
+ *     Column
+ *       ├── HorizontalDivider
+ *       ├── Box(weight = 1f)
+ *       ├── HorizontalDivider
+ *
+ * The direct `weight` import caused:
+ *
+ *     Cannot access 'weight':
+ *     it is internal in
+ *     androidx.compose.foundation.layout
+ *
+ * Therefore the main screen now uses:
+ *
+ *     Box(fillMaxSize())
+ *
+ * with top/bottom HorizontalDivider overlays.
+ *
+ * This preserves the visual borders without depending
+ * on the problematic weight import.
+ *
+ *
+ * Lifecycle fix:
+ *
+ * LocalLifecycleOwner was removed because the build reported:
+ *
+ *     Unresolved reference: LocalLifecycleOwner
+ *
+ * The default-browser state is instead checked by a
+ * lightweight coroutine while ENABLE_SHIELD is visible.
+ *
+ *
+ * Do not add:
+ *
+ *     import androidx.compose.foundation.layout.weight
+ *
+ * or:
+ *
+ *     import androidx.lifecycle.compose.LocalLifecycleOwner
+ *
+ * to this file.
  */
-
-
-// END OF FILE
