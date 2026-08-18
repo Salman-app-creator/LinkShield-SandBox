@@ -1,0 +1,40 @@
+package com.linkshield.sandbox
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
+// FIX #1: Was "LinkShieldSandboxTheme" which does not exist anywhere in the project.
+// Theme.kt only defines LinkShieldTheme. Changed import + call site to match.
+import com.linkshield.sandbox.ui.theme.LinkShieldTheme
+import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
+import com.linkshield.sandbox.ui.unblock.UnblockShieldViewModel
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MainAppContent()
+        }
+    }
+}
+
+@Composable
+fun MainAppContent() {
+    // FIX #1 applied here: LinkShieldSandboxTheme → LinkShieldTheme
+    LinkShieldTheme {
+        val unblockViewModel: UnblockShieldViewModel = viewModel()
+
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            UnblockShieldScreen(viewModel = unblockViewModel)
+        }
+    }
+}
