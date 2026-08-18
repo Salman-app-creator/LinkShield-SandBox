@@ -17,7 +17,6 @@ import com.linkshield.sandbox.ui.screens.openDefaultBrowserSettings
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
-import kotlinx.coroutines.delay
 
 private enum class SetupStage {
     DISCLAIMER,
@@ -26,13 +25,16 @@ private enum class SetupStage {
 }
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MainAppContent(
-                initialUrl = intent?.dataString
-                    ?: intent?.getStringExtra("url")
-                    ?: ""
+                initialUrl =
+                    intent?.dataString
+                        ?: intent?.getStringExtra("url")
+                        ?: ""
             )
         }
     }
@@ -40,82 +42,128 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun MainAppContent(initialUrl: String) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val disclaimerManager = remember { DisclaimerManager(context) }
-    val themeManager = remember { ThemeManager(context.applicationContext) }
-    var isDarkTheme by remember { mutableStateOf(themeManager.isDarkTheme()) }
-    var adBlockReady by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        AdBlockEngine.getInstance().initialize(context.applicationContext)
-        adBlockReady = true
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val disclaimerManager =
+        remember {
+            DisclaimerManager(context.applicationContext)
+        }
+
+    val themeManager =
+        remember {
+            ThemeManager(context.applicationContext)
+        }
+
+    var isDarkTheme by remember {
+        mutableStateOf(themeManager.isDarkTheme())
     }
 
     var stage by remember {
+
         mutableStateOf(
+
             when {
-                !disclaimerManager.hasAccepted() -> SetupStage.DISCLAIMER
-                !disclaimerManager.hasBrowserSet() -> SetupStage.ENABLE_SHIELD
-                !checkIsDefaultBrowser(context) -> SetupStage.ENABLE_SHIELD
-                else -> SetupStage.MAIN
+                !disclaimerManager.hasAccepted() ->
+                    SetupStage.DISCLAIMER
+
+                !checkIsDefaultBrowser(context) ->
+                    SetupStage.ENABLE_SHIELD
+
+                else ->
+                    SetupStage.MAIN
             }
         )
     }
 
-    // Keep the mandatory default-browser requirement enforced after setup too.
-    LaunchedEffect(stage) {
-        if (stage == SetupStage.MAIN) {
-            while (true) {
-                delay(1000)
-                if (!checkIsDefaultBrowser(context)) {
-                    stage = SetupStage.ENABLE_SHIELD
-                    break
-                }
-            }
-        }
+    var adBlockReady by remember {
+        mutableStateOf(false)
     }
 
-    LinkShieldTheme(darkTheme = isDarkTheme) {
+    LaunchedEffect(Unit) {
+
+        AdBlockEngine
+            .getInstance()
+            .initialize(context.applicationContext)
+
+        adBlockReady = true
+    }
+
+    LinkShieldTheme(
+        darkTheme = isDarkTheme
+    ) {
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
+
             when (stage) {
+
                 SetupStage.DISCLAIMER -> {
+
                     DisclaimerScreen(
                         onAccept = {
+
                             disclaimerManager.accept()
-                            stage = SetupStage.ENABLE_SHIELD
+
+                            stage =
+                                if (checkIsDefaultBrowser(context)) {
+                                    SetupStage.MAIN
+                                } else {
+                                    SetupStage.ENABLE_SHIELD
+                                }
                         }
                     )
                 }
 
                 SetupStage.ENABLE_SHIELD -> {
+
                     EnableShieldScreen(
+
                         onBrowserSet = {
+
                             if (checkIsDefaultBrowser(context)) {
+
                                 disclaimerManager.markBrowserSet()
+
                                 stage = SetupStage.MAIN
                             }
                         },
+
                         onRequestBrowserRole = {
+
                             openDefaultBrowserSettings(context)
                         }
                     )
                 }
 
                 SetupStage.MAIN -> {
-                    if (!adBlockReady) {
-                        androidx.compose.material3.CircularProgressIndicator()
-                    } else {
+
+                    if (adBlockReady) {
+
                         UnblockShieldScreen(
-                        initialUrl = initialUrl,
-                        isDarkTheme = isDarkTheme,
-                        onThemeToggle = { dark ->
-                            isDarkTheme = dark
-                            themeManager.setTheme(if (dark) ThemeManager.THEME_DARK else ThemeManager.THEME_LIGHT)
-                        }
+
+                            initialUrl = initialUrl,
+
+                            isDarkTheme = isDarkTheme,
+
+                            onThemeToggle = { dark ->
+
+                                isDarkTheme = dark
+
+                                themeManager.setTheme(
+                                    if (dark)
+                                        ThemeManager.THEME_DARK
+                                    else
+                                        ThemeManager.THEME_LIGHT
+                                )
+                            }
                         )
+
+                    } else {
+
+                        androidx.compose.material3.CircularProgressIndicator()
                     }
                 }
             }
