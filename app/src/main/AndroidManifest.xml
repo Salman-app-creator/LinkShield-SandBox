@@ -9,13 +9,13 @@
         android:maxSdkVersion="28" />
 
     <application
-        android:name=".LinkShieldApp"
-        android:allowBackup="true"
-        android:icon="@drawable/ic_app_logo"
-        android:roundIcon="@drawable/ic_app_logo"
-        android:label="LinkShield Sandbox"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.LinkShieldSandbox">
+    android:name=".LinkShieldApp"
+    android:allowBackup="true"
+    android:icon="@drawable/ic_app_logo"
+    android:roundIcon="@drawable/ic_app_logo"
+    android:label="LinkShield Sandbox"
+    android:supportsRtl="true"
+    android:theme="@style/Theme.LinkShieldSandbox">
 
         <activity
             android:name=".MainActivity"
