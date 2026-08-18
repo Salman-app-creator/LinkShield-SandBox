@@ -21,17 +21,11 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Checkout current repository
-      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # --------------------------------------------------
-      # 2. Find ZIP
-      # --------------------------------------------------
       - name: Determine ZIP path
         id: zip
         shell: bash
@@ -56,9 +50,6 @@ jobs:
           echo "$ZIP"
           echo "======================================"
 
-      # --------------------------------------------------
-      # 3. Prepare temporary directories
-      # --------------------------------------------------
       - name: Prepare import directories
         shell: bash
         run: |
@@ -72,9 +63,6 @@ jobs:
           mkdir -p _replacement
           mkdir -p _protected
 
-      # --------------------------------------------------
-      # 4. Extract ZIP
-      # --------------------------------------------------
       - name: Extract ZIP
         shell: bash
         run: |
@@ -82,22 +70,14 @@ jobs:
 
           unzip -q "$ZIP" -d _zip_import
 
-          echo "======================================"
           echo "ZIP extracted successfully."
-          echo "======================================"
 
-      # --------------------------------------------------
-      # 5. Show ZIP contents
-      # --------------------------------------------------
       - name: Show ZIP contents
         shell: bash
         run: |
           echo "ZIP contents:"
           find _zip_import -maxdepth 5 -type f | head -200
 
-      # --------------------------------------------------
-      # 6. Detect Android project root
-      # --------------------------------------------------
       - name: Detect Android project root
         shell: bash
         run: |
@@ -131,9 +111,6 @@ jobs:
           echo "$PROJECT_ROOT"
           echo "======================================"
 
-      # --------------------------------------------------
-      # 7. Validate Android project
-      # --------------------------------------------------
       - name: Validate Android project
         shell: bash
         run: |
@@ -157,9 +134,6 @@ jobs:
 
           echo "Android project validation passed."
 
-      # --------------------------------------------------
-      # 8. Prepare ZIP project
-      # --------------------------------------------------
       - name: Prepare replacement
         shell: bash
         run: |
@@ -179,9 +153,6 @@ jobs:
 
           chmod +x _replacement/gradlew
 
-      # --------------------------------------------------
-      # 9. Preserve known working files
-      # --------------------------------------------------
       - name: Preserve working Media Extractor files
         shell: bash
         run: |
@@ -199,11 +170,7 @@ jobs:
               > "_protected/app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaExtractorViewModel.kt"
 
             echo "Preserved MediaExtractorViewModel.kt"
-
-          else
-            echo "WARNING: Current MediaExtractorViewModel.kt not found."
           fi
-
 
           if git ls-files --error-unmatch \
             "app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaGrabberScreen.kt" \
@@ -215,28 +182,17 @@ jobs:
               > "_protected/app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaGrabberScreen.kt"
 
             echo "Preserved MediaGrabberScreen.kt"
-
-          else
-            echo "WARNING: Current MediaGrabberScreen.kt not found."
           fi
 
-      # --------------------------------------------------
-      # 10. Put protected files into ZIP project
-      # --------------------------------------------------
       - name: Apply protected working files
         shell: bash
         run: |
           set -e
 
-          if [ -d "_protected" ]; then
-            rsync -a "_protected/" "_replacement/"
-          fi
+          rsync -a "_protected/" "_replacement/"
 
           echo "Protected working files applied."
 
-      # --------------------------------------------------
-      # 11. Build imported project
-      # --------------------------------------------------
       - name: Validate Gradle build
         working-directory: _replacement
         shell: bash
@@ -256,9 +212,36 @@ jobs:
           echo "Gradle build successful."
           echo "======================================"
 
-      # --------------------------------------------------
-      # 12. Replace repository project
-      # --------------------------------------------------
+      # APK ko yahin upload karo — cleanup/replacement se pehle
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkShield-debug-apk
+          path: |
+            _replacement/app/build/outputs/apk/debug/*.apk
+            _replacement/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+
+          APK=$(find _replacement \
+            -path '*/build/outputs/apk/debug/*.apk' \
+            -type f \
+            -print -quit)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not found after successful Gradle build."
+            exit 1
+          fi
+
+          echo "======================================"
+          echo "APK found:"
+          echo "$APK"
+          echo "======================================"
+
       - name: Replace project files
         shell: bash
         run: |
@@ -283,9 +266,6 @@ jobs:
 
           echo "Repository project replaced successfully."
 
-      # --------------------------------------------------
-      # 13. Remove temporary files
-      # --------------------------------------------------
       - name: Remove temporary directories
         shell: bash
         run: |
@@ -293,9 +273,6 @@ jobs:
           rm -rf _replacement
           rm -rf _protected
 
-      # --------------------------------------------------
-      # 14. Commit imported project
-      # --------------------------------------------------
       - name: Commit imported project
         shell: bash
         run: |
@@ -314,35 +291,3 @@ jobs:
           git commit -m "chore: import updated LinkShield project"
 
           git push origin HEAD:main
-
-      # --------------------------------------------------
-      # 15. Find APK
-      # --------------------------------------------------
-      - name: Locate APK
-        shell: bash
-        run: |
-          APK=$(find . \
-            -path '*/build/outputs/apk/debug/*.apk' \
-            -type f \
-            -print -quit)
-
-          if [ -z "$APK" ]; then
-            echo "WARNING: APK not found."
-            exit 0
-          fi
-
-          echo "======================================"
-          echo "APK found:"
-          echo "$APK"
-          echo "======================================"
-
-      # --------------------------------------------------
-      # 16. Upload APK
-      # --------------------------------------------------
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: LinkShield-debug-apk
-          path: |
-            **/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
