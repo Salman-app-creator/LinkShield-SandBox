@@ -9,13 +9,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.linkshield.sandbox.ui.theme.LinkShieldSandboxTheme
+import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 import com.linkshield.sandbox.ui.unblock.UnblockShieldViewModel
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MainAppContent()
         }
@@ -24,14 +26,18 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainAppContent() {
-    LinkShieldSandboxTheme {
-        val unblockViewModel: UnblockShieldViewModel = viewModel()
+    LinkShieldTheme {
+        val unblockViewModel: UnblockShieldViewModel =
+            viewModel()
 
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            UnblockShieldScreen(viewModel = unblockViewModel)
+            UnblockShieldScreen(
+                viewModel = unblockViewModel
+            )
         }
     }
 }
+// END OF FILE
