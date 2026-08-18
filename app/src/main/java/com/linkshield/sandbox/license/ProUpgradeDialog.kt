@@ -1,4 +1,8 @@
-package com.linkshield.sandbox.ui.license
+// FIX #15: Original package was "com.linkshield.sandbox.ui.license" but the file lives
+// at sandbox/license/ (NOT sandbox/ui/license/). The directory–package mismatch meant any
+// consumer importing the correct path "com.linkshield.sandbox.license.ProUpgradeDialog"
+// would get an unresolved-reference compile error. Aligned to the physical folder.
+package com.linkshield.sandbox.license
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -27,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.linkshield.sandbox.license.LicenseManager
 import java.net.URLEncoder
 
 private const val WHATSAPP_NUMBER = "923136176616"
@@ -123,8 +126,7 @@ fun ProUpgradeDialog(
                     Card(
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor =
-                                MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Column(
@@ -163,9 +165,8 @@ fun ProUpgradeDialog(
                     Card(
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor =
-                                MaterialTheme.colorScheme.surfaceVariant
-                                    .copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                .copy(alpha = 0.5f)
                         )
                     ) {
                         Column(
@@ -222,6 +223,7 @@ fun ProUpgradeDialog(
                             )
                         }
                     }
+
                     Spacer(Modifier.height(10.dp))
 
                     Button(
@@ -276,8 +278,7 @@ fun ProUpgradeDialog(
                         },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
-                            capitalization =
-                                KeyboardCapitalization.Characters
+                            capitalization = KeyboardCapitalization.Characters
                         ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -382,7 +383,6 @@ private fun PaymentRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
         Icon(
             Icons.Default.ContentCopy,
             "Copy $label",
@@ -398,17 +398,7 @@ private fun copyToClipboard(
     text: String
 ) {
     val manager =
-        context.getSystemService(
-            Context.CLIPBOARD_SERVICE
-        ) as ClipboardManager
-
-    manager.setPrimaryClip(
-        ClipData.newPlainText(label, text)
-    )
-
-    Toast.makeText(
-        context,
-        "$label copied!",
-        Toast.LENGTH_SHORT
-    ).show()
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    manager.setPrimaryClip(ClipData.newPlainText(label, text))
+    Toast.makeText(context, "$label copied!", Toast.LENGTH_SHORT).show()
 }
