@@ -56,7 +56,7 @@ fun MediaGrabberScreen(
     }
 
     val extractionState by
-        viewModel.state.collectAsStateCompat()
+    viewModel.state.collectAsState()
 
     fun processUrl(url: String) {
         val cleanUrl = url.trim()
@@ -279,17 +279,3 @@ fun MediaGrabberScreen(
         }
     }
 }
-
-/*
- * Small compatibility helper.
- *
- * Keeps the screen independent from lifecycle-compose APIs.
- */
-@Composable
-private fun <T> kotlinx.coroutines.flow.StateFlow<T>
-    .collectAsStateCompat():
-    androidx.compose.runtime.State<T> {
-    return androidx.compose.runtime.collectAsState(
-        this
-    )
-    }
