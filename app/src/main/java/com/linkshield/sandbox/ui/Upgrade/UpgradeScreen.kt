@@ -1,4 +1,10 @@
-package com.linkshield.sandbox.ui.Upgrade
+// FIX #14: Original package was "com.linkshield.sandbox.ui.Upgrade" (capital U).
+// JVM/Kotlin spec requires package segments to be all-lowercase.
+// Changed to "com.linkshield.sandbox.ui.upgrade".
+// ACTION REQUIRED: Rename the folder from "Upgrade/" to "upgrade/" in your source tree,
+// then delete the old "Upgrade/UpgradeScreen.kt" file. No other file imported from
+// this package so no downstream import changes are needed.
+package com.linkshield.sandbox.ui.upgrade
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -6,13 +12,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
@@ -20,7 +26,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,17 +35,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.license.LicenseManager
 import java.net.URLEncoder
+import kotlinx.coroutines.launch
 
 private const val WHATSAPP_NUMBER = "923136176616"
-
 private const val EASYPAISA_NUMBER = "03136176616"
 private const val EASYPAISA_TITLE = "Salman Latif"
-
 private const val JAZZCASH_NUMBER = "03061934345"
 private const val JAZZCASH_TITLE = "Salman Latif"
-
 private const val USDT_ADDRESS = "TQhUtaU9sg2hKfEM5FdeB3VGpzotKtwVub"
-
 private const val PRICE_PKR = "350"
 private const val PRICE_USD = "1.25"
 
@@ -50,7 +52,6 @@ fun UpgradeScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
     var keyInput by remember { mutableStateOf("") }
     var keyError by remember { mutableStateOf<String?>(null) }
     var isProUnlocked by remember { mutableStateOf(licenseManager.isProUser()) }
@@ -189,11 +190,7 @@ fun UpgradeScreen(
                         )
                         IconButton(
                             onClick = {
-                                copyToClipboard(
-                                    context,
-                                    "USDT Address",
-                                    USDT_ADDRESS
-                                )
+                                copyToClipboard(context, "USDT Address", USDT_ADDRESS)
                             }
                         ) {
                             Icon(Icons.Default.ContentCopy, "Copy USDT address")
@@ -215,11 +212,7 @@ fun UpgradeScreen(
                         Payment amount: Rs. $PRICE_PKR
                         Please verify my payment and send my Pro license key.
                     """.trimIndent()
-
-                    openWhatsApp(
-                        context = context,
-                        message = message
-                    )
+                    openWhatsApp(context = context, message = message)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -235,9 +228,7 @@ fun UpgradeScreen(
             }
 
             OutlinedButton(
-                onClick = {
-                    screenshotPicker.launch("image/*")
-                },
+                onClick = { screenshotPicker.launch("image/*") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -301,7 +292,8 @@ fun UpgradeScreen(
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
-                                        keyError = "Invalid key, GitHub validation failed, or key is already used on this device."
+                                        keyError =
+                                            "Invalid key, GitHub validation failed, or key is already used on this device."
                                     }
                                 }
                             }
@@ -332,11 +324,7 @@ private fun PaymentRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                copyToClipboard(
-                    context,
-                    label,
-                    "$accountNumber\n$accountTitle"
-                )
+                copyToClipboard(context, label, "$accountNumber\n$accountTitle")
             },
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -356,7 +344,6 @@ private fun PaymentRow(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-
         Icon(
             Icons.Default.ContentCopy,
             contentDescription = "Copy $label",
@@ -368,11 +355,8 @@ private fun PaymentRow(
 private fun openWhatsApp(context: Context, message: String) {
     val encoded = URLEncoder.encode(message, "UTF-8")
     val whatsappUri = Uri.parse("https://wa.me/$WHATSAPP_NUMBER?text=$encoded")
-
     runCatching {
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, whatsappUri)
-        )
+        context.startActivity(Intent(Intent.ACTION_VIEW, whatsappUri))
     }.onFailure {
         Toast.makeText(
             context,
@@ -382,13 +366,10 @@ private fun openWhatsApp(context: Context, message: String) {
     }
 }
 
-
-private fun sharePaymentScreenshotToWhatsApp(
-    context: Context,
-    imageUri: Uri
-) {
-    val message = "Hi, I have paid Rs. $PRICE_PKR for LinkShield Pro. Please verify the attached payment screenshot and send my Pro license key."
-
+private fun sharePaymentScreenshotToWhatsApp(context: Context, imageUri: Uri) {
+    val message =
+        "Hi, I have paid Rs. $PRICE_PKR for LinkShield Pro. " +
+            "Please verify the attached payment screenshot and send my Pro license key."
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "image/*"
         putExtra(Intent.EXTRA_STREAM, imageUri)
@@ -396,7 +377,6 @@ private fun sharePaymentScreenshotToWhatsApp(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         setPackage("com.whatsapp")
     }
-
     runCatching {
         context.startActivity(intent)
     }.onFailure {
@@ -408,11 +388,7 @@ private fun sharePaymentScreenshotToWhatsApp(
     }
 }
 
-private fun copyToClipboard(
-    context: Context,
-    label: String,
-    text: String
-) {
+private fun copyToClipboard(context: Context, label: String, text: String) {
     val clipboard =
         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
@@ -420,10 +396,7 @@ private fun copyToClipboard(
 }
 
 @Composable
-private fun ProFeatureRow(
-    title: String,
-    description: String
-) {
+private fun ProFeatureRow(title: String, description: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top
