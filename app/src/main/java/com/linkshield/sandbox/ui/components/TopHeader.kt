@@ -86,6 +86,8 @@ fun TopHeader(
     isDarkTheme:    Boolean,
     onThemeToggle:  (Boolean) -> Unit,
     onMenuClick:    () -> Unit = {},
+    onDnsProviderChange: (String) -> Unit = {},
+    onDnsDisable: () -> Unit = {},
     canGoBack:      Boolean   = false,
     canGoForward:   Boolean   = false,
     onBack:         () -> Unit = {},
@@ -218,13 +220,20 @@ fun TopHeader(
                                         if (p == selectedDns)
                                             Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
                                     },
-                                    onClick = { selectedDns = p; showDnsMenu = false }
+                                    onClick = {
+                                        selectedDns = p
+                                        showDnsMenu = false
+                                        onDnsProviderChange(p)
+                                    }
                                 )
                             }
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text    = { Text("Disable DoH", color = MaterialTheme.colorScheme.error) },
-                                onClick = { showDnsMenu = false }
+                                onClick = {
+                                    showDnsMenu = false
+                                    onDnsDisable()
+                                }
                             )
                         }
                     }

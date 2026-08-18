@@ -11,4 +11,3 @@ package com.linkshield.sandbox.ui
 // Keeping this file empty (package declaration only) resolves the conflict
 // while preserving the file so Git history and directory structure stay clean.
 // ─────────────────────────────────────────────────────────────────────────────
-

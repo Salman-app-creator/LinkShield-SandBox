@@ -20,6 +20,8 @@ class DisclaimerManager(context: Context) {
         prefs.edit().putBoolean(KEY_ACCEPTED, true).apply()
     }
 
+    fun hasBrowserSet(): Boolean = prefs.getBoolean(KEY_BROWSER_SET, false)
+
     fun markBrowserSet() {
         prefs.edit().putBoolean(KEY_BROWSER_SET, true).apply()
     }

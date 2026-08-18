@@ -37,59 +37,88 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
 
     suspend fun fetchMediaUrl(pageUrl: String): MediaResult = withContext(Dispatchers.IO) {
         try {
-            // FIXED: Cobalt API v7 correct body format
+            // Current Cobalt API schema. The older /api/json v7 endpoint is no longer
+            // a reliable public dependency, so the current root POST endpoint is used.
             val jsonBody = JSONObject().apply {
                 put("url", pageUrl)
                 put("downloadMode", "auto")
                 put("videoQuality", "720")
                 put("audioFormat", "mp3")
+                put("audioBitrate", "128")
                 put("filenameStyle", "classic")
             }
 
             val request = Request.Builder()
-                .url("$API_BASE/api/json")
+                .url(API_BASE)
                 .addHeader("Accept", "application/json")
                 .addHeader("Content-Type", "application/json")
                 .post(jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull()))
                 .build()
 
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string()
-
-            if (!response.isSuccessful || responseBody == null) {
-                return@withContext MediaResult(
-                    success = false,
-                    error = "API Error: ${response.code}"
-                )
-            }
-
-            val json = JSONObject(responseBody)
-            val status = json.optString("status")
-
-            when (status) {
-                "stream", "redirect", "tunnel" -> {
-                    val url = json.optString("url")
-                    val filename = json.optString("filename", "download")
-                    MediaResult(
-                        success = true,
-                        url = url,
-                        filename = filename,
-                        isDirectDownload = status == "tunnel"
-                    )
-                }
-                "error" -> {
-                    MediaResult(
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string()
+                if (!response.isSuccessful || responseBody.isNullOrBlank()) {
+                    return@withContext MediaResult(
                         success = false,
-                        error = json.optString("text", "Unknown error")
+                        error = "Cobalt API error: HTTP ${response.code}"
                     )
                 }
-                else -> {
-                    val url = json.optString("url")
-                    if (url.isNotEmpty()) {
-                        MediaResult(success = true, url = url, filename = "download")
-                    } else {
-                        MediaResult(success = false, error = "Unexpected response format")
+
+                val json = JSONObject(responseBody)
+                when (json.optString("status")) {
+                    "redirect", "tunnel", "stream" -> {
+                        val url = json.optString("url")
+                        if (url.isBlank()) {
+                            MediaResult(false, error = "Cobalt returned an empty media URL")
+                        } else {
+                            MediaResult(
+                                success = true,
+                                url = url,
+                                filename = json.optString("filename", "download"),
+                                isDirectDownload = json.optString("status") == "tunnel"
+                            )
+                        }
                     }
+
+                    "picker" -> {
+                        val picker = json.optJSONArray("picker")
+                        val first = picker?.optJSONObject(0)
+                        val url = first?.optString("url").orEmpty()
+                        if (url.isBlank()) {
+                            MediaResult(false, error = "Cobalt returned no selectable media")
+                        } else {
+                            MediaResult(
+                                success = true,
+                                url = url,
+                                filename = "download"
+                            )
+                        }
+                    }
+
+                    "local-processing" -> {
+                        val tunnels = json.optJSONArray("tunnel")
+                        val url = tunnels?.optString(0).orEmpty()
+                        if (url.isBlank()) {
+                            MediaResult(false, error = "Cobalt requires local media processing")
+                        } else {
+                            MediaResult(
+                                success = true,
+                                url = url,
+                                filename = json.optJSONObject("output")?.optString("filename", "download")
+                            )
+                        }
+                    }
+
+                    "error" -> {
+                        val errorObject = json.optJSONObject("error")
+                        MediaResult(
+                            success = false,
+                            error = errorObject?.optString("code")
+                                ?: json.optString("text", "Cobalt rejected the URL")
+                        )
+                    }
+
+                    else -> MediaResult(false, error = "Unexpected Cobalt response")
                 }
             }
         } catch (e: IOException) {
