@@ -18,24 +18,45 @@ class UnblockShieldViewModel : ViewModel() {
         val title: String? = null
     )
 
-    var currentUrl by mutableStateOf("https://google.com")
+    var currentUrl by mutableStateOf(
+        "https://google.com"
+    )
         private set
 
-    var isFullScreen by mutableStateOf(false)
+    var isFullScreen by mutableStateOf(
+        false
+    )
         private set
 
-    var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    var customViewCallback:
+        WebChromeClient.CustomViewCallback? =
+        null
         private set
 
-    val capturedMediaList = mutableStateListOf<MediaItem>()
+    val capturedMediaList =
+        mutableStateListOf<MediaItem>()
 
     fun updateUrl(url: String) {
         currentUrl = url
     }
 
-    fun addCapturedMedia(url: String, type: String, title: String? = null) {
-        if (capturedMediaList.none { it.url == url }) {
-            capturedMediaList.add(MediaItem(url, type, title))
+    fun addCapturedMedia(
+        url: String,
+        type: String,
+        title: String? = null
+    ) {
+        if (
+            capturedMediaList.none {
+                it.url == url
+            }
+        ) {
+            capturedMediaList.add(
+                MediaItem(
+                    url = url,
+                    type = type,
+                    title = title
+                )
+            )
         }
     }
 
@@ -43,22 +64,38 @@ class UnblockShieldViewModel : ViewModel() {
         capturedMediaList.clear()
     }
 
-    fun showCustomView(callback: WebChromeClient.CustomViewCallback?) {
+    fun showCustomView(
+        callback:
+            WebChromeClient.CustomViewCallback?
+    ) {
         customViewCallback = callback
         isFullScreen = true
     }
+        fun hideCustomView() {
+        val callback =
+            customViewCallback
 
-    fun hideCustomView() {
-        customViewCallback?.onCustomViewHidden()
         customViewCallback = null
         isFullScreen = false
+
+        callback?.onCustomViewHidden()
     }
 
-    fun openExternalBrowser(context: Context, url: String) {
+    fun openExternalBrowser(
+        context: Context,
+        url: String
+    ) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            val intent =
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse(url)
+                )
+
             context.startActivity(intent)
-        } catch (e: Exception) {
+        } catch (
+            e: Exception
+        ) {
             e.printStackTrace()
         }
     }
