@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -132,8 +131,7 @@ fun SandboxBrowserScreen(
             verticalArrangement =
                 Arrangement.spacedBy(8.dp)
         ) {
-
-            OutlinedTextField(
+                    OutlinedTextField(
                 value = state.url,
                 onValueChange =
                     viewModel::updateUrl,
@@ -154,8 +152,9 @@ fun SandboxBrowserScreen(
 
             if (state.isLoading) {
                 LinearProgressIndicator(
-                    progress =
-                        state.progress / 100f,
+                    progress = {
+                        state.progress / 100f
+                    },
                     modifier =
                         Modifier.fillMaxWidth()
                 )
@@ -174,7 +173,8 @@ fun SandboxBrowserScreen(
             )
 
             Button(
-                onClick = onOpenGrabber,
+                onClick =
+                    onOpenGrabber,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -183,7 +183,9 @@ fun SandboxBrowserScreen(
                         )
                         .height(52.dp)
             ) {
-                Text("Open Grabber")
+                Text(
+                    "Open Grabber"
+                )
             }
         }
     }
