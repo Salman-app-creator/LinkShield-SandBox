@@ -51,6 +51,10 @@ class GrabberDownloadManager(
                         "LinkShield Sandbox"
                     )
 
+                    if (option.mimeType.isNotBlank()) {
+                        setMimeType(option.mimeType)
+                    }
+
                     setNotificationVisibility(
                         DownloadManager
                             .Request

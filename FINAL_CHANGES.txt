@@ -1,0 +1,21 @@
+LinkShield Sandbox — final corrected integration pass
+
+Changed:
+- app/src/main/java/com/linkshield/sandbox/api/CobaltApiService.kt
+  - Uses Cobalt JSON API as the Grabber extraction engine.
+  - Requests multiple video quality targets (1080/720/480/360) and MP3 audio.
+  - Deduplicates returned media URLs and exposes selectable MediaQualityOption entries.
+  - Rejects empty/unsupported Cobalt responses.
+- app/src/main/java/com/linkshield/sandbox/ui/grabber/LinkShieldGrabberScreen.kt
+  - Restores the requested Grabber layout.
+  - Adds active Back button to return to the current browser page.
+  - Shows extraction results as selectable quality/format options.
+  - Downloads the selected media file rather than the original page HTML.
+  - Refuses to save raw m3u8/mpd playlists as MP4 files.
+  - Keeps Upgrade entry in the Grabber banner.
+- app/src/main/java/com/linkshield/sandbox/ui/components/TopHeader.kt
+  - Uses the actual LinkShield app logo resource.
+  - Keeps the logo circular and fits it without the old shield-icon substitute.
+  - Reduces the logo footprint so the header controls fit cleanly.
+
+The existing four bottom tabs remain Check / Browse / Grabber / Upgrade; Secure stays in the top secure menu.

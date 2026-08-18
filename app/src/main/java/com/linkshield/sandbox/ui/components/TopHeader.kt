@@ -6,18 +6,14 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,9 +71,9 @@ fun TopHeader(
     trialDaysLeft: Int,
     isDarkTheme: Boolean,
     onThemeToggle: (Boolean) -> Unit,
-    onMenuClick: () -> Unit = {},
     onDnsProviderChange: (String) -> Unit = {},
     onDnsDisable: () -> Unit = {},
+    onOpenSecure: () -> Unit = {},
     canGoBack: Boolean = false,
     canGoForward: Boolean = false,
     onBack: () -> Unit = {},
@@ -87,177 +83,102 @@ fun TopHeader(
     isLoading: Boolean = false
 ) {
     var showDnsMenu by remember { mutableStateOf(false) }
-
-    val dnsProviders = listOf(
-        "Cloudflare",
-        "WARP",
-        "Google",
-        "Quad9",
-        "AdGuard"
-    )
-
-    var selectedDns by remember {
-        mutableStateOf(dnsProviders[0])
-    }
+    val dnsProviders = listOf("Cloudflare", "WARP", "Google", "Quad9", "AdGuard")
+    var selectedDns by remember { mutableStateOf(dnsProviders.first()) }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 4.dp
+        shadowElevation = 3.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            // ACTUAL LINKSHIELD APP LOGO
-            Box(
+            Image(
+                painter = painterResource(R.drawable.ic_app_logo),
+                contentDescription = "LinkShield Sandbox",
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .wrapContentWidth()
-                    .padding(end = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(
-                        id = R.drawable.ic_app_logo
-                    ),
-                    contentDescription = "LinkShield Sandbox",
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                )
-            }
+                     .size(58.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
 
-            // RIGHT COLUMN
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Spacer(Modifier.width(6.dp))
 
-                // ROW 1
+            Column(Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 3.dp),
+                        .horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-
-                    // Shield chip
                     FilterChip(
                         selected = isShieldActive,
                         onClick = onShieldToggle,
                         label = {
                             Text(
-                                text = if (isShieldActive) {
-                                    "Shield ON"
-                                } else {
-                                    "Shield OFF"
-                                },
-                                fontSize = 10.sp,
+                                if (isShieldActive) "Shield ON" else "Shield OFF",
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         },
                         leadingIcon = {
                             Icon(
-                                imageVector = if (isShieldActive) {
-                                    Icons.Default.Security
-                                } else {
-                                    Icons.Default.ShieldMoon
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp)
+                                if (isShieldActive) Icons.Default.Security else Icons.Default.ShieldMoon,
+                                null,
+                                Modifier.size(12.dp)
                             )
                         },
-                        modifier = Modifier.height(28.dp),
+                        modifier = Modifier.height(26.dp),
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor =
-                                MaterialTheme.colorScheme.primary.copy(
-                                    alpha = 0.18f
-                                ),
-                            selectedLabelColor =
-                                MaterialTheme.colorScheme.primary,
-                            selectedLeadingIconColor =
-                                MaterialTheme.colorScheme.primary
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = .18f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.primary
                         )
                     )
 
-                    // DNS dropdown
                     Box {
                         OutlinedButton(
-                            onClick = {
-                                showDnsMenu = true
-                            },
-                            contentPadding = PaddingValues(
-                                horizontal = 6.dp,
-                                vertical = 0.dp
-                            ),
-                            modifier = Modifier.height(28.dp),
+                            onClick = { showDnsMenu = true },
+                            contentPadding = PaddingValues(horizontal = 5.dp),
+                            modifier = Modifier.height(26.dp),
                             shape = RoundedCornerShape(6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Security,
-                                contentDescription = "DNS",
-                                modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-
-                            Spacer(
-                                modifier = Modifier.width(3.dp)
-                            )
-
-                            Text(
-                                text = selectedDns,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp)
-                            )
+                            Icon(Icons.Default.Security, "Secure settings", Modifier.size(12.dp))
+                            Spacer(Modifier.width(2.dp))
+                            Text(selectedDns, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                            Icon(Icons.Default.ArrowDropDown, null, Modifier.size(13.dp))
                         }
 
                         DropdownMenu(
                             expanded = showDnsMenu,
-                            onDismissRequest = {
-                                showDnsMenu = false
-                            }
-                        ) {                            dnsProviders.forEach { provider ->
-
+                            onDismissRequest = { showDnsMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Secure Network") },
+                                leadingIcon = { Icon(Icons.Default.Security, null) },
+                                onClick = {
+                                    showDnsMenu = false
+                                    onOpenSecure()
+                                }
+                            )
+                            HorizontalDivider()
+                            dnsProviders.forEach { provider ->
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = provider,
-                                            fontWeight =
-                                                if (provider == selectedDns) {
-                                                    FontWeight.Bold
-                                                } else {
-                                                    FontWeight.Normal
-                                                },
-                                            color =
-                                                if (provider == selectedDns) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                }
+                                            provider,
+                                            fontWeight = if (provider == selectedDns) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (provider == selectedDns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     leadingIcon = {
-                                        if (provider == selectedDns) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = MaterialTheme
-                                                    .colorScheme
-                                                    .primary
-                                            )
-                                        }
+                                        if (provider == selectedDns) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
                                     },
                                     onClick = {
                                         selectedDns = provider
@@ -266,18 +187,9 @@ fun TopHeader(
                                     }
                                 )
                             }
-
                             HorizontalDivider()
-
                             DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Disable DoH",
-                                        color = MaterialTheme
-                                            .colorScheme
-                                            .error
-                                    )
-                                },
+                                text = { Text("Disable DoH", color = MaterialTheme.colorScheme.error) },
                                 onClick = {
                                     showDnsMenu = false
                                     onDnsDisable()
@@ -286,236 +198,82 @@ fun TopHeader(
                         }
                     }
 
-                    // Trial badge
-                    val badgeColor = when {
-                        trialDaysLeft > 7 ->
-                            MaterialTheme.colorScheme.secondaryContainer
-
-                        trialDaysLeft > 0 ->
-                            MaterialTheme.colorScheme.tertiaryContainer
-
-                        else ->
-                            MaterialTheme.colorScheme.errorContainer
-                    }
-
-                    val badgeTextColor = when {
-                        trialDaysLeft > 7 ->
-                            MaterialTheme.colorScheme.onSecondaryContainer
-
-                        trialDaysLeft > 0 ->
-                            MaterialTheme.colorScheme.onTertiaryContainer
-
-                        else ->
-                            MaterialTheme.colorScheme.onErrorContainer
-                    }
-
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = badgeColor
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (trialDaysLeft > 0) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer
                     ) {
                         Text(
-                            text =
-                                if (trialDaysLeft > 0) {
-                                    "Trial: ${trialDaysLeft}d Left"
-                                } else {
-                                    "Trial Expired"
-                                },
-                            fontSize = 9.sp,
+                            if (trialDaysLeft > 0) "Trial ${trialDaysLeft}d" else "Trial Expired",
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
-                            color = badgeTextColor,
-                            modifier = Modifier.padding(
-                                horizontal = 6.dp,
-                                vertical = 3.dp
-                            )
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
                         )
                     }
 
-                    // Light / Dark switch
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.scale(0.78f)
+                        modifier = Modifier.scale(0.72f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LightMode,
-                            contentDescription = "Light mode",
-                            tint =
-                                if (!isDarkTheme) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme
-                                        .onSurface
-                                        .copy(alpha = 0.35f)
-                                },
-                            modifier = Modifier.size(14.dp)
-                        )
-
+                        Icon(Icons.Default.LightMode, null, Modifier.size(13.dp))
                         Switch(
                             checked = isDarkTheme,
                             onCheckedChange = onThemeToggle,
-                            thumbContent = {
-                                Icon(
-                                    imageVector =
-                                        if (isDarkTheme) {
-                                            Icons.Default.DarkMode
-                                        } else {
-                                            Icons.Default.LightMode
-                                        },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(10.dp)
-                                )
-                            },
-                            modifier = Modifier
-                                .padding(horizontal = 2.dp)
-                                .height(22.dp)
+                            modifier = Modifier.height(22.dp)
                         )
-
-                        Icon(
-                            imageVector = Icons.Default.DarkMode,
-                            contentDescription = "Dark mode",
-                            tint =
-                                if (isDarkTheme) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme
-                                        .onSurface
-                                        .copy(alpha = 0.35f)
-                                },
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Icon(Icons.Default.DarkMode, null, Modifier.size(13.dp))
                     }
                 }
 
-                // ROW 2
+                Spacer(Modifier.height(2.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-
-                    // Back
-                    IconButton(
-                        onClick = onBack,
-                        enabled = canGoBack,
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint =
-                                if (canGoBack) {
-                                    MaterialTheme.colorScheme.onSurface
-                                } else {
-                                    MaterialTheme.colorScheme
-                                        .onSurface
-                                        .copy(alpha = 0.28f)
-                                },
-                            modifier = Modifier.size(16.dp)
-                        )
+                    IconButton(onClick = onBack, enabled = canGoBack, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.ArrowBack, "Back", Modifier.size(16.dp))
+                    }
+                    IconButton(onClick = onForward, enabled = canGoForward, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.ArrowForward, "Forward", Modifier.size(16.dp))
+                    }
+                    IconButton(onClick = onReload, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Refresh, "Reload", Modifier.size(16.dp))
                     }
 
-                    // Forward
-                    IconButton(
-                        onClick = onForward,
-                        enabled = canGoForward,
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = "Forward",
-                            tint =
-                                if (canGoForward) {
-                                    MaterialTheme.colorScheme.onSurface
-                                } else {
-                                    MaterialTheme.colorScheme
-                                        .onSurface
-                                        .copy(alpha = 0.28f)
-                                },
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Spacer(Modifier.width(2.dp))
 
-                    // Refresh
-                    IconButton(
-                        onClick = onReload,
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reload",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    Spacer(
-                        modifier = Modifier.width(3.dp)
-                    )
-
-                    // Address bar
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .height(34.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(horizontal = 8.dp),
+                            .height(32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
-                    ) {                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = "Secure",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
-                        )
-
-                        Spacer(
-                            modifier = Modifier.width(4.dp)
-                        )
-
+                    ) {
+                        Icon(Icons.Default.Security, "Secure", Modifier.size(13.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(4.dp))
                         BasicTextField(
                             value = currentUrl,
                             onValueChange = onUrlChange,
                             singleLine = true,
-                            cursorBrush = SolidColor(
-                                MaterialTheme.colorScheme.primary
-                            ),
-                            textStyle = TextStyle(
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Go
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onGo = {
-                                    onNavigate()
-                                }
-                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            textStyle = TextStyle(fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { onNavigate() }),
                             modifier = Modifier
                                 .weight(1f)
-                                .horizontalScroll(
-                                    rememberScrollState()
-                                )
+                                .horizontalScroll(rememberScrollState())
                         )
                     }
 
-                    Spacer(
-                        modifier = Modifier.width(3.dp)
-                    )
-
-                    // Go button
+                    Spacer(Modifier.width(3.dp))
                     OutlinedButton(
                         onClick = onNavigate,
-                        contentPadding = PaddingValues(
-                            horizontal = 8.dp
-                        ),
-                        modifier = Modifier.height(30.dp),
+                        contentPadding = PaddingValues(horizontal = 7.dp),
+                        modifier = Modifier.height(29.dp),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Text(
-                            text = "Go",
-                            fontSize = 11.sp
-                        )
+                        Text(if (isLoading) "…" else "Go", fontSize = 10.sp)
                     }
                 }
             }
