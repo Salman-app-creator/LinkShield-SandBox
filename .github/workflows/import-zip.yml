@@ -3,7 +3,7 @@ name: Import ZIP Project
 on:
   push:
     paths:
-      - 'incoming/*.zip'
+      - "incoming/**"
 
   workflow_dispatch:
     inputs:
@@ -15,80 +15,133 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: import-zip-main
+  cancel-in-progress: false
+
 jobs:
   import:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine ZIP path
-        id: zip
+      # --------------------------------------------------
+      # Find ZIP
+      # --------------------------------------------------
+
+      - name: Find ZIP file
         shell: bash
         run: |
+          set -e
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ZIP="${{ inputs.zip_path }}"
           else
-            ZIP=$(find incoming -maxdepth 1 -type f -name '*.zip' | head -1)
+            ZIP=$(find incoming \
+              -maxdepth 1 \
+              -type f \
+              -iname "*.zip" \
+              -print -quit || true)
           fi
 
-          if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
-            echo "ERROR: ZIP file not found."
+          if [ -z "$ZIP" ]; then
+            echo "No ZIP file found in incoming/."
+            echo "Nothing to import."
+            exit 0
+          fi
+
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: ZIP file does not exist:"
+            echo "$ZIP"
             exit 1
           fi
 
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
-          echo "Using ZIP: $ZIP"
 
-      - name: Prepare import directory
+          echo "======================================"
+          echo "ZIP selected:"
+          echo "$ZIP"
+          echo "======================================"
+
+      # --------------------------------------------------
+      # Prepare temporary directories
+      # --------------------------------------------------
+
+      - name: Prepare temporary directories
+        shell: bash
         run: |
+          set -e
+
           rm -rf _zip_import
           rm -rf _replacement
+
           mkdir -p _zip_import
           mkdir -p _replacement
 
+      # --------------------------------------------------
+      # Extract ZIP
+      # --------------------------------------------------
+
       - name: Extract ZIP
+        shell: bash
         run: |
+          set -e
+
           unzip -q "$ZIP" -d _zip_import
 
-      - name: Show ZIP contents
-        run: |
-          echo "ZIP contents:"
-          find _zip_import -maxdepth 4 -type f | head -150
+          echo "ZIP extracted successfully."
+
+      # --------------------------------------------------
+      # Detect Gradle project
+      # --------------------------------------------------
 
       - name: Detect Android project root
         shell: bash
         run: |
-          if [ -f "_zip_import/settings.gradle" ] || \
-             [ -f "_zip_import/settings.gradle.kts" ]; then
+          set -e
 
-            echo "PROJECT_ROOT=_zip_import" >> "$GITHUB_ENV"
-            exit 0
-          fi
+          echo "Searching for Gradle project..."
 
-          ROOT=$(find _zip_import \
+          ROOT_FILE=$(find _zip_import \
             -type f \
-            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            \( \
+              -name "settings.gradle" \
+              -o \
+              -name "settings.gradle.kts" \
+            \) \
             -print -quit)
 
-          if [ -z "$ROOT" ]; then
-            echo "ERROR: Could not find settings.gradle or settings.gradle.kts"
+          if [ -z "$ROOT_FILE" ]; then
+            echo "ERROR: settings.gradle or settings.gradle.kts not found."
+            echo ""
+            echo "ZIP contents:"
+            find _zip_import -maxdepth 4 -type f | head -200
             exit 1
           fi
 
-          PROJECT_ROOT=$(dirname "$ROOT")
+          PROJECT_ROOT=$(dirname "$ROOT_FILE")
 
           echo "PROJECT_ROOT=$PROJECT_ROOT" >> "$GITHUB_ENV"
 
+          echo "======================================"
           echo "Detected project root:"
           echo "$PROJECT_ROOT"
+          echo "======================================"
+
+      # --------------------------------------------------
+      # Validate Android project
+      # --------------------------------------------------
 
       - name: Validate Android project
         shell: bash
         run: |
+          set -e
+
           if [ ! -f "$PROJECT_ROOT/settings.gradle" ] && \
              [ ! -f "$PROJECT_ROOT/settings.gradle.kts" ]; then
             echo "ERROR: Gradle settings file missing."
@@ -100,92 +153,160 @@ jobs:
             exit 1
           fi
 
-          echo "Android project validation passed."
-
-      - name: Prepare clean replacement
-        run: |
-          rsync -a \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'incoming/' \
-            --exclude '_zip_import/' \
-            --exclude '_replacement/' \
-            --exclude '.gradle/' \
-            --exclude 'build/' \
-            --exclude '**/build/' \
-            "$PROJECT_ROOT/" _replacement/
-
-      - name: Validate Gradle build
-        working-directory: _replacement
-        shell: bash
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug --stacktrace
-          else
-            echo "ERROR: Gradle wrapper not found."
+          if [ ! -f "$PROJECT_ROOT/gradlew" ]; then
+            echo "ERROR: gradlew not found."
             exit 1
           fi
 
-      - name: Replace project files
+          echo "Android project validation passed."
+
+      # --------------------------------------------------
+      # Copy project to temporary build directory
+      # --------------------------------------------------
+
+      - name: Prepare project for build
         shell: bash
         run: |
-          find . -mindepth 1 -maxdepth 1 \
-            ! -name '.git' \
-            ! -name '.github' \
-            ! -name 'incoming' \
-            ! -name '_zip_import' \
-            ! -name '_replacement' \
+          set -e
+
+          rsync -a \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude "incoming/" \
+            --exclude "_zip_import/" \
+            --exclude "_replacement/" \
+            --exclude ".gradle/" \
+            --exclude "build/" \
+            --exclude "**/build/" \
+            "$PROJECT_ROOT/" \
+            _replacement/
+
+          chmod +x _replacement/gradlew
+
+      # --------------------------------------------------
+      # Build APK BEFORE replacing repository
+      # --------------------------------------------------
+
+      - name: Build Debug APK
+        working-directory: _replacement
+        shell: bash
+        run: |
+          set -e
+
+          echo "======================================"
+          echo "Starting Gradle build..."
+          echo "======================================"
+
+          ./gradlew \
+            assembleDebug \
+            --stacktrace \
+            --no-daemon
+
+          echo "======================================"
+          echo "Gradle build successful."
+          echo "======================================"
+
+      # --------------------------------------------------
+      # Verify APK
+      # --------------------------------------------------
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+
+          APK=$(find _replacement \
+            -type f \
+            -path "*/build/outputs/apk/debug/*.apk" \
+            -print -quit)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: Debug APK was not produced."
+            exit 1
+          fi
+
+          echo "APK found:"
+          echo "$APK"
+
+          echo "APK=$APK" >> "$GITHUB_ENV"
+
+      # --------------------------------------------------
+      # Upload APK artifact
+      # --------------------------------------------------
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkShield-debug-apk
+          path: |
+            _replacement/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      # --------------------------------------------------
+      # Replace repository project files
+      # --------------------------------------------------
+
+      - name: Replace repository project
+        shell: bash
+        run: |
+          set -e
+
+          echo "Replacing project files..."
+
+          find . \
+            -mindepth 1 \
+            -maxdepth 1 \
+            ! -name ".git" \
+            ! -name ".github" \
+            ! -name "incoming" \
+            ! -name "_zip_import" \
+            ! -name "_replacement" \
             -exec rm -rf {} +
 
           rsync -a \
-            --exclude '.gradle/' \
-            --exclude 'build/' \
-            --exclude '**/build/' \
+            --exclude ".gradle/" \
+            --exclude "build/" \
+            --exclude "**/build/" \
+            --exclude ".github/" \
+            --exclude "incoming/" \
             _replacement/ ./
 
-      - name: Remove temporary directories
+          echo "Repository project files replaced successfully."
+
+      # --------------------------------------------------
+      # Remove temporary directories
+      # --------------------------------------------------
+
+      - name: Cleanup
+        shell: bash
         run: |
           rm -rf _zip_import
           rm -rf _replacement
 
+      # --------------------------------------------------
+      # Commit changes
+      # --------------------------------------------------
+
       - name: Commit imported project
         shell: bash
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add -A
 
           if git diff --cached --quiet; then
-            echo "No changes detected."
+            echo "No repository changes detected."
             exit 0
           fi
 
-          git commit -m "chore: import updated LinkShield project"
+          git commit \
+            -m "chore: import updated LinkShield project"
+
           git push origin HEAD:main
 
-      - name: Locate APK
-        id: apk
-        shell: bash
-        run: |
-          APK=$(find . \
-            -path '*/build/outputs/apk/debug/*.apk' \
-            -type f \
-            -print -quit)
-
-          if [ -z "$APK" ]; then
-            echo "WARNING: APK not found."
-            exit 0
-          fi
-
-          echo "APK=$APK" >> "$GITHUB_ENV"
-          echo "Found APK: $APK"
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: LinkShield-debug-apk
-          path: |
-            **/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          echo "======================================"
+          echo "Project import completed successfully."
+          echo "======================================"
