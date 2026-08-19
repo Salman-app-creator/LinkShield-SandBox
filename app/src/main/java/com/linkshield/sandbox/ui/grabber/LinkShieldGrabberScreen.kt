@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinkShieldGrabberScreen(
     onBackToBrowser: () -> Unit,
@@ -31,8 +32,10 @@ fun LinkShieldGrabberScreen(
     val context = LocalContext.current
     var inputUrl by rememberSaveable { mutableStateOf("") }
     var audioOnly by rememberSaveable { mutableStateOf(false) }
-    var highQuality by rememberSaveable { mutableStateOf(true) }
+    var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
     var fetched by rememberSaveable { mutableStateOf(false) }
+
+    val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
 
     Column(
         Modifier
@@ -97,19 +100,37 @@ fun LinkShieldGrabberScreen(
         }
 
         Text("Options:", fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(audioOnly, { audioOnly = it })
-                Text("Audio Only", fontSize = 13.sp)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(highQuality, { highQuality = it })
-                Text("High Qual", fontSize = 13.sp)
+
+        // Audio Checkbox
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = audioOnly, onCheckedChange = { audioOnly = it })
+            Text("Audio Only (MP3)", fontSize = 13.sp)
+        }
+
+        // Resolution Chips Section (Video Selection)
+        if (!audioOnly) {
+            Text("Select Resolution:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                resolutions.forEach { res ->
+                    FilterChip(
+                        selected = (selectedResolution == res),
+                        onClick = { selectedResolution = res },
+                        label = { Text(res, fontSize = 12.sp) },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
             }
         }
 
         if (fetched) {
-            Text("Quality: ${if (highQuality) "1080p" else "720p"}${if (audioOnly) " • MP3" else " • MP4"}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Quality: ${if (audioOnly) "MP3 Audio" else "$selectedResolution • MP4"}",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(Modifier.height(4.dp))
