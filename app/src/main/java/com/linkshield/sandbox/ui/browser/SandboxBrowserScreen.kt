@@ -1,42 +1,28 @@
 package com.linkshield.sandbox.ui.browser
 
+import android.graphics.Bitmap
+import android.view.ViewGroup
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-// FIX #8: Added missing ExperimentalMaterial3Api import.
-// Without this import the @OptIn annotation below cannot resolve the class.
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.viewinterop.AndroidView
 
-// FIX #8: TopAppBar (and OutlinedTextField in older M3 builds) are annotated
-// @ExperimentalMaterial3Api. The original file had no @OptIn, causing a
-// "This declaration is experimental and its usage must be marked with…" error.
-// All other composables in this project that use TopAppBar already carry this annotation.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SandboxBrowserScreen(
@@ -44,134 +30,64 @@ fun SandboxBrowserScreen(
     onExit: () -> Unit,
     initialUrl: String = ""
 ) {
-    val context =
-        LocalContext.current
-
-    val viewModel: SandboxBrowserViewModel =
-        viewModel()
-
-    val state by
-        viewModel.uiState.collectAsState()
-
-    LaunchedEffect(Unit) {
-        viewModel.syncFromWebView()
-    }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var title by rememberSaveable { mutableStateOf("LinkShield Sandbox") }
+    var canBack by remember { mutableStateOf(false) }
+    var canForward by remember { mutableStateOf(false) }
 
     BackHandler {
-        if (!viewModel.goBack()) {
-            onExit()
-        }
+        if (canBack) webView?.goBack() else onExit()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        state.title.ifBlank {
-                            "LinkShield Sandbox"
-                        }
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (!viewModel.goBack()) {
-                                onExit()
-                            }
-                        }
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.goBack() },
-                        enabled = state.canGoBack
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            "Previous page"
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.goForward() },
-                        enabled = state.canGoForward
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            "Next page"
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.reload() }
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            "Reload"
-                        )
-                    }
+    Column(Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text(title) },
+            navigationIcon = {
+                IconButton(onClick = { if (canBack) webView?.goBack() else onExit() }) {
+                    Icon(Icons.Default.ArrowBack, "Back")
                 }
-            )
-        }
-    ) { padding ->
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-
-            OutlinedTextField(
-                value = state.url,
-                onValueChange = viewModel::updateUrl,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                singleLine = true,
-                leadingIcon = {
-                    Icon(Icons.Default.Search, null)
-                }
-            )
-
-            if (state.isLoading) {
-                // FIX #12: Material3 ≥ 1.1 changed the determinate LinearProgressIndicator
-                // parameter from "progress: Float" to "progress: () -> Float" (a lambda).
-                // The original code passed "state.progress / 100f" (a Float literal) which
-                // causes a type-mismatch compile error on the M3 version used by this project
-                // (confirmed because UnblockShieldScreen.kt in the same project already uses
-                // the correct lambda form). Wrapped in a lambda to match the API.
-                LinearProgressIndicator(
-                    progress = { state.progress / 100f },
-                    modifier = Modifier.fillMaxWidth()
-                )
+            },
+            actions = {
+                IconButton(onClick = { webView?.goBack() }, enabled = canBack) { Icon(Icons.Default.ArrowBack, "Previous") }
+                IconButton(onClick = { webView?.goForward() }, enabled = canForward) { Icon(Icons.Default.ArrowForward, "Next") }
+                IconButton(onClick = { webView?.reload() }) { Icon(Icons.Default.Refresh, "Reload") }
+                IconButton(onClick = onOpenGrabber) { Icon(Icons.Default.Download, "Grabber") }
             }
-
-            SandboxWebViewContainer(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                initialUrl = initialUrl,
-                onUrlChanged = {
-                    viewModel.updateUrl(it)
+        )
+        AndroidView(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            title = view?.title?.takeIf { it.isNotBlank() } ?: "LinkShield Sandbox"
+                        }
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            canBack = view?.canGoBack() == true
+                            canForward = view?.canGoForward() == true
+                            title = view?.title?.takeIf { it.isNotBlank() } ?: "LinkShield Sandbox"
+                        }
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val scheme = request?.url?.scheme?.lowercase()
+                            return scheme != null && scheme !in setOf("http", "https")
+                        }
+                        override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                            runCatching { view?.destroy() }
+                            webView = null
+                            return true
+                        }
+                    }
+                    webChromeClient = WebChromeClient()
+                    webView = this
+                    if (initialUrl.isNotBlank()) loadUrl(initialUrl)
                 }
-            )
-
-            Button(
-                onClick = onOpenGrabber,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .height(52.dp)
-            ) {
-                Text("Open Grabber")
-            }
-        }
+            },
+            update = { webView = it }
+        )
     }
 }

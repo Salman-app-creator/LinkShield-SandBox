@@ -1,104 +1,59 @@
 package com.linkshield.sandbox.ui.unblock
 
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.graphics.Bitmap
 import android.view.ViewGroup
-import java.io.ByteArrayInputStream
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.linkshield.sandbox.SecurityChecker
-import com.linkshield.sandbox.adblock.AdBlockEngine
-import com.linkshield.sandbox.api.SecurityApiService
-import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.dns.DohProvider
-import com.linkshield.sandbox.license.LicenseManager
+import androidx.compose.ui.unit.dp
 import com.linkshield.sandbox.ui.components.TopHeader
-import com.linkshield.sandbox.ui.grabber.CapturedMediaItem
-import com.linkshield.sandbox.ui.grabber.GrabberDownloadManager
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
-import com.linkshield.sandbox.vpn.WireGuardPermissionManager
-import com.linkshield.sandbox.vpn.WireGuardVpnManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 private enum class MainTab(val label: String) {
-    CHECK("Check"),
-    BROWSE("Browse"),
-    GRAB("Grabber"),
-    UPGRADE("Upgrade"),
-    SECURE("Secure")
+    CHECK("Check"), BROWSE("Browse"), GRAB("Grabber"), UPGRADE("Upgrade")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnblockShieldScreen(
-    viewModel: UnblockShieldViewModel = viewModel(),
     initialUrl: String = "",
     isDarkTheme: Boolean = true,
     onThemeToggle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val dnsManager = remember { DnsManager(context.applicationContext) }
-    val licenseManager = remember { LicenseManager(context.applicationContext) }
-    var selectedTab by remember { mutableStateOf(MainTab.BROWSE) }
-    var isShieldActive by remember { mutableStateOf(dnsManager.isDohEnabled()) }
-    var webView: WebView? by remember { mutableStateOf(null) }
-    var webViewGeneration by remember { mutableIntStateOf(0) }
-    val startUrl = remember(initialUrl, viewModel.currentUrl) {
-        initialUrl.trim().takeIf { it.isNotBlank() }?.let { normalizeUrl(it) } ?: viewModel.currentUrl
-    }
-    var urlInput by remember(startUrl) { mutableStateOf(startUrl) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var selectedTab by rememberSaveable { mutableStateOf(MainTab.BROWSE.name) }
+    var url by rememberSaveable { mutableStateOf(normalizeUrl(initialUrl).ifBlank { "https://www.google.com" }) }
+    var browserUrl by rememberSaveable { mutableStateOf(url) }
+    var isShieldActive by rememberSaveable { mutableStateOf(true) }
+    var trialDays by rememberSaveable { mutableIntStateOf(30) }
+    var canBack by remember { mutableStateOf(false) }
+    var canForward by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
-    var progress by remember { mutableStateOf(0) }
-    var canGoBack by remember { mutableStateOf(false) }
-    var canGoForward by remember { mutableStateOf(false) }
-    var showMediaSheet by remember { mutableStateOf(false) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var webViewGeneration by remember { mutableIntStateOf(0) }
 
-    val capturedMediaList = viewModel.capturedMediaList.map { item ->
-        CapturedMediaItem(item.url, item.title ?: "Media File", item.type)
-    }
-
-    LaunchedEffect(startUrl) {
-        if (startUrl.isNotBlank()) viewModel.updateUrl(startUrl)
-    }
+    val tab = MainTab.valueOf(selectedTab)
 
     BackHandler {
         when {
-            selectedTab == MainTab.BROWSE && canGoBack -> webView?.goBack()
-            selectedTab != MainTab.BROWSE -> selectedTab = MainTab.BROWSE
+            tab == MainTab.BROWSE && canBack -> webView?.goBack()
+            tab != MainTab.BROWSE -> selectedTab = MainTab.BROWSE.name
             else -> (context as? Activity)?.finish()
         }
     }
@@ -106,319 +61,161 @@ fun UnblockShieldScreen(
     Scaffold(
         topBar = {
             TopHeader(
-                currentUrl = urlInput,
-                onUrlChange = { urlInput = it },
+                currentUrl = url,
+                onUrlChange = { url = it },
                 isShieldActive = isShieldActive,
-                onShieldToggle = {
-                    if (dnsManager.isDohEnabled()) dnsManager.disableDoh() else dnsManager.enableDoh()
-                    isShieldActive = dnsManager.isDohEnabled()
-                },
-                trialDaysLeft = licenseManager.getTrialDaysRemaining(),
+                onShieldToggle = { isShieldActive = !isShieldActive },
+                trialDaysLeft = trialDays,
                 isDarkTheme = isDarkTheme,
                 onThemeToggle = onThemeToggle,
-                canGoBack = selectedTab == MainTab.BROWSE && canGoBack,
-                canGoForward = selectedTab == MainTab.BROWSE && canGoForward,
-                onBack = { if (selectedTab == MainTab.BROWSE) webView?.goBack() else selectedTab = MainTab.BROWSE },
+                canGoBack = tab == MainTab.BROWSE && canBack,
+                canGoForward = tab == MainTab.BROWSE && canForward,
+                onBack = { if (tab == MainTab.BROWSE) webView?.goBack() else selectedTab = MainTab.BROWSE.name },
                 onForward = { webView?.goForward() },
                 onReload = { webView?.reload() },
                 onNavigate = {
-                    keyboardController?.hide()
-                    val target = normalizeUrl(urlInput)
-                    urlInput = target
-                    viewModel.updateUrl(target)
-                    selectedTab = MainTab.BROWSE
-                    webView?.loadUrl(target)
+                    val target = normalizeUrl(url)
+                    if (target.isNotBlank()) {
+                        keyboard?.hide()
+                        url = target
+                        browserUrl = target
+                        selectedTab = MainTab.BROWSE.name
+                        webView?.loadUrl(target)
+                    }
                 },
                 isLoading = isLoading,
-                onDnsProviderChange = { providerName ->
-                    val provider = when (providerName.substringBefore(" ")) {
-                        "Cloudflare" -> if (providerName.contains("WARP")) DohProvider.CLOUDFLARE_WARP else DohProvider.CLOUDFLARE
-                        "Google" -> DohProvider.GOOGLE
-                        "Quad9" -> DohProvider.QUAD9
-                        "AdGuard" -> DohProvider.ADGUARD
-                        else -> DohProvider.CLOUDFLARE
-                    }
-                    dnsManager.enableDoh(provider)
-                    isShieldActive = true
-                },
-                onDnsDisable = {
-                    dnsManager.disableDoh()
-                    isShieldActive = false
-                },
-                onOpenSecure = { selectedTab = MainTab.SECURE }
+                onDnsProviderChange = { isShieldActive = true },
+                onDnsDisable = { isShieldActive = false },
+                onOpenSecure = { Toast.makeText(context, "Secure Network is reserved for the next engine phase.", Toast.LENGTH_SHORT).show() }
             )
         },
         bottomBar = {
-            NavigationBar(tonalElevation = 8.dp) {
-                listOf(MainTab.CHECK, MainTab.BROWSE, MainTab.GRAB, MainTab.UPGRADE).forEach { tab ->
+            NavigationBar {
+                MainTab.values().forEach { item ->
                     NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
+                        selected = tab == item,
+                        onClick = { selectedTab = item.name },
                         icon = {
                             Icon(
-                                when (tab) {
+                                when (item) {
                                     MainTab.CHECK -> Icons.Default.Security
                                     MainTab.BROWSE -> Icons.Default.Public
                                     MainTab.GRAB -> Icons.Default.Download
                                     MainTab.UPGRADE -> Icons.Default.Star
-                                    MainTab.SECURE -> Icons.Default.Security
                                 },
-                                tab.label
+                                item.label
                             )
                         },
-                        label = { Text(tab.label) }
+                        label = { Text(item.label) }
                     )
                 }
             }
         }
-    ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            when (selectedTab) {
-                MainTab.BROWSE -> {
-                    key(webViewGeneration) {
-                        BrowserPane(
-                            viewModel = viewModel,
-                            startUrl = startUrl,
-                            onUrlChanged = { url -> urlInput = url; viewModel.updateUrl(url) },
-                            onLoadingChanged = { isLoading = it },
-                            onProgressChanged = { progress = it },
-                            onNavigationChanged = { back, forward -> canGoBack = back; canGoForward = forward },
-                            onWebViewReady = { webView = it },
-                            onRendererGone = {
-                                webView = null
-                                webViewGeneration++
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    if (isLoading) {
-                        LinearProgressIndicator(
-                            progress = { progress / 100f },
-                            modifier = Modifier.fillMaxWidth().height(2.dp).align(Alignment.TopCenter)
-                        )
-                    }
-                    BadgedBox(
-                        badge = { if (capturedMediaList.isNotEmpty()) Badge { Text("${capturedMediaList.size}") } },
-                        modifier = Modifier.align(Alignment.BottomEnd)
-                    ) {
-                        FloatingActionButton(onClick = { showMediaSheet = true }, modifier = Modifier.padding(16.dp)) {
-                            Icon(Icons.Default.Download, "Detected media")
-                        }
-                    }
-                    if (showMediaSheet) {
-                        MediaLinksSheet(context, capturedMediaList, { showMediaSheet = false }) { viewModel.clearCapturedMedia() }
-                    }
-                }
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (tab) {
+                MainTab.BROWSE -> BasicSandboxBrowser(
+                    generation = webViewGeneration,
+                    startUrl = browserUrl,
+                    onReady = { webView = it },
+                    onUrlChanged = { browserUrl = it; url = it },
+                    onLoading = { isLoading = it },
+                    onNavigation = { back, forward -> canBack = back; canForward = forward },
+                    onRendererGone = { webView = null; webViewGeneration++ }
+                )
                 MainTab.CHECK -> CheckTab()
                 MainTab.GRAB -> LinkShieldGrabberScreen(
-                    onBackToBrowser = { selectedTab = MainTab.BROWSE },
-                    onUpgradeClick = { selectedTab = MainTab.UPGRADE }
+                    onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
+                    onUpgradeClick = { selectedTab = MainTab.UPGRADE.name }
                 )
-                MainTab.UPGRADE -> UpgradeScreen(licenseManager = licenseManager)
-                MainTab.SECURE -> SecureTab(dnsManager)
+                MainTab.UPGRADE -> UpgradeScreen(modifier = Modifier.fillMaxSize())
             }
         }
     }
+
 }
 
 @Composable
-private fun BrowserPane(
-    viewModel: UnblockShieldViewModel,
+private fun BasicSandboxBrowser(
+    generation: Int,
     startUrl: String,
+    onReady: (WebView) -> Unit,
     onUrlChanged: (String) -> Unit,
-    onLoadingChanged: (Boolean) -> Unit,
-    onProgressChanged: (Int) -> Unit,
-    onNavigationChanged: (Boolean, Boolean) -> Unit,
-    onWebViewReady: (WebView) -> Unit,
-    onRendererGone: () -> Unit,
-    modifier: Modifier
+    onLoading: (Boolean) -> Unit,
+    onNavigation: (Boolean, Boolean) -> Unit,
+    onRendererGone: () -> Unit
 ) {
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            WebView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.databaseEnabled = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = true
-                settings.mediaPlaybackRequiresUserGesture = false
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.setSupportMultipleWindows(false)
-                settings.javaScriptCanOpenWindowsAutomatically = false
-                settings.userAgentString = settings.userAgentString + " LinkShieldSandbox/2.1"
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-
-                webViewClient = object : WebViewClient() {
-                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                        super.onPageStarted(view, url, favicon)
-                        onLoadingChanged(true)
-                        url?.let(onUrlChanged)
-                    }
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        onLoadingChanged(false)
-                        onNavigationChanged(view?.canGoBack() == true, view?.canGoForward() == true)
-                    }
-                    override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
-                        onLoadingChanged(false)
-                        onNavigationChanged(false, false)
-                        // Do not let a Chromium renderer crash terminate the Activity.
-                        // Compose will remove this instance and create a fresh WebView.
-                        runCatching { view?.stopLoading() }
-                        runCatching { view?.webChromeClient = null }
-                        runCatching { view?.webViewClient = WebViewClient() }
-                        runCatching { view?.removeAllViews() }
-                        runCatching { view?.destroy() }
-                        onRendererGone()
-                        return true
-                    }
-                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                        val reqUrl = request?.url?.toString().orEmpty()
-                        if (reqUrl.isBlank()) return super.shouldInterceptRequest(view, request)
-                        val host = request?.url?.host?.lowercase().orEmpty()
-                        val isYouTube = host == "youtube.com" || host.endsWith(".youtube.com") || host == "googlevideo.com" || host.endsWith(".googlevideo.com")
-                        // Never ad-block YouTube/GoogleVideo resources: blocking media/telemetry at the
-                        // WebView interception layer can destabilize Chromium on some Android builds.
-                        if (!isYouTube && AdBlockEngine.getInstance().shouldBlock(reqUrl)) {
-                            return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+    androidx.compose.runtime.key(generation) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.databaseEnabled = true
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.setSupportMultipleWindows(false)
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            onLoading(true)
+                            url?.let(onUrlChanged)
                         }
-                        reqUrl.takeIf { isMediaUrl(it) }?.let {
-                            val type = when {
-                                it.contains(".mp3", true) -> "Audio"
-                                it.contains(".m3u8", true) -> "HLS Stream"
-                                else -> "Video"
-                            }
-                            viewModel.addCapturedMedia(it, type, view?.title)
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            onLoading(false)
+                            onNavigation(view?.canGoBack() == true, view?.canGoForward() == true)
                         }
-                        return super.shouldInterceptRequest(view, request)
+                        override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                            onLoading(false)
+                            runCatching { view?.destroy() }
+                            onRendererGone()
+                            return true
+                        }
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val scheme = request?.url?.scheme?.lowercase()
+                            return scheme != null && scheme !in setOf("http", "https")
+                        }
                     }
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        val scheme = request?.url?.scheme?.lowercase()
-                        return scheme != null && scheme !in setOf("http", "https")
-                    }
+                    webChromeClient = WebChromeClient()
+                    onReady(this)
+                    if (startUrl.isNotBlank()) loadUrl(startUrl)
                 }
-                webChromeClient = object : WebChromeClient() {
-                    override fun onProgressChanged(view: WebView?, newProgress: Int) { onProgressChanged(newProgress) }
-                    override fun onShowCustomView(view: android.view.View?, callback: CustomViewCallback?) { viewModel.showCustomView(callback) }
-                    override fun onHideCustomView() { viewModel.hideCustomView() }
-                }
-                onWebViewReady(this)
-                if (startUrl.isNotBlank()) loadUrl(startUrl)
-            }
-        },
-        update = { onWebViewReady(it) }
-    )
+            },
+            update = { onReady(it) }
+        )
+    }
 }
 
 @Composable
 private fun CheckTab() {
-    val scope = rememberCoroutineScope()
-    val api = remember { SecurityApiService() }
-    var input by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
-    var resultText by remember { mutableStateOf<String?>(null) }
-    var expandedUrl by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Link Security Check", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Expand shortened links and check the destination before opening it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("https://example.com/...") })
-        Button(onClick = {
-            val target = normalizeUrl(input); if (target.isBlank()) return@Button
-            loading = true; resultText = null
-            scope.launch(Dispatchers.IO) {
-                val local = SecurityChecker.analyzeUrl(target)
-                val remote = api.checkAndExpand(target)
-                expandedUrl = remote.second.expandedUrl.takeIf { remote.second.success }
-                resultText = when {
-                    remote.first.isMalicious -> "DANGEROUS: ${remote.first.message}"
-                    remote.first.isSuspicious || local.isDangerous -> "SUSPICIOUS: ${remote.first.message.ifBlank { local.warnings.joinToString() }}"
-                    else -> "No threat detected. Local score: ${local.score}/100"
-                }
-                loading = false
-            }
-        }, enabled = input.isNotBlank() && !loading, modifier = Modifier.fillMaxWidth()) {
-            if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Check Link")
-        }
-        resultText?.let {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (it.startsWith("DANGEROUS")) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant)) {
+    var input by rememberSaveable { mutableStateOf("") }
+    var checked by rememberSaveable { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("Link Security Check", style = MaterialTheme.typography.headlineSmall)
+        Text("UI-only preview. Security engines will be connected in the backend phase.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it; checked = false },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("https://example.com") }
+        )
+        Button(
+            onClick = { checked = input.isNotBlank() },
+            enabled = input.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Check Link") }
+        if (checked) {
+            Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(it, fontWeight = FontWeight.Bold)
-                    expandedUrl?.let { url -> Spacer(Modifier.height(8.dp)); Text("Expanded: $url", style = MaterialTheme.typography.bodySmall) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SecureTab(dnsManager: DnsManager) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val activity = context as? Activity
-    val vpnManager = remember { WireGuardVpnManager(context.applicationContext) }
-    var dohEnabled by remember { mutableStateOf(dnsManager.isDohEnabled()) }
-    var vpnConnected by remember { mutableStateOf(vpnManager.isConnected()) }
-    var message by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Secure Network", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("DNS-over-HTTPS", fontWeight = FontWeight.Bold)
-                Text(if (dohEnabled) "DNS requests are routed through the selected DoH resolver." else "DoH is disabled.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = { if (dohEnabled) dnsManager.disableDoh() else dnsManager.enableDoh(); dohEnabled = dnsManager.isDohEnabled() }, modifier = Modifier.fillMaxWidth()) { Text(if (dohEnabled) "Disable DNS Shield" else "Enable DNS Shield") }
-            }
-        }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("WireGuard", fontWeight = FontWeight.Bold)
-                Text(if (vpnManager.hasConfiguration()) "A valid WireGuard configuration is installed." else "No WireGuard configuration is installed; the VPN engine will not start without one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = {
-                    if (vpnConnected) {
-                        scope.launch { vpnManager.disconnect(); vpnConnected = vpnManager.isConnected() }
-                    } else if (vpnManager.hasConfiguration() && activity != null) {
-                        val permissionManager = WireGuardPermissionManager(activity)
-                        if (permissionManager.prepare()) {
-                            scope.launch { val result = vpnManager.connect(); vpnConnected = result.isSuccess && vpnManager.isConnected(); message = result.exceptionOrNull()?.message }
-                        } else message = "Approve the Android VPN permission, then tap Connect again."
-                    }
-                }, enabled = vpnConnected || vpnManager.hasConfiguration(), modifier = Modifier.fillMaxWidth()) { Text(if (vpnConnected) "Disconnect WireGuard" else "Connect WireGuard") }
-                message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MediaLinksSheet(context: Context, items: List<CapturedMediaItem>, onDismiss: () -> Unit, onClear: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Detected Media (${items.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (items.isNotEmpty()) TextButton(onClick = onClear) { Text("Clear All") }
-            }
-            if (items.isEmpty()) {
-                Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) { Text("No media links detected yet.") }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 420.dp)) {
-                    items(items) { item ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(item.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(item.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                }
-                                IconButton(onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("Media Link", item.url))
-                                    Toast.makeText(context, "Link copied!", Toast.LENGTH_SHORT).show()
-                                }) { Icon(Icons.Outlined.ContentCopy, "Copy") }
-                            }
-                        }
-                    }
+                    Text("Demo result", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("No engine executed. Backend security analysis will be plugged in later.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -428,11 +225,5 @@ private fun MediaLinksSheet(context: Context, items: List<CapturedMediaItem>, on
 private fun normalizeUrl(value: String): String {
     val trimmed = value.trim()
     if (trimmed.isBlank()) return ""
-    if (trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)) return trimmed
-    return "https://$trimmed"
-}
-
-private fun isMediaUrl(url: String): Boolean {
-    val lower = url.lowercase()
-    return lower.contains(".mp4") || lower.contains(".m3u8") || lower.contains(".mp3") || lower.contains(".webm") || lower.contains(".m4a") || lower.contains(".mpd")
+    return if (trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)) trimmed else "https://$trimmed"
 }
