@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -20,8 +21,8 @@ fun TopHeader(
     onThemeToggle: (Boolean) -> Unit,
     isProUser: Boolean,
     trialDaysRemaining: Int = 30,
-    isShieldEnabled: Boolean,
-    onShieldToggle: (Boolean) -> Unit
+    isShieldEnabled: Boolean = true,
+    onShieldToggle: (Boolean) -> Unit = {}
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
 
@@ -36,7 +37,6 @@ fun TopHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left Side: App Logo
             Image(
                 painter = painterResource(id = R.drawable.ic_app_logo),
                 contentDescription = "App Logo",
@@ -45,12 +45,10 @@ fun TopHeader(
                     .clip(CircleShape)
             )
 
-            // Right Side: Controls Row
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Dropdown Button: Shield Settings
                 Box {
                     OutlinedButton(
                         onClick = { dropdownExpanded = true },
@@ -82,7 +80,6 @@ fun TopHeader(
                     }
                 }
 
-                // Custom Sliding Toggle Switch for Light/Dark
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("☀️")
                     Switch(
@@ -93,7 +90,6 @@ fun TopHeader(
                     Text("🌙")
                 }
 
-                // Conditional Badge Indicator
                 if (isProUser) {
                     Surface(
                         color = Color(0xFFFFD700),
