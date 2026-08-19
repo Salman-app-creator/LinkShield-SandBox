@@ -2,7 +2,6 @@ package com.linkshield.sandbox.ui.unblock
 
 import android.app.Activity
 import android.webkit.WebView
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -51,7 +50,11 @@ fun UnblockShieldScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var webViewGeneration by remember { mutableIntStateOf(0) }
 
-    val tab = MainTab.valueOf(selectedTab)
+    val tab = try {
+        MainTab.valueOf(selectedTab)
+    } catch (e: Exception) {
+        MainTab.BROWSE
+    }
 
     BackHandler {
         when {
@@ -85,58 +88,85 @@ fun UnblockShieldScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             when (tab) {
-                MainTab.BROWSE -> SandboxBrowserScreen(
-                    generation = webViewGeneration,
-                    startUrl = browserUrl,
-                    currentUrl = url,
-                    onUrlChange = { url = it },
-                    isShieldProtectionEnabled = isShieldActive,
-                    onShieldProtectionToggle = { isShieldActive = !isShieldActive },
-                    isWireGuardEnabled = isWireGuardEnabled,
-                    onWireGuardToggle = { isWireGuardEnabled = !isWireGuardEnabled },
-                    trialDaysLeft = trialDays,
-                    isDarkTheme = isDarkTheme,
-                    onThemeToggle = onThemeToggle,
-                    canGoBack = canBack,
-                    canGoForward = canForward,
-                    onBack = { webView?.goBack() },
-                    onForward = { webView?.goForward() },
-                    onReload = { webView?.reload() },
-                    onNavigate = {
-                        val target = normalizeUrl(url)
-                        if (target.isNotBlank()) {
-                            url = target
-                            browserUrl = target
-                            webView?.loadUrl(target)
+                MainTab.BROWSE -> {
+                    SandboxBrowserScreen(
+                        generation = webViewGeneration,
+                        startUrl = browserUrl,
+                        currentUrl = url,
+                        onUrlChange = { url = it },
+                        isShieldProtectionEnabled = isShieldActive,
+                        onShieldProtectionToggle = { isShieldActive = !isShieldActive },
+                        isWireGuardEnabled = isWireGuardEnabled,
+                        onWireGuardToggle = { isWireGuardEnabled = !isWireGuardEnabled },
+                        trialDaysLeft = trialDays,
+                        isDarkTheme = isDarkTheme,
+                        onThemeToggle = onThemeToggle,
+                        canGoBack = canBack,
+                        canGoForward = canForward,
+                        onBack = { webView?.goBack() },
+                        onForward = { webView?.goForward() },
+                        onReload = { webView?.reload() },
+                        onNavigate = {
+                            val target = normalizeUrl(url)
+                            if (target.isNotBlank()) {
+                                url = target
+                                browserUrl = target
+                                webView?.loadUrl(target)
+                            }
+                        },
+                        isLoading = isLoading,
+                        onReady = { webView = it },
+                        onUrlChanged = {
+                            browserUrl = it
+                            url = it
+                        },
+                        onLoading = { isLoading = it },
+                        onNavigation = { back, forward ->
+                            canBack = back
+                            canForward = forward
+                        },
+                        onRendererGone = {
+                            webView = null
+                            webViewGeneration++
                         }
-                    },
-                    isLoading = isLoading,
-                    onReady = { webView = it },
-                    onUrlChanged = {
-                        browserUrl = it
-                        url = it
-                    },
-                    onLoading = { isLoading = it },
-                    onNavigation = { back, forward ->
-                        canBack = back
-                        canForward = forward
-                    },
-                    onRendererGone = {
-                        webView = null
-                        webViewGeneration++
+                    )
+                }
+
+                MainTab.CHECK -> {
+                    CheckTab()
+                }
+
+                MainTab.GRAB -> {
+                    runCatching {
+                        LinkShieldGrabberScreen(
+                            onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
+                            onUpgradeClick = { selectedTab = MainTab.UPGRADE.name }
+                        )
+                    }.getOrElse {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Grabber feature opening failed.")
+                        }
                     }
-                )
+                }
 
-                MainTab.CHECK -> CheckTab()
-
-                MainTab.GRAB -> LinkShieldGrabberScreen(
-                    onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
-                    onUpgradeClick = { selectedTab = MainTab.UPGRADE.name }
-                )
-
-                MainTab.UPGRADE -> UpgradeScreen(modifier = Modifier.fillMaxSize())
+                MainTab.UPGRADE -> {
+                    runCatching {
+                        UpgradeScreen(
+                            licenseManager = null,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }.getOrElse {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Upgrade screen loading failed.")
+                        }
+                    }
+                }
             }
         }
     }
@@ -148,17 +178,18 @@ private fun CheckTab() {
     var checked by rememberSaveable { mutableStateOf(false) }
 
     Column(
-        Modifier.fillMaxSize().padding(20.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Stylish Header with App Logo
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start,
             modifier = Modifier.padding(bottom = 4.dp)
         ) {
             Image(
-                painter = painterResource(id = R.mipmap.ic_launcher), // Aap ki app ka standard icon
+                painter = painterResource(id = R.mipmap.ic_launcher),
                 contentDescription = "App Logo",
                 modifier = Modifier.size(28.dp)
             )
@@ -176,6 +207,7 @@ private fun CheckTab() {
             "UI-only preview. Security engines will be connected in the backend phase.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
         OutlinedTextField(
             value = input,
             onValueChange = { input = it; checked = false },
@@ -183,11 +215,15 @@ private fun CheckTab() {
             singleLine = true,
             placeholder = { Text("https://example.com") }
         )
+
         Button(
             onClick = { checked = input.isNotBlank() },
             enabled = input.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Check Link") }
+        ) {
+            Text("Check Link")
+        }
+
         if (checked) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -206,5 +242,9 @@ private fun CheckTab() {
 private fun normalizeUrl(value: String): String {
     val trimmed = value.trim()
     if (trimmed.isBlank()) return ""
-    return if (trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)) trimmed else "https://$trimmed"
+    return if (trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)) {
+        trimmed
+    } else {
+        "https://$trimmed"
+    }
 }
