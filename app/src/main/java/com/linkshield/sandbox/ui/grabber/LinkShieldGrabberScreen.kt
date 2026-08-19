@@ -3,6 +3,8 @@ package com.linkshield.sandbox.ui.grabber
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -33,7 +35,10 @@ fun LinkShieldGrabberScreen(
     var fetched by rememberSaveable { mutableStateOf(false) }
 
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -107,7 +112,7 @@ fun LinkShieldGrabberScreen(
             Text("Quality: ${if (highQuality) "1080p" else "720p"}${if (audioOnly) " • MP3" else " • MP4"}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(4.dp))
 
         Button(
             onClick = {

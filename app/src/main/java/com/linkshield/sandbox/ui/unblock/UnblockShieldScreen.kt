@@ -1,27 +1,22 @@
 package com.linkshield.sandbox.ui.unblock
 
 import android.app.Activity
-import android.graphics.Bitmap
-import android.view.ViewGroup
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
-import com.linkshield.sandbox.ui.components.TopHeader
+import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
 
@@ -36,11 +31,13 @@ fun UnblockShieldScreen(
     onThemeToggle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val keyboard = LocalSoftwareKeyboardController.current
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.BROWSE.name) }
-    var url by rememberSaveable { mutableStateOf(normalizeUrl(initialUrl).ifBlank { "https://www.google.com" }) }
+    var url by rememberSaveable {
+        mutableStateOf(normalizeUrl(initialUrl).ifBlank { "https://www.google.com" })
+    }
     var browserUrl by rememberSaveable { mutableStateOf(url) }
     var isShieldActive by rememberSaveable { mutableStateOf(true) }
+    var isWireGuardEnabled by rememberSaveable { mutableStateOf(false) }
     var trialDays by rememberSaveable { mutableIntStateOf(30) }
     var canBack by remember { mutableStateOf(false) }
     var canForward by remember { mutableStateOf(false) }
@@ -59,36 +56,6 @@ fun UnblockShieldScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopHeader(
-                currentUrl = url,
-                onUrlChange = { url = it },
-                isShieldActive = isShieldActive,
-                onShieldToggle = { isShieldActive = !isShieldActive },
-                trialDaysLeft = trialDays,
-                isDarkTheme = isDarkTheme,
-                onThemeToggle = onThemeToggle,
-                canGoBack = tab == MainTab.BROWSE && canBack,
-                canGoForward = tab == MainTab.BROWSE && canForward,
-                onBack = { if (tab == MainTab.BROWSE) webView?.goBack() else selectedTab = MainTab.BROWSE.name },
-                onForward = { webView?.goForward() },
-                onReload = { webView?.reload() },
-                onNavigate = {
-                    val target = normalizeUrl(url)
-                    if (target.isNotBlank()) {
-                        keyboard?.hide()
-                        url = target
-                        browserUrl = target
-                        selectedTab = MainTab.BROWSE.name
-                        webView?.loadUrl(target)
-                    }
-                },
-                isLoading = isLoading,
-                onDnsProviderChange = { isShieldActive = true },
-                onDnsDisable = { isShieldActive = false },
-                onOpenSecure = { Toast.makeText(context, "Secure Network is reserved for the next engine phase.", Toast.LENGTH_SHORT).show() }
-            )
-        },
         bottomBar = {
             NavigationBar {
                 MainTab.values().forEach { item ->
@@ -103,7 +70,7 @@ fun UnblockShieldScreen(
                                     MainTab.GRAB -> Icons.Default.Download
                                     MainTab.UPGRADE -> Icons.Default.Star
                                 },
-                                item.label
+                                contentDescription = item.label
                             )
                         },
                         label = { Text(item.label) }
@@ -114,77 +81,58 @@ fun UnblockShieldScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                MainTab.BROWSE -> BasicSandboxBrowser(
+                MainTab.BROWSE -> SandboxBrowserScreen(
                     generation = webViewGeneration,
                     startUrl = browserUrl,
+                    currentUrl = url,
+                    onUrlChange = { url = it },
+                    isShieldProtectionEnabled = isShieldActive,
+                    onShieldProtectionToggle = { isShieldActive = !isShieldActive },
+                    isWireGuardEnabled = isWireGuardEnabled,
+                    onWireGuardToggle = { isWireGuardEnabled = !isWireGuardEnabled },
+                    trialDaysLeft = trialDays,
+                    isDarkTheme = isDarkTheme,
+                    onThemeToggle = onThemeToggle,
+                    canGoBack = canBack,
+                    canGoForward = canForward,
+                    onBack = { webView?.goBack() },
+                    onForward = { webView?.goForward() },
+                    onReload = { webView?.reload() },
+                    onNavigate = {
+                        val target = normalizeUrl(url)
+                        if (target.isNotBlank()) {
+                            url = target
+                            browserUrl = target
+                            webView?.loadUrl(target)
+                        }
+                    },
+                    isLoading = isLoading,
                     onReady = { webView = it },
-                    onUrlChanged = { browserUrl = it; url = it },
+                    onUrlChanged = {
+                        browserUrl = it
+                        url = it
+                    },
                     onLoading = { isLoading = it },
-                    onNavigation = { back, forward -> canBack = back; canForward = forward },
-                    onRendererGone = { webView = null; webViewGeneration++ }
+                    onNavigation = { back, forward ->
+                        canBack = back
+                        canForward = forward
+                    },
+                    onRendererGone = {
+                        webView = null
+                        webViewGeneration++
+                    }
                 )
+
                 MainTab.CHECK -> CheckTab()
+
                 MainTab.GRAB -> LinkShieldGrabberScreen(
                     onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
                     onUpgradeClick = { selectedTab = MainTab.UPGRADE.name }
                 )
+
                 MainTab.UPGRADE -> UpgradeScreen(modifier = Modifier.fillMaxSize())
             }
         }
-    }
-
-}
-
-@Composable
-private fun BasicSandboxBrowser(
-    generation: Int,
-    startUrl: String,
-    onReady: (WebView) -> Unit,
-    onUrlChanged: (String) -> Unit,
-    onLoading: (Boolean) -> Unit,
-    onNavigation: (Boolean, Boolean) -> Unit,
-    onRendererGone: () -> Unit
-) {
-    androidx.compose.runtime.key(generation) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.databaseEnabled = true
-                    settings.mediaPlaybackRequiresUserGesture = false
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
-                    settings.setSupportMultipleWindows(false)
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            onLoading(true)
-                            url?.let(onUrlChanged)
-                        }
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            onLoading(false)
-                            onNavigation(view?.canGoBack() == true, view?.canGoForward() == true)
-                        }
-                        override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
-                            onLoading(false)
-                            runCatching { view?.destroy() }
-                            onRendererGone()
-                            return true
-                        }
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            val scheme = request?.url?.scheme?.lowercase()
-                            return scheme != null && scheme !in setOf("http", "https")
-                        }
-                    }
-                    webChromeClient = WebChromeClient()
-                    onReady(this)
-                    if (startUrl.isNotBlank()) loadUrl(startUrl)
-                }
-            },
-            update = { onReady(it) }
-        )
     }
 }
 
@@ -192,12 +140,16 @@ private fun BasicSandboxBrowser(
 private fun CheckTab() {
     var input by rememberSaveable { mutableStateOf("") }
     var checked by rememberSaveable { mutableStateOf(false) }
+
     Column(
         Modifier.fillMaxSize().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Link Security Check", style = MaterialTheme.typography.headlineSmall)
-        Text("UI-only preview. Security engines will be connected in the backend phase.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "UI-only preview. Security engines will be connected in the backend phase.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         OutlinedTextField(
             value = input,
             onValueChange = { input = it; checked = false },
@@ -215,7 +167,10 @@ private fun CheckTab() {
                 Column(Modifier.padding(16.dp)) {
                     Text("Demo result", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text("No engine executed. Backend security analysis will be plugged in later.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "No engine executed. Backend security analysis will be plugged in later.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

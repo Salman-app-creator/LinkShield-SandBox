@@ -6,88 +6,133 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import com.linkshield.sandbox.ui.components.TopHeader
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Canonical browser tab. TopHeader is intentionally owned by this screen only.
+ */
 @Composable
 fun SandboxBrowserScreen(
-    onOpenGrabber: () -> Unit,
-    onExit: () -> Unit,
-    initialUrl: String = ""
+    generation: Int,
+    startUrl: String,
+    currentUrl: String,
+    onUrlChange: (String) -> Unit,
+    isShieldProtectionEnabled: Boolean,
+    onShieldProtectionToggle: () -> Unit,
+    isWireGuardEnabled: Boolean,
+    onWireGuardToggle: () -> Unit,
+    trialDaysLeft: Int,
+    isDarkTheme: Boolean,
+    onThemeToggle: (Boolean) -> Unit,
+    canGoBack: Boolean,
+    canGoForward: Boolean,
+    onBack: () -> Unit,
+    onForward: () -> Unit,
+    onReload: () -> Unit,
+    onNavigate: () -> Unit,
+    isLoading: Boolean,
+    onReady: (WebView) -> Unit,
+    onUrlChanged: (String) -> Unit,
+    onLoading: (Boolean) -> Unit,
+    onNavigation: (Boolean, Boolean) -> Unit,
+    onRendererGone: () -> Unit
 ) {
-    var webView by remember { mutableStateOf<WebView?>(null) }
-    var title by rememberSaveable { mutableStateOf("LinkShield Sandbox") }
-    var canBack by remember { mutableStateOf(false) }
-    var canForward by remember { mutableStateOf(false) }
+    val webViewState = remember { mutableStateOf<WebView?>(null) }
 
-    BackHandler {
-        if (canBack) webView?.goBack() else onExit()
-    }
+    key(generation) {
+        Column {
+            TopHeader(
+                currentUrl = currentUrl,
+                onUrlChange = onUrlChange,
+                isShieldProtectionEnabled = isShieldProtectionEnabled,
+                onShieldProtectionToggle = onShieldProtectionToggle,
+                isWireGuardEnabled = isWireGuardEnabled,
+                onWireGuardToggle = onWireGuardToggle,
+                trialDaysLeft = trialDaysLeft,
+                isDarkTheme = isDarkTheme,
+                onThemeToggle = onThemeToggle,
+                canGoBack = canGoBack,
+                canGoForward = canGoForward,
+                onBack = onBack,
+                onForward = onForward,
+                onReload = onReload,
+                onNavigate = onNavigate,
+                isLoading = isLoading
+            )
 
-    Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(title) },
-            navigationIcon = {
-                IconButton(onClick = { if (canBack) webView?.goBack() else onExit() }) {
-                    Icon(Icons.Default.ArrowBack, "Back")
-                }
-            },
-            actions = {
-                IconButton(onClick = { webView?.goBack() }, enabled = canBack) { Icon(Icons.Default.ArrowBack, "Previous") }
-                IconButton(onClick = { webView?.goForward() }, enabled = canForward) { Icon(Icons.Default.ArrowForward, "Next") }
-                IconButton(onClick = { webView?.reload() }) { Icon(Icons.Default.Refresh, "Reload") }
-                IconButton(onClick = onOpenGrabber) { Icon(Icons.Default.Download, "Grabber") }
-            }
-        )
-        AndroidView(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            title = view?.title?.takeIf { it.isNotBlank() } ?: "LinkShield Sandbox"
+            AndroidView(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.setSupportMultipleWindows(false)
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(
+                                view: WebView?,
+                                url: String?,
+                                favicon: Bitmap?
+                            ) {
+                                onLoading(true)
+                                url?.let(onUrlChanged)
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                onLoading(false)
+                                onNavigation(
+                                    view?.canGoBack() == true,
+                                    view?.canGoForward() == true
+                                )
+                            }
+
+                            override fun onRenderProcessGone(
+                                view: WebView?,
+                                detail: android.webkit.RenderProcessGoneDetail?
+                            ): Boolean {
+                                onLoading(false)
+                                runCatching { view?.destroy() }
+                                webViewState.value = null
+                                onRendererGone()
+                                return true
+                            }
+
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): Boolean {
+                                val scheme = request?.url?.scheme?.lowercase()
+                                return scheme != null && scheme !in setOf("http", "https")
+                            }
                         }
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            canBack = view?.canGoBack() == true
-                            canForward = view?.canGoForward() == true
-                            title = view?.title?.takeIf { it.isNotBlank() } ?: "LinkShield Sandbox"
-                        }
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            val scheme = request?.url?.scheme?.lowercase()
-                            return scheme != null && scheme !in setOf("http", "https")
-                        }
-                        override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
-                            runCatching { view?.destroy() }
-                            webView = null
-                            return true
-                        }
+                        webChromeClient = WebChromeClient()
+                        webViewState.value = this
+                        onReady(this)
+                        if (startUrl.isNotBlank()) loadUrl(startUrl)
                     }
-                    webChromeClient = WebChromeClient()
-                    webView = this
-                    if (initialUrl.isNotBlank()) loadUrl(initialUrl)
+                },
+                update = {
+                    webViewState.value = it
+                    onReady(it)
                 }
-            },
-            update = { webView = it }
-        )
+            )
+        }
     }
 }
