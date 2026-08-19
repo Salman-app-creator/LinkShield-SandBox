@@ -17,12 +17,23 @@ import com.linkshield.sandbox.R
 
 @Composable
 fun TopHeader(
-    isDarkTheme: Boolean,
-    onThemeToggle: (Boolean) -> Unit,
-    isProUser: Boolean,
-    trialDaysRemaining: Int = 30,
-    isShieldEnabled: Boolean = true,
-    onShieldToggle: (Boolean) -> Unit = {}
+    currentUrl: String = "",
+    onUrlChange: (String) -> Unit = {},
+    isShieldProtectionEnabled: Boolean = true,
+    onShieldProtectionToggle: () -> Unit = {},
+    isWireGuardEnabled: Boolean = false,
+    onWireGuardToggle: () -> Unit = {},
+    trialDaysLeft: Int = 30,
+    isDarkTheme: Boolean = false,
+    onThemeToggle: (Boolean) -> Unit = {},
+    canGoBack: Boolean = false,
+    canGoForward: Boolean = false,
+    onBack: () -> Unit = {},
+    onForward: () -> Unit = {},
+    onReload: () -> Unit = {},
+    onNavigate: () -> Unit = {},
+    isLoading: Boolean = false,
+    isProUser: Boolean = false
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
 
@@ -37,6 +48,7 @@ fun TopHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // App Logo
             Image(
                 painter = painterResource(id = R.drawable.ic_app_logo),
                 contentDescription = "App Logo",
@@ -45,16 +57,18 @@ fun TopHeader(
                     .clip(CircleShape)
             )
 
+            // Right Controls
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Dropdown Button for Shield Toggle
                 Box {
                     OutlinedButton(
                         onClick = { dropdownExpanded = true },
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
-                        Text(if (isShieldEnabled) "🛡️ Shield 🔻" else "🛡️ Off 🔻")
+                        Text(if (isShieldProtectionEnabled) "🛡️ Shield 🔻" else "🛡️ Off 🔻")
                     }
 
                     DropdownMenu(
@@ -62,24 +76,25 @@ fun TopHeader(
                         onDismissRequest = { dropdownExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Enable DNS Shield") },
+                            text = { Text("Enable Protection") },
                             leadingIcon = {
                                 Checkbox(
-                                    checked = isShieldEnabled,
+                                    checked = isShieldProtectionEnabled,
                                     onCheckedChange = {
-                                        onShieldToggle(it)
+                                        onShieldProtectionToggle()
                                         dropdownExpanded = false
                                     }
                                 )
                             },
                             onClick = {
-                                onShieldToggle(!isShieldEnabled)
+                                onShieldProtectionToggle()
                                 dropdownExpanded = false
                             }
                         )
                     }
                 }
 
+                // Theme Switch
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("☀️")
                     Switch(
@@ -90,6 +105,7 @@ fun TopHeader(
                     Text("🌙")
                 }
 
+                // Trial / Pro Badge
                 if (isProUser) {
                     Surface(
                         color = Color(0xFFFFD700),
@@ -108,7 +124,7 @@ fun TopHeader(
                         shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = "⏳ Trial: ${trialDaysRemaining}d",
+                            text = "⏳ Trial: ${trialDaysLeft}d",
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
