@@ -2,9 +2,11 @@ package com.linkshield.sandbox.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -19,13 +21,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.R
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopHeader(
     currentUrl: String = "",
@@ -55,30 +58,29 @@ fun TopHeader(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // LEFT: Enlarged Logo (Spans height of Row 1 + Row 2)
+        // LEFT: Logo
         Image(
             painter = painterResource(id = R.drawable.ic_app_logo),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(64.dp)
+                .size(56.dp)
                 .clip(CircleShape)
         )
 
-        // Shifted spacing to give breathing room for the larger logo
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
 
-        // RIGHT: Stacked Row 1 and Row 2
+        // RIGHT: Controls + Address Bar
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // ROW 1: Sleek Justified Controls
+            // ROW 1: Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Dropdown Button (Shield)
+                // Shield Dropdown
                 Box {
                     OutlinedButton(
                         onClick = { dropdownExpanded = true },
@@ -132,7 +134,7 @@ fun TopHeader(
                     }
                 }
 
-                // 2. Compact Theme Switcher
+                // Theme Switcher
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -146,7 +148,7 @@ fun TopHeader(
                     Text("🌙", fontSize = 10.sp)
                 }
 
-                // 3. Pro/Trial Badge Indicator
+                // Badge Indicator
                 if (isProUser) {
                     Surface(
                         color = Color(0xFFFFD700),
@@ -175,7 +177,7 @@ fun TopHeader(
                 }
             }
 
-            // ROW 2: Balanced Navigation & Integrated Address Bar
+            // ROW 2: Nav Buttons & Custom High-Contrast Address Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -218,29 +220,55 @@ fun TopHeader(
                     )
                 }
 
-                OutlinedTextField(
-                    value = currentUrl,
-                    onValueChange = onUrlChange,
+                // Custom Compact Address Bar (Fixes Clipping & Color Blend)
+                val textColor = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                val barBgColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                val borderColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
+
+                Row(
                     modifier = Modifier
                         .weight(1f)
-                        .height(36.dp),
-                    singleLine = true,
-                    placeholder = { Text("Search or type URL", fontSize = 11.sp) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "SSL Secure",
-                            modifier = Modifier.size(14.dp),
-                            tint = Color(0xFF4CAF50)
-                        )
-                    },
-                    shape = RoundedCornerShape(18.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { onNavigate() }),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        .height(34.dp)
+                        .background(barBgColor, RoundedCornerShape(17.dp))
+                        .border(1.dp, borderColor, RoundedCornerShape(17.dp))
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "SSL Secure",
+                        modifier = Modifier.size(14.dp),
+                        tint = Color(0xFF4CAF50)
                     )
-                )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    BasicTextField(
+                        value = currentUrl,
+                        onValueChange = onUrlChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = textColor,
+                            fontSize = 12.sp
+                        ),
+                        cursorBrush = SolidColor(textColor),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { onNavigate() }),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (currentUrl.isEmpty()) {
+                                    Text(
+                                        text = "Search or type URL",
+                                        color = if (isDarkTheme) Color.Gray else Color.DarkGray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             }
         }
     }
