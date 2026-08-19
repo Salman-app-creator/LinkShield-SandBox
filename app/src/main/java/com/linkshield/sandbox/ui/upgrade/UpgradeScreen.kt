@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,7 +46,6 @@ fun UpgradeScreen(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Stylish Top Header with App Logo
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
@@ -151,7 +151,6 @@ private fun ProBenefitsCard() {
                     shape = RoundedCornerShape(12.dp),
                     color = Color.White.copy(alpha = 0.12f)
                 ) {
-                    // Star Icon Reverted Back
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = null,
@@ -183,7 +182,6 @@ private fun ProBenefitsCard() {
         }
     }
 }
-
 
 @Composable
 private fun PremiumBenefit(text: String) {
@@ -262,7 +260,6 @@ private fun PaymentInformationCard(context: Context) {
 private enum class PaymentBrand { EASYPAISA, JAZZCASH, USDT }
 
 @Composable
-@Composable
 private fun PaymentBrandIcon(brand: PaymentBrand) {
     val drawableRes = when (brand) {
         PaymentBrand.EASYPAISA -> R.drawable.ic_easypaisa
@@ -270,7 +267,6 @@ private fun PaymentBrandIcon(brand: PaymentBrand) {
         PaymentBrand.USDT -> R.drawable.ic_usdt
     }
 
-    // Uniform size with clean transparent background for transparent PNGs
     Box(
         modifier = Modifier.size(42.dp),
         contentAlignment = Alignment.Center
@@ -282,7 +278,6 @@ private fun PaymentBrandIcon(brand: PaymentBrand) {
         )
     }
 }
-
 
 @Composable
 private fun PaymentRow(
