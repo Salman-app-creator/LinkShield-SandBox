@@ -2,6 +2,7 @@ package com.linkshield.sandbox.ui.browser
 
 import android.graphics.Bitmap
 import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -85,6 +86,7 @@ fun SandboxBrowserScreen(
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
                         settings.setSupportMultipleWindows(false)
+
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(
                                 view: WebView?,
@@ -105,7 +107,7 @@ fun SandboxBrowserScreen(
 
                             override fun onRenderProcessGone(
                                 view: WebView?,
-                                detail: android.webkit.RenderProcessGoneDetail?
+                                detail: RenderProcessGoneDetail?
                             ): Boolean {
                                 onLoading(false)
                                 runCatching { view?.destroy() }
@@ -122,10 +124,14 @@ fun SandboxBrowserScreen(
                                 return scheme != null && scheme !in setOf("http", "https")
                             }
                         }
+
                         webChromeClient = WebChromeClient()
                         webViewState.value = this
                         onReady(this)
-                        if (startUrl.isNotBlank()) loadUrl(startUrl)
+
+                        if (startUrl.isNotBlank()) {
+                            loadUrl(startUrl)
+                        }
                     }
                 },
                 update = {
