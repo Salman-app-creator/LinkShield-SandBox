@@ -55,29 +55,30 @@ fun TopHeader(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // LEFT: Spanned Logo (Height spans Row 1 + Row 2)
+        // LEFT: Enlarged Logo (Spans height of Row 1 + Row 2)
         Image(
             painter = painterResource(id = R.drawable.ic_app_logo),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(52.dp)
+                .size(64.dp)
                 .clip(CircleShape)
         )
 
-        Spacer(modifier = Modifier.width(8.dp))
+        // Shifted spacing to give breathing room for the larger logo
+        Spacer(modifier = Modifier.width(12.dp))
 
         // RIGHT: Stacked Row 1 and Row 2
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // ROW 1: Sleek Controls
+            // ROW 1: Sleek Justified Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Dropdown Button
+                // 1. Dropdown Button (Shield)
                 Box {
                     OutlinedButton(
                         onClick = { dropdownExpanded = true },
@@ -174,11 +175,11 @@ fun TopHeader(
                 }
             }
 
-            // ROW 2: Minimalist Navigation & Integrated Address Bar
+            // ROW 2: Balanced Navigation & Integrated Address Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 IconButton(
                     onClick = onBack,
