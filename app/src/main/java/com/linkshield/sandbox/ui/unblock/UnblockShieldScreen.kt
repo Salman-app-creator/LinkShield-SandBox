@@ -4,6 +4,7 @@ import android.app.Activity
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
@@ -13,9 +14,14 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.R
 import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
@@ -145,7 +151,27 @@ private fun CheckTab() {
         Modifier.fillMaxSize().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Link Security Check", style = MaterialTheme.typography.headlineSmall)
+        // Stylish Header with App Logo
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start,
+            modifier = Modifier.padding(bottom = 4.dp)
+        ) {
+            Image(
+                painter = painterResource(id = R.mipmap.ic_launcher), // Aap ki app ka standard icon
+                contentDescription = "App Logo",
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Link Security Check",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+                letterSpacing = 0.3.sp
+            )
+        }
+
         Text(
             "UI-only preview. Security engines will be connected in the backend phase.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -165,7 +191,7 @@ private fun CheckTab() {
         if (checked) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Demo result", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("Demo result", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "No engine executed. Backend security analysis will be plugged in later.",
