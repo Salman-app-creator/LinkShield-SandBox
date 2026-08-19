@@ -262,28 +262,27 @@ private fun PaymentInformationCard(context: Context) {
 private enum class PaymentBrand { EASYPAISA, JAZZCASH, USDT }
 
 @Composable
+@Composable
 private fun PaymentBrandIcon(brand: PaymentBrand) {
-    // Standard Drawables for EasyPaisa, JazzCash, USDT
     val drawableRes = when (brand) {
         PaymentBrand.EASYPAISA -> R.drawable.ic_easypaisa
         PaymentBrand.JAZZCASH -> R.drawable.ic_jazzcash
         PaymentBrand.USDT -> R.drawable.ic_usdt
     }
 
-    Surface(
-        modifier = Modifier.size(width = 68.dp, height = 40.dp),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    // Uniform size with clean transparent background for transparent PNGs
+    Box(
+        modifier = Modifier.size(42.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
-            Image(
-                painter = painterResource(id = drawableRes),
-                contentDescription = brand.name,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        Image(
+            painter = painterResource(id = drawableRes),
+            contentDescription = brand.name,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
+
 
 @Composable
 private fun PaymentRow(
