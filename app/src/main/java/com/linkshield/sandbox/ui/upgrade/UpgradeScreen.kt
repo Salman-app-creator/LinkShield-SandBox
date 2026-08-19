@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,9 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.linkshield.sandbox.R
 import com.linkshield.sandbox.license.LicenseManager
 
 @Composable
@@ -43,16 +45,25 @@ fun UpgradeScreen(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // No global TopHeader and no redundant app-logo block on this screen.
+        // Stylish Top Header with App Logo
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                "LinkShield Pro",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher),
+                    contentDescription = "App Logo",
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "LinkShield Pro",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             Text(
                 "Unlimited Grabber downloads and premium access",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
             )
         }
 
@@ -140,8 +151,9 @@ private fun ProBenefitsCard() {
                     shape = RoundedCornerShape(12.dp),
                     color = Color.White.copy(alpha = 0.12f)
                 ) {
+                    // Star Icon Reverted Back
                     Icon(
-                        Icons.Default.Star,
+                        imageVector = Icons.Default.Star,
                         contentDescription = null,
                         tint = Color(0xFFFFD54F),
                         modifier = Modifier.padding(9.dp).size(20.dp)
@@ -171,6 +183,7 @@ private fun ProBenefitsCard() {
         }
     }
 }
+
 
 @Composable
 private fun PremiumBenefit(text: String) {
@@ -248,32 +261,25 @@ private fun PaymentInformationCard(context: Context) {
 
 private enum class PaymentBrand { EASYPAISA, JAZZCASH, USDT }
 
-private data class PaymentBrandStyle(
-    val label: String,
-    val background: Color,
-    val foreground: Color,
-    val textSize: androidx.compose.ui.unit.TextUnit
-)
-
 @Composable
 private fun PaymentBrandIcon(brand: PaymentBrand) {
-    val (label, bg, fg, size) = when (brand) {
-        PaymentBrand.EASYPAISA -> PaymentBrandStyle("easypaisa", Color(0xFF00A651), Color.White, 9.sp)
-        PaymentBrand.JAZZCASH -> PaymentBrandStyle("JazzCash", Color(0xFFE31837), Color.White, 9.sp)
-        PaymentBrand.USDT -> PaymentBrandStyle("₮  USDT", Color(0xFF26A17B), Color.White, 11.sp)
+    // Standard Drawables for EasyPaisa, JazzCash, USDT
+    val drawableRes = when (brand) {
+        PaymentBrand.EASYPAISA -> R.drawable.ic_easypaisa
+        PaymentBrand.JAZZCASH -> R.drawable.ic_jazzcash
+        PaymentBrand.USDT -> R.drawable.ic_usdt
     }
+
     Surface(
-        modifier = Modifier.size(width = 72.dp, height = 42.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = bg
+        modifier = Modifier.size(width = 68.dp, height = 40.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                label,
-                color = fg,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = size,
-                maxLines = 1
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(4.dp)) {
+            Image(
+                painter = painterResource(id = drawableRes),
+                contentDescription = brand.name,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
