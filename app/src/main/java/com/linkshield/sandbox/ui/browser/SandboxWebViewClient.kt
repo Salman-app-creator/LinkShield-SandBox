@@ -6,6 +6,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.linkshield.sandbox.ui.grabber.MediaSnifferState
+import java.io.ByteArrayInputStream
 import java.util.Locale
 
 class SandboxWebViewClient(
@@ -13,18 +14,27 @@ class SandboxWebViewClient(
         ((String) -> Unit)? = null
 ) : WebViewClient() {
 
+    // Common ad, tracker, and telemetry domains to block automatically
+    private val blockedDomains = setOf(
+        "doubleclick.net",
+        "googleadservices.com",
+        "googlesyndication.com",
+        "adnxs.com",
+        "moatads.com",
+        "googletagmanager.com",
+        "facebook.com/tr",
+        "analytics.google.com",
+        "hotjar.com"
+    )
+
     override fun shouldOverrideUrlLoading(
         view: WebView,
         request: WebResourceRequest
     ): Boolean {
-
-        val url =
-            request.url.toString()
-
+        val url = request.url.toString()
         if (url.isBlank()) {
             return false
         }
-
         return false
     }
 
@@ -35,7 +45,6 @@ class SandboxWebViewClient(
         if (url.isBlank()) {
             return false
         }
-
         return false
     }
 
@@ -44,12 +53,7 @@ class SandboxWebViewClient(
         url: String,
         favicon: Bitmap?
     ) {
-        super.onPageStarted(
-            view,
-            url,
-            favicon
-        )
-
+        super.onPageStarted(view, url, favicon)
         onPageChanged?.invoke(url)
     }
 
@@ -57,48 +61,63 @@ class SandboxWebViewClient(
         view: WebView,
         url: String
     ) {
-        super.onPageFinished(
-            view,
-            url
-        )
-
-        onPageChanged?.invoke(
-            view.url ?: url
-        )
+        super.onPageFinished(view, url)
+        onPageChanged?.invoke(view.url ?: url)
     }
 
     override fun shouldInterceptRequest(
         view: WebView,
         request: WebResourceRequest
     ): WebResourceResponse? {
+        val url = request.url.toString()
 
+        // 1. AdGuard Filtering: Check if request is an ad or tracker
+        if (isAdOrTracker(url)) {
+            return WebResourceResponse(
+                "text/plain",
+                "utf-8",
+                200,
+                "OK",
+                emptyMap(),
+                ByteArrayInputStream(ByteArray(0))
+            )
+        }
+
+        // 2. Media Sniffer Inspection
         inspectResource(
-            request.url.toString(),
-            request.requestHeaders[
-                "Content-Type"
-            ]
+            url,
+            request.requestHeaders["Content-Type"]
         )
 
-        return super.shouldInterceptRequest(
-            view,
-            request
-        )
+        return super.shouldInterceptRequest(view, request)
     }
 
     override fun shouldInterceptRequest(
         view: WebView,
         url: String
     ): WebResourceResponse? {
+        // 1. AdGuard Filtering: Check if request is an ad or tracker
+        if (isAdOrTracker(url)) {
+            return WebResourceResponse(
+                "text/plain",
+                "utf-8",
+                200,
+                "OK",
+                emptyMap(),
+                ByteArrayInputStream(ByteArray(0))
+            )
+        }
 
-        inspectResource(
-            url,
-            null
-        )
+        // 2. Media Sniffer Inspection
+        inspectResource(url, null)
 
-        return super.shouldInterceptRequest(
-            view,
-            url
-        )
+        return super.shouldInterceptRequest(view, url)
+    }
+
+    private fun isAdOrTracker(url: String): Boolean {
+        return blockedDomains.any { domain ->
+            url.contains(domain, ignoreCase = true)
+        }
     }
 
     private fun inspectResource(
@@ -109,36 +128,21 @@ class SandboxWebViewClient(
             return
         }
 
-        val lowerUrl =
-            url.lowercase(Locale.US)
-
-        val lowerType =
-            contentType
-                ?.lowercase(Locale.US)
-                .orEmpty()
+        val lowerUrl = url.lowercase(Locale.US)
+        val lowerType = contentType?.lowercase(Locale.US).orEmpty()
 
         val media =
-            lowerType.startsWith(
-                "video/"
-            ) ||
-            lowerType.startsWith(
-                "audio/"
-            ) ||
+            lowerType.startsWith("video/") ||
+            lowerType.startsWith("audio/") ||
             MEDIA_EXTENSIONS.any {
                 lowerUrl
                     .substringBefore("?")
                     .substringBefore("#")
                     .endsWith(it)
             } ||
-            lowerUrl.contains(
-                ".m3u8"
-            ) ||
-            lowerUrl.contains(
-                ".mpd"
-            ) ||
-            lowerUrl.startsWith(
-                "blob:"
-            )
+            lowerUrl.contains(".m3u8") ||
+            lowerUrl.contains(".mpd") ||
+            lowerUrl.startsWith("blob:")
 
         if (!media) {
             return
@@ -146,28 +150,14 @@ class SandboxWebViewClient(
 
         MediaSnifferState.publish(
             url = url,
-            mimeType =
-                contentType.orEmpty(),
-            extension =
-                detectExtension(
-                    lowerUrl
-                )
+            mimeType = contentType.orEmpty(),
+            extension = detectExtension(lowerUrl)
         )
     }
 
-    private fun detectExtension(
-        url: String
-    ): String {
-        val clean =
-            url.substringBefore("?")
-                .substringBefore("#")
-
-        return clean
-            .substringAfterLast(
-                '.',
-                ""
-            )
-            .take(10)
+    private fun detectExtension(url: String): String {
+        val clean = url.substringBefore("?").substringBefore("#")
+        return clean.substringAfterLast('.', "").take(10)
     }
 
     companion object {
@@ -185,11 +175,9 @@ class SandboxWebViewClient(
             )
     }
 }
+
 fun createSandboxWebViewClient(
-    onPageChanged:
-        ((String) -> Unit)? = null
+    onPageChanged: ((String) -> Unit)? = null
 ): SandboxWebViewClient {
-    return SandboxWebViewClient(
-        onPageChanged = onPageChanged
-    )
+    return SandboxWebViewClient(onPageChanged = onPageChanged)
 }
