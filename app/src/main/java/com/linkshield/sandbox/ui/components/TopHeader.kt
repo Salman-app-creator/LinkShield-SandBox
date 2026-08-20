@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -50,6 +52,7 @@ fun TopHeader(
     isProUser: Boolean = false
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Row(
         modifier = Modifier
@@ -177,7 +180,7 @@ fun TopHeader(
                 }
             }
 
-            // ROW 2: Nav Buttons & Custom High-Contrast Address Bar
+            // ROW 2: Balanced Nav Buttons & Compact Address Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -186,41 +189,42 @@ fun TopHeader(
                 IconButton(
                     onClick = onBack,
                     enabled = canGoBack,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        modifier = Modifier.size(16.dp),
-                        tint = if (canGoBack) MaterialTheme.colorScheme.onSurface else Color.Gray
+                        modifier = Modifier.size(18.dp),
+                        tint = if (canGoBack) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.4f)
                     )
                 }
 
                 IconButton(
                     onClick = onForward,
                     enabled = canGoForward,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Forward",
-                        modifier = Modifier.size(16.dp),
-                        tint = if (canGoForward) MaterialTheme.colorScheme.onSurface else Color.Gray
+                        modifier = Modifier.size(18.dp),
+                        tint = if (canGoForward) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.4f)
                     )
                 }
 
                 IconButton(
                     onClick = onReload,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Reload",
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                // Custom Compact Address Bar (Fixes Clipping & Color Blend)
+                // Custom Address Bar with Clear (X) Button
                 val textColor = if (isDarkTheme) Color.White else Color(0xFF1E293B)
                 val barBgColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                 val borderColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
@@ -231,7 +235,7 @@ fun TopHeader(
                         .height(34.dp)
                         .background(barBgColor, RoundedCornerShape(17.dp))
                         .border(1.dp, borderColor, RoundedCornerShape(17.dp))
-                        .padding(horizontal = 10.dp),
+                        .padding(start = 10.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -246,7 +250,7 @@ fun TopHeader(
                     BasicTextField(
                         value = currentUrl,
                         onValueChange = onUrlChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         singleLine = true,
                         textStyle = TextStyle(
                             color = textColor,
@@ -254,7 +258,12 @@ fun TopHeader(
                         ),
                         cursorBrush = SolidColor(textColor),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = { onNavigate() }),
+                        keyboardActions = KeyboardActions(
+                            onGo = {
+                                keyboardController?.hide()
+                                onNavigate()
+                            }
+                        ),
                         decorationBox = { innerTextField ->
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (currentUrl.isEmpty()) {
@@ -268,6 +277,21 @@ fun TopHeader(
                             }
                         }
                     )
+
+                    // Clear (X) Button
+                    if (currentUrl.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onUrlChange("") },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Text",
+                                modifier = Modifier.size(14.dp),
+                                tint = if (isDarkTheme) Color.LightGray else Color.Gray
+                            )
+                        }
+                    }
                 }
             }
         }
