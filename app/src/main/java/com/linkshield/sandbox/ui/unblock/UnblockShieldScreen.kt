@@ -6,6 +6,9 @@ import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Public
@@ -21,21 +24,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
+import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
 import com.linkshield.sandbox.vpn.VpnShieldController
 import com.linkshield.sandbox.vpn.WireGuardVpnStatus
 import kotlinx.coroutines.launch
+import java.net.URLEncoder
 
 private enum class MainTab(val label: String) {
     BROWSE("Shield"),
@@ -51,6 +53,11 @@ fun UnblockShieldScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // LicenseManager instance for key validation
+    val licenseManager = remember {
+        LicenseManager(context.applicationContext)
+    }
 
     val vpnController = remember {
         VpnShieldController(context.applicationContext)
@@ -84,7 +91,6 @@ fun UnblockShieldScreen(
         mutableStateOf(url)
     }
 
-    // AdGuard / Content Blocker is permanently active by default in the background
     val isAdGuardActive = true
 
     var isDnsShieldEnabled by rememberSaveable {
@@ -179,11 +185,8 @@ fun UnblockShieldScreen(
                         onUrlChange = {
                             url = it
                         },
-                        // AdGuard hamesha active rahega background mein
                         isShieldProtectionEnabled = isAdGuardActive,
-                        onShieldProtectionToggle = {
-                            // AdGuard is auto-enabled, no manual toggle needed here
-                        },
+                        onShieldProtectionToggle = {},
                         isWireGuardEnabled =
                             vpnStatus == WireGuardVpnStatus.CONNECTED,
                         onWireGuardToggle = {
@@ -263,7 +266,7 @@ fun UnblockShieldScreen(
                 MainTab.UPGRADE -> {
                     runCatching {
                         UpgradeScreen(
-                            licenseManager = null,
+                            licenseManager = licenseManager,
                             modifier = Modifier.fillMaxSize()
                         )
                     }.getOrElse {
@@ -280,17 +283,17 @@ fun UnblockShieldScreen(
     }
 }
 
+// Improved URL Normalizer: Fixes white screen on search queries
 private fun normalizeUrl(value: String): String {
     val trimmed = value.trim()
-    if (trimmed.isBlank()) {
-        return ""
-    }
-    return if (
-        trimmed.startsWith("http://", true) ||
-        trimmed.startsWith("https://", true)
-    ) {
-        trimmed
-    } else {
-        "https://$trimmed"
+    if (trimmed.isBlank()) return ""
+
+    val hasProtocol = trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)
+    val hasDomainDot = trimmed.contains(".") && !trimmed.contains(" ")
+
+    return when {
+        hasProtocol -> trimmed
+        hasDomainDot -> "https://$trimmed"
+        else -> "https://www.google.com/search?q=${URLEncoder.encode(trimmed, "UTF-8")}"
     }
 }
