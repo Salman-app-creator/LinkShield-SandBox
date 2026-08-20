@@ -6,6 +6,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.linkshield.sandbox.ui.grabber.MediaSnifferState
+import com.linkshield.sandbox.adblock.AdBlockEngine
 import java.io.ByteArrayInputStream
 import java.util.Locale
 
@@ -19,12 +20,38 @@ class SandboxWebViewClient(
         "doubleclick.net",
         "googleadservices.com",
         "googlesyndication.com",
-        "adnxs.com",
-        "moatads.com",
+        "adservice.google.com",
+        "pagead2.googlesyndication.com",
+        "ad.doubleclick.net",
+        "g.doubleclick.net",
+        "stats.g.doubleclick.net",
+        "cm.g.doubleclick.net",
+        "tpc.googlesyndication.com",
         "googletagmanager.com",
-        "facebook.com/tr",
-        "analytics.google.com",
-        "hotjar.com"
+        "googletagservices.com",
+        "google-analytics.com",
+        "adnxs.com",
+        "appnexus.com",
+        "adsrvr.org",
+        "rubiconproject.com",
+        "pubmatic.com",
+        "openx.net",
+        "casalemedia.com",
+        "criteo.com",
+        "taboola.com",
+        "outbrain.com",
+        "moatads.com",
+        "connect.facebook.net",
+        "pixel.facebook.com",
+        "analytics.facebook.com",
+        "hotjar.com",
+        "clarity.ms",
+        "fullstory.com",
+        "mouseflow.com",
+        "mixpanel.com",
+        "amplitude.com",
+        "segment.com",
+        "sentry.io"
     )
 
     override fun shouldOverrideUrlLoading(
@@ -115,9 +142,60 @@ class SandboxWebViewClient(
     }
 
     private fun isAdOrTracker(url: String): Boolean {
-        return blockedDomains.any { domain ->
-            url.contains(domain, ignoreCase = true)
+        if (url.isBlank()) {
+            return false
         }
+
+        val lower = url.lowercase(Locale.US)
+
+        // Use the application's full AdBlockEngine ruleset first.
+        // It is initialized by LinkShieldApp and includes the bundled rules.
+        if (AdBlockEngine.getInstance().shouldBlock(url)) {
+            return true
+        }
+
+        // Keep the lightweight WebView-specific domain rules as a fallback.
+        if (blockedDomains.any { domain ->
+                lower.contains(domain.lowercase(Locale.US))
+            }
+        ) {
+            return true
+        }
+
+        // YouTube-specific ad/telemetry request patterns.
+        // Do not block youtube.com itself; only known ad endpoints.
+        if (lower.contains("youtube.com")) {
+            val youtubeAdPatterns = listOf(
+                "/pagead/",
+                "/api/stats/ads",
+                "/youtube.com/api/stats/ads",
+                "/ptracking",
+                "/youtubei/v1/log_event",
+                "/youtubei/v1/feedback"
+            )
+
+            if (youtubeAdPatterns.any { lower.contains(it) }) {
+                return true
+            }
+        }
+
+        // Some YouTube ad metadata is carried on googlevideo playback URLs.
+        if (lower.contains("googlevideo.com")) {
+            val adParameters = listOf(
+                "adformat=",
+                "oad=",
+                "ctier=",
+                "afs=",
+                "ad_type=",
+                "adunit="
+            )
+
+            if (adParameters.any { lower.contains(it) }) {
+                return true
+            }
+        }
+
+        return false
     }
 
     private fun inspectResource(
