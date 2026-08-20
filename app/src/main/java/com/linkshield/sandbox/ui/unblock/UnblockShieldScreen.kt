@@ -1,8 +1,9 @@
 package com.linkshield.sandbox.ui.unblock
 
 import android.app.Activity
-import android.content.Intent
+import android.net.VpnService
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,7 +20,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,8 +34,7 @@ import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
-import com.linkshield.sandbox.vpn.VpnShieldController
-import com.linkshield.sandbox.vpn.WireGuardVpnStatus
+import com.linkshield.sandbox.vpn.WireGuardVpnManager
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 
@@ -59,20 +58,34 @@ fun UnblockShieldScreen(
         LicenseManager(context.applicationContext)
     }
 
-    val vpnController = remember {
-        VpnShieldController(context.applicationContext)
+    // WireGuard Engine Manager
+    val wireGuardManager = remember {
+        WireGuardVpnManager(context.applicationContext)
     }
 
-    val vpnStatus by vpnController.status.collectAsState()
+    var isWireGuardConnected by remember {
+        mutableStateOf(wireGuardManager.isConnected())
+    }
 
+    // Android System VPN Permission Launcher
     val vpnPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 scope.launch {
-                    vpnController.connect()
+                    val connectResult = wireGuardManager.connect()
+                    isWireGuardConnected = connectResult.isSuccess
+                    if (connectResult.isFailure) {
+                        Toast.makeText(
+                            context,
+                            connectResult.exceptionOrNull()?.message ?: "Connection failed",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
+            } else {
+                isWireGuardConnected = false
             }
         }
 
@@ -92,10 +105,6 @@ fun UnblockShieldScreen(
     }
 
     val isAdGuardActive = true
-
-    var isDnsShieldEnabled by rememberSaveable {
-        mutableStateOf(true)
-    }
 
     var trialDays by rememberSaveable {
         mutableIntStateOf(7)
@@ -187,16 +196,39 @@ fun UnblockShieldScreen(
                         },
                         isShieldProtectionEnabled = isAdGuardActive,
                         onShieldProtectionToggle = {},
-                        isWireGuardEnabled =
-                            vpnStatus == WireGuardVpnStatus.CONNECTED,
+                        isWireGuardEnabled = isWireGuardConnected,
                         onWireGuardToggle = {
-                            val activity = context as? Activity ?: return@SandboxBrowserScreen
-
                             scope.launch {
-                                vpnController.toggle(
-                                    activity = activity,
-                                    launcher = vpnPermissionLauncher
-                                )
+                                if (wireGuardManager.isConnected()) {
+                                    val disconnectResult = wireGuardManager.disconnect()
+                                    if (disconnectResult.isSuccess) {
+                                        isWireGuardConnected = false
+                                    }
+                                } else {
+                                    if (!wireGuardManager.hasConfiguration()) {
+                                        Toast.makeText(
+                                            context,
+                                            "WireGuard configuration missing!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        return@launch
+                                    }
+
+                                    val prepareIntent = VpnService.prepare(context)
+                                    if (prepareIntent != null) {
+                                        vpnPermissionLauncher.launch(prepareIntent)
+                                    } else {
+                                        val connectResult = wireGuardManager.connect()
+                                        isWireGuardConnected = connectResult.isSuccess
+                                        if (connectResult.isFailure) {
+                                            Toast.makeText(
+                                                context,
+                                                connectResult.exceptionOrNull()?.message ?: "Connection failed",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
                             }
                         },
                         trialDaysLeft = trialDays,
