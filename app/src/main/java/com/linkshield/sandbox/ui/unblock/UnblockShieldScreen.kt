@@ -1,8 +1,11 @@
 package com.linkshield.sandbox.ui.unblock
 
 import android.app.Activity
+import android.content.Intent
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Public
@@ -13,11 +16,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,6 +33,9 @@ import androidx.compose.ui.Alignment
 import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
+import com.linkshield.sandbox.vpn.VpnShieldController
+import com.linkshield.sandbox.vpn.WireGuardVpnStatus
+import kotlinx.coroutines.launch
 
 private enum class MainTab(val label: String) {
     BROWSE("Shield"),
@@ -42,6 +50,24 @@ fun UnblockShieldScreen(
     onThemeToggle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val vpnController = remember {
+        VpnShieldController(context.applicationContext)
+    }
+
+    val vpnStatus by vpnController.status.collectAsState()
+
+    val vpnPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                scope.launch {
+                    vpnController.connect()
+                }
+            }
+        }
 
     var selectedTab by rememberSaveable {
         mutableStateOf(MainTab.BROWSE.name)
@@ -63,10 +89,6 @@ fun UnblockShieldScreen(
 
     var isDnsShieldEnabled by rememberSaveable {
         mutableStateOf(true)
-    }
-
-    var isWireGuardEnabled by rememberSaveable {
-        mutableStateOf(false)
     }
 
     var trialDays by rememberSaveable {
@@ -162,9 +184,17 @@ fun UnblockShieldScreen(
                         onShieldProtectionToggle = {
                             // AdGuard is auto-enabled, no manual toggle needed here
                         },
-                        isWireGuardEnabled = isWireGuardEnabled,
+                        isWireGuardEnabled =
+                            vpnStatus == WireGuardVpnStatus.CONNECTED,
                         onWireGuardToggle = {
-                            isWireGuardEnabled = !isWireGuardEnabled
+                            val activity = context as? Activity ?: return@SandboxBrowserScreen
+
+                            scope.launch {
+                                vpnController.toggle(
+                                    activity = activity,
+                                    launcher = vpnPermissionLauncher
+                                )
+                            }
                         },
                         trialDaysLeft = trialDays,
                         isDarkTheme = isDarkTheme,
