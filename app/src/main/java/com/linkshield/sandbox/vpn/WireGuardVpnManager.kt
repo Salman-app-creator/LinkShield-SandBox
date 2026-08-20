@@ -8,69 +8,45 @@ class WireGuardVpnManager(
     context: Context
 ) {
 
-    private val repository =
-        WireGuardVpnRepository(context)
+    private val repository = WireGuardVpnRepository(context)
+    private val controller = WireGuardVpnController(context)
+    val state = WireGuardVpnState()
 
-    private val controller =
-        WireGuardVpnController(context)
+    suspend fun connect(): Result<Unit> = withContext(Dispatchers.IO) {
+        state.setConnecting()
 
-    val state =
-        WireGuardVpnState()
+        // 1. Config load karein
+        val configResult = repository.loadConfig()
+        val config = configResult.getOrElse { error ->
+            val errorMsg = error.message ?: "WireGuard configuration missing"
+            state.setError(errorMsg)
+            return@withContext Result.failure(Exception(errorMsg))
+        }
 
-    suspend fun connect(): Result<Unit> =
-        withContext(Dispatchers.IO) {
-
-            state.setConnecting()
-
-            repository.loadConfig().fold(
-                onSuccess = { config ->
-
-                    controller.connect(config)
-                        .onSuccess {
-                            state.setConnected()
-                        }
-                        .onFailure { error ->
-                            state.setError(
-                                error.message
-                                    ?: "Unable to connect"
-                            )
-                        }
-                },
-                onFailure = { error ->
-
-                    state.setError(
-                        error.message
-                            ?: "WireGuard configuration missing"
-                    )
-                }
-            )
-
-            if (controller.isConnected()) {
-                Result.success(Unit)
-            } else {
-                Result.failure(
-                    IllegalStateException(
-                        "WireGuard tunnel is not connected"
-                    )
-                )
+        // 2. Controller ke zariye tunnel connect karein
+        val connectResult = controller.connect(config)
+        return@withContext connectResult
+            .onSuccess {
+                state.setConnected()
             }
-        }
-       suspend fun disconnect(): Result<Unit> =
-        withContext(Dispatchers.IO) {
+            .onFailure { error ->
+                val errorMsg = error.message ?: "Unable to connect"
+                state.setError(errorMsg)
+            }
+    }
 
-            state.setDisconnecting()
+    suspend fun disconnect(): Result<Unit> = withContext(Dispatchers.IO) {
+        state.setDisconnecting()
 
-            controller.disconnect()
-                .onSuccess {
-                    state.setDisconnected()
-                }
-                .onFailure { error ->
-                    state.setError(
-                        error.message
-                            ?: "Unable to disconnect"
-                    )
-                }
-        }
+        return@withContext controller.disconnect()
+            .onSuccess {
+                state.setDisconnected()
+            }
+            .onFailure { error ->
+                val errorMsg = error.message ?: "Unable to disconnect"
+                state.setError(errorMsg)
+            }
+    }
 
     fun isConnected(): Boolean {
         return controller.isConnected()
@@ -80,22 +56,15 @@ class WireGuardVpnManager(
         return repository.hasConfig()
     }
 
-    suspend fun saveConfiguration(
-        configText: String
-    ): Result<Unit> {
+    suspend fun saveConfiguration(configText: String): Result<Unit> {
+        return repository.saveConfig(configText)
+    }
 
-        return repository.saveConfig(
-            configText
-        )
-    } 
     suspend fun removeConfiguration() {
-
         if (controller.isConnected()) {
             disconnect()
         }
-
         repository.deleteConfig()
-
         state.setDisconnected()
     }
 
