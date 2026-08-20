@@ -52,6 +52,7 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
             DisclaimerBlock("1. Privacy", "The application is designed not to collect or transmit personal browsing information. Users remain responsible for the data and websites they access.")
             DisclaimerBlock("2. Security", "Security features can reduce risk but cannot guarantee that every website, link, download, or network connection is safe.")
             DisclaimerBlock("3. Default Browser", "LinkShield must be selected as the Android default browser so links opened from other applications can enter the sandbox browser flow.")
+            DisclaimerBlock("4. AdGuard", "Blocks web banner ads, pop-ups, and hidden tracking scripts for a cleaner and safer browsing experience.")
             Spacer(Modifier.height(8.dp))
         }
         Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
