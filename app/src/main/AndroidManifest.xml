@@ -8,6 +8,15 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- Android 8+ background service requirement -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- Android 14+ VPN foreground service requirement -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <!-- Android 13+ notification permission -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".LinkShieldApp"
         android:allowBackup="true"
@@ -51,16 +60,27 @@
             </intent-filter>
         </activity>
 
+        <!-- WireGuard VPN service — foregroundServiceType added for Android 14+ -->
         <service
             android:name="com.wireguard.android.backend.GoBackend$VpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
-            android:exported="false">
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice">
 
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
 
         </service>
+
+        <!-- Handles Disconnect tap on VPN foreground notification -->
+        <receiver
+            android:name=".vpn.VpnActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.linkshield.sandbox.VPN_DISCONNECT" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
