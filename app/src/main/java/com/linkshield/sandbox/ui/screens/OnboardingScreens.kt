@@ -49,10 +49,9 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
             Text("LinkShield Sandbox", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Text("Privacy & Security Disclaimer", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            DisclaimerBlock("1. Intended Use", "LinkShield Sandbox is a privacy and security tool designed to open links inside an isolated browser environment.")
-            DisclaimerBlock("2. Privacy", "The application is designed not to collect or transmit personal browsing information. Users remain responsible for the data and websites they access.")
-            DisclaimerBlock("3. Security", "Security features can reduce risk but cannot guarantee that every website, link, download, or network connection is safe.")
-            DisclaimerBlock("4. Default Browser", "LinkShield must be selected as the Android default browser so links opened from other applications can enter the sandbox browser flow.")
+            DisclaimerBlock("1. Privacy", "The application is designed not to collect or transmit personal browsing information. Users remain responsible for the data and websites they access.")
+            DisclaimerBlock("2. Security", "Security features can reduce risk but cannot guarantee that every website, link, download, or network connection is safe.")
+            DisclaimerBlock("3. Default Browser", "LinkShield must be selected as the Android default browser so links opened from other applications can enter the sandbox browser flow.")
             Spacer(Modifier.height(8.dp))
         }
         Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
@@ -112,7 +111,6 @@ fun EnableShieldScreen(
         Spacer(Modifier.height(20.dp))
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Feature("Suspicious-link detection UI")
                 Feature("Sandbox browser")
                 Feature("Media Grabber")
                 Feature("Secure Network entry point")
