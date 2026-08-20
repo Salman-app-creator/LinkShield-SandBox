@@ -12,89 +12,57 @@ class WireGuardVpnController(
     context: Context
 ) {
 
-    private val backend: Backend =
-        GoBackend(context.applicationContext)
+    private val backend: Backend = GoBackend(context.applicationContext)
+    private val tunnel = LinkShieldTunnel()
 
-    private val tunnel =
-        LinkShieldTunnel()
+    suspend fun connect(configText: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(configText.isNotBlank()) {
+                "WireGuard configuration is empty"
+            }
 
-    suspend fun connect(
-        configText: String
-    ): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                require(
-                    configText.isNotBlank()
-                ) {
-                    "WireGuard configuration is empty"
-                }
+            val config = Config.parse(configText.byteInputStream())
 
-                val config =
-                    Config.parse(
-                        configText.byteInputStream()
-                    )
-
-                backend.setState(
-                    tunnel,
-                    Tunnel.State.UP,
-                    config
-                )
-                check(
-                    backend.getState(tunnel) ==
-                        Tunnel.State.UP
-                ) {
-                    "WireGuard tunnel failed to start"
-                }
+            // Tunnel Start
+            backend.setState(tunnel, Tunnel.State.UP, config)
+            
+            check(backend.getState(tunnel) == Tunnel.State.UP) {
+                "WireGuard tunnel failed to start"
             }
         }
+    }
 
-    suspend fun disconnect(): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
+    suspend fun disconnect(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (backend.getState(tunnel) == Tunnel.State.UP) {
+                backend.setState(tunnel, Tunnel.State.DOWN, null)
+            }
 
-                if (
-                    backend.getState(tunnel) ==
-                    Tunnel.State.UP
-                ) {
-                    backend.setState(
-                        tunnel,
-                        Tunnel.State.DOWN,
-                        null
-                    )
-                }
-
-                check(
-                    backend.getState(tunnel) ==
-                        Tunnel.State.DOWN
-                ) {
-                    "WireGuard tunnel failed to stop"
-                }
+            check(backend.getState(tunnel) == Tunnel.State.DOWN) {
+                "WireGuard tunnel failed to stop"
             }
         }
+    }
 
     fun isConnected(): Boolean {
         return runCatching {
-            backend.getState(tunnel) ==
-                Tunnel.State.UP
+            backend.getState(tunnel) == Tunnel.State.UP
         }.getOrDefault(false)
     }
+
     fun version(): String {
         return runCatching {
             backend.getVersion()
         }.getOrDefault("unknown")
     }
 
-    private class LinkShieldTunnel :
-        Tunnel {
-
+    private class LinkShieldTunnel : Tunnel {
         override fun getName(): String {
             return "LinkShield"
         }
 
-        override fun onStateChange(
-            newState: Tunnel.State
-        ) {
-            // WireGuard backend owns tunnel state.
+        override fun onStateChange(newState: Tunnel.State) {
+            // Tunnel state handled by WireGuard GoBackend
         }
     }
 }
