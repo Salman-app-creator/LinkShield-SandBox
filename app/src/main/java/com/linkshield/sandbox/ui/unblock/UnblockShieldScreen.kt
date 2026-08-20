@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
@@ -59,7 +58,10 @@ fun UnblockShieldScreen(
         mutableStateOf(url)
     }
 
-    var isShieldActive by rememberSaveable {
+    // AdGuard / Content Blocker is permanently active by default in the background
+    val isAdGuardActive = true
+
+    var isDnsShieldEnabled by rememberSaveable {
         mutableStateOf(true)
     }
 
@@ -68,7 +70,7 @@ fun UnblockShieldScreen(
     }
 
     var trialDays by rememberSaveable {
-        mutableIntStateOf(30)
+        mutableIntStateOf(7)
     }
 
     var canBack by remember {
@@ -116,142 +118,92 @@ fun UnblockShieldScreen(
     Scaffold(
         bottomBar = {
             NavigationBar {
-
                 MainTab.values().forEach { item ->
-
                     NavigationBarItem(
                         selected = tab == item,
-
                         onClick = {
                             selectedTab = item.name
                         },
-
                         icon = {
                             Icon(
                                 imageVector = when (item) {
-                                    MainTab.BROWSE ->
-                                        Icons.Default.Public
-
-                                    MainTab.GRAB ->
-                                        Icons.Default.Download
-
-                                    MainTab.UPGRADE ->
-                                        Icons.Default.Star
+                                    MainTab.BROWSE -> Icons.Default.Public
+                                    MainTab.GRAB -> Icons.Default.Download
+                                    MainTab.UPGRADE -> Icons.Default.Star
                                 },
-
                                 contentDescription = item.label
                             )
                         },
-
                         label = {
                             Text(item.label)
                         },
-
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
     ) { padding ->
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-
             when (tab) {
-
                 MainTab.BROWSE -> {
-
                     SandboxBrowserScreen(
                         generation = webViewGeneration,
                         startUrl = browserUrl,
                         currentUrl = url,
-
                         onUrlChange = {
                             url = it
                         },
-
-                        isShieldProtectionEnabled =
-                            isShieldActive,
-
+                        // AdGuard hamesha active rahega background mein
+                        isShieldProtectionEnabled = isAdGuardActive,
                         onShieldProtectionToggle = {
-                            isShieldActive =
-                                !isShieldActive
+                            // AdGuard is auto-enabled, no manual toggle needed here
                         },
-
-                        isWireGuardEnabled =
-                            isWireGuardEnabled,
-
+                        isWireGuardEnabled = isWireGuardEnabled,
                         onWireGuardToggle = {
-                            isWireGuardEnabled =
-                                !isWireGuardEnabled
+                            isWireGuardEnabled = !isWireGuardEnabled
                         },
-
                         trialDaysLeft = trialDays,
-
                         isDarkTheme = isDarkTheme,
-
-                        onThemeToggle =
-                            onThemeToggle,
-
+                        onThemeToggle = onThemeToggle,
                         canGoBack = canBack,
-
                         canGoForward = canForward,
-
                         onBack = {
                             webView?.goBack()
                         },
-
                         onForward = {
                             webView?.goForward()
                         },
-
                         onReload = {
                             webView?.reload()
                         },
-
                         onNavigate = {
-
-                            val target =
-                                normalizeUrl(url)
-
+                            val target = normalizeUrl(url)
                             if (target.isNotBlank()) {
-
                                 url = target
                                 browserUrl = target
-
                                 webView?.loadUrl(target)
                             }
                         },
-
                         isLoading = isLoading,
-
                         onReady = {
                             webView = it
                         },
-
                         onUrlChanged = {
-
                             browserUrl = it
                             url = it
                         },
-
                         onLoading = {
                             isLoading = it
                         },
-
-                        onNavigation = {
-                                back,
-                                forward ->
-
+                        onNavigation = { back, forward ->
                             canBack = back
                             canForward = forward
                         },
-
                         onRendererGone = {
-
                             webView = null
                             webViewGeneration++
                         }
@@ -259,59 +211,37 @@ fun UnblockShieldScreen(
                 }
 
                 MainTab.GRAB -> {
-
                     runCatching {
-
                         LinkShieldGrabberScreen(
                             onBackToBrowser = {
-                                selectedTab =
-                                    MainTab.BROWSE.name
+                                selectedTab = MainTab.BROWSE.name
                             },
-
                             onUpgradeClick = {
-                                selectedTab =
-                                    MainTab.UPGRADE.name
+                                selectedTab = MainTab.UPGRADE.name
                             }
                         )
-
                     }.getOrElse {
-
                         Box(
-                            modifier =
-                                Modifier.fillMaxSize(),
-
-                            contentAlignment =
-                                Alignment.Center
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "Grabber feature opening failed."
-                            )
+                            Text("Grabber feature opening failed.")
                         }
                     }
                 }
 
                 MainTab.UPGRADE -> {
-
                     runCatching {
-
                         UpgradeScreen(
                             licenseManager = null,
-                            modifier =
-                                Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize()
                         )
-
                     }.getOrElse {
-
                         Box(
-                            modifier =
-                                Modifier.fillMaxSize(),
-
-                            contentAlignment =
-                                Alignment.Center
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "Upgrade screen loading failed."
-                            )
+                            Text("Upgrade screen loading failed.")
                         }
                     }
                 }
@@ -321,22 +251,13 @@ fun UnblockShieldScreen(
 }
 
 private fun normalizeUrl(value: String): String {
-
     val trimmed = value.trim()
-
     if (trimmed.isBlank()) {
         return ""
     }
-
     return if (
-        trimmed.startsWith(
-            "http://",
-            true
-        ) ||
-        trimmed.startsWith(
-            "https://",
-            true
-        )
+        trimmed.startsWith("http://", true) ||
+        trimmed.startsWith("https://", true)
     ) {
         trimmed
     } else {
