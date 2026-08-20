@@ -174,7 +174,7 @@ private fun ProBenefitsCard() {
             PremiumBenefit("Unlimited media download access")
             PremiumBenefit("Higher-quality download choices")
             PremiumBenefit("Priority access to future engine integrations")
-            PremiumBenefit("No free-download counter")
+            PremiumBenefit("Blocks web banner ads, pop-ups, and hidden tracking scripts for a cleaner and safer browsing experience.")
         }
     }
 }
