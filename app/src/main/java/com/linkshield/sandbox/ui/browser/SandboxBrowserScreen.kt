@@ -1,6 +1,7 @@
 package com.linkshield.sandbox.ui.browser
 
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -75,6 +76,9 @@ fun SandboxBrowserScreen(
                     .fillMaxWidth(),
                 factory = { ctx ->
                     WebView(ctx).apply {
+                        // White screen flash ko rokne ke liye transparent background
+                        setBackgroundColor(Color.TRANSPARENT)
+
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -103,6 +107,12 @@ fun SandboxBrowserScreen(
                                     view?.canGoBack() == true,
                                     view?.canGoForward() == true
                                 )
+                                // Back/Forward ke baad address bar ko final URL se sync rakhne k liye
+                                url?.let {
+                                    if (it != "about:blank") {
+                                        onUrlChanged(it)
+                                    }
+                                }
                             }
 
                             override fun onRenderProcessGone(
