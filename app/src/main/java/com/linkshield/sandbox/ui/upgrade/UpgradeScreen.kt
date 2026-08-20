@@ -88,11 +88,7 @@ fun UpgradeScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Text(
-                    "UI-only activation form. License validation will be connected in the backend phase.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it.uppercase().take(32); message = null },
@@ -249,7 +245,7 @@ private fun PaymentInformationCard(context: Context) {
                 context = context
             )
             Text(
-                "Price: Rs. 350 / $1.25",
+                "Secure your entire digital world for just Rs. 350 or 1.25 usdt only.",
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
