@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.R
 import com.linkshield.sandbox.license.LicenseManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun UpgradeScreen(
@@ -36,8 +37,13 @@ fun UpgradeScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val activeLicenseManager = licenseManager ?: remember { LicenseManager(context) }
+
     var key by rememberSaveable { mutableStateOf("") }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
+    var isLoading by rememberSaveable { mutableStateOf(false) }
+    var isSuccess by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -91,28 +97,59 @@ fun UpgradeScreen(
                 
                 OutlinedTextField(
                     value = key,
-                    onValueChange = { key = it.uppercase().take(32); message = null },
+                    onValueChange = { 
+                        key = it.uppercase().take(32)
+                        message = null 
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    enabled = !isLoading,
                     label = { Text("Pro License Key") },
                     shape = RoundedCornerShape(12.dp)
                 )
                 Button(
                     onClick = {
-                        message = if (key.isBlank()) {
-                            "Enter your license key."
-                        } else {
-                            "Activation will be enabled with the license engine in the next phase."
+                        if (key.isBlank()) {
+                            message = "Enter your license key."
+                            isSuccess = false
+                            return@Button
+                        }
+
+                        isLoading = true
+                        message = "Validating key online..."
+
+                        scope.launch {
+                            val valid = activeLicenseManager.validateKey(key)
+                            isLoading = false
+                            if (valid) {
+                                message = "Pro version activated successfully!"
+                                isSuccess = true
+                            } else {
+                                message = "Invalid or already used license key."
+                                isSuccess = false
+                            }
                         }
                     },
-                    enabled = key.isNotBlank(),
+                    enabled = key.isNotBlank() && !isLoading,
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Activate Pro")
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Activate Pro")
+                    }
                 }
                 message?.let {
-                    Text(it, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+                    Text(
+                        text = it,
+                        color = if (isSuccess) Color(0xFF00E676) else MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
