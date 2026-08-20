@@ -2,9 +2,11 @@ package com.linkshield.sandbox.license
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
@@ -14,6 +16,7 @@ class LicenseManager(context: Context) {
         context.getSharedPreferences(LICENSE_PREFS, Context.MODE_PRIVATE)
 
     companion object {
+        private const val TAG = "LicenseManager"
         private const val LICENSE_PREFS = "license_prefs"
         private const val KEY_IS_PRO = "is_pro_activated"
         private const val KEY_INSTALL_DATE = "install_date"
@@ -24,7 +27,6 @@ class LicenseManager(context: Context) {
         private const val TRIAL_DAYS = 7L
         private const val FREE_DOWNLOAD_LIMIT = 20
 
-        // Aap ka GitHub Raw JSON URL
         private const val GITHUB_JSON_URL = "https://raw.githubusercontent.com/Salman-app-creator/LinkShield-SandBox/refs/heads/main/Licenses.json"
     }
 
@@ -101,38 +103,51 @@ class LicenseManager(context: Context) {
         }
     }
 
-    // GitHub se online key fetch kar ke validate karne ka updated function (Suspend function)
     suspend fun validateKey(key: String): Boolean = withContext(Dispatchers.IO) {
         val trimmed = key.trim().uppercase()
         if (trimmed.isEmpty()) return@withContext false
 
-        val usedKeys = prefs.getStringSet(KEY_USED_KEYS, mutableSetOf()) ?: mutableSetOf()
-        if (usedKeys.contains(trimmed)) return@withContext false
+        // Already Pro user check
+        if (isProUser()) return@withContext true
 
         try {
-            // GitHub raw file se keys download kar ke check karna
-            val jsonString = URL(GITHUB_JSON_URL).readText()
-            val jsonArray = JSONArray(jsonString)
-
-            var isValidInRemote = false
-            for (i in 0 until jsonArray.length()) {
-                val remoteKey = jsonArray.getString(i).trim().uppercase()
-                if (remoteKey == trimmed) {
-                    isValidInRemote = true
-                    break
-                }
+            // Robust Network Call with Timeouts & User-Agent
+            val url = URL(GITHUB_JSON_URL)
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 10000
+                setRequestProperty("User-Agent", "Mozilla/5.0 LinkShieldAndroid")
             }
 
-            if (isValidInRemote) {
-                val updatedKeys = usedKeys.toMutableSet().apply { add(trimmed) }
-                prefs.edit()
-                    .putBoolean(KEY_IS_PRO, true)
-                    .putStringSet(KEY_USED_KEYS, updatedKeys)
-                    .apply()
-                return@withContext true
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val jsonString = connection.inputStream.bufferedReader().use { it.readText() }
+                val jsonArray = JSONArray(jsonString)
+
+                var isValidInRemote = false
+                for (i in 0 until jsonArray.length()) {
+                    val remoteKey = jsonArray.getString(i).trim().uppercase()
+                    if (remoteKey == trimmed) {
+                        isValidInRemote = true
+                        break
+                    }
+                }
+
+                if (isValidInRemote) {
+                    val usedKeys = prefs.getStringSet(KEY_USED_KEYS, mutableSetOf()) ?: mutableSetOf()
+                    val updatedKeys = usedKeys.toMutableSet().apply { add(trimmed) }
+                    
+                    prefs.edit()
+                        .putBoolean(KEY_IS_PRO, true)
+                        .putStringSet(KEY_USED_KEYS, updatedKeys)
+                        .apply()
+                    return@withContext true
+                }
+            } else {
+                Log.e(TAG, "GitHub Response Error Code: ${connection.responseCode}")
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Key Validation Failed", e)
         }
 
         return@withContext false
