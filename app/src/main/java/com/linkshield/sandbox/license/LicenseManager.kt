@@ -2,6 +2,10 @@ package com.linkshield.sandbox.license
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import java.net.URL
 import java.util.concurrent.TimeUnit
 
 class LicenseManager(context: Context) {
@@ -20,18 +24,8 @@ class LicenseManager(context: Context) {
         private const val TRIAL_DAYS = 7L
         private const val FREE_DOWNLOAD_LIMIT = 20
 
-        private val VALID_KEYS = setOf(
-            "LSHD-ABCD-1234-5678",
-            "LSHD-EFGH-9012-3456",
-            "LSHD-IJKL-3456-7890",
-            "LSHD-MNOP-5678-9012",
-            "LSHD-QRST-7890-1234",
-            "LSHD-UVWX-9012-3456",
-            "LSHD-YZAB-1234-5678",
-            "LSHD-CDEF-3456-7890",
-            "LSHD-GHIJ-5678-9012",
-            "LSHD-KLMN-7890-1234"
-        )
+        // Aap ka GitHub Raw JSON URL
+        private const val GITHUB_JSON_URL = "https://raw.githubusercontent.com/Salman-app-creator/LinkShield-SandBox/refs/heads/main/Licenses.json"
     }
 
     init {
@@ -107,19 +101,41 @@ class LicenseManager(context: Context) {
         }
     }
 
-    fun validateKey(key: String): Boolean {
+    // GitHub se online key fetch kar ke validate karne ka updated function (Suspend function)
+    suspend fun validateKey(key: String): Boolean = withContext(Dispatchers.IO) {
         val trimmed = key.trim().uppercase()
-        if (!VALID_KEYS.contains(trimmed)) return false
+        if (trimmed.isEmpty()) return@withContext false
 
         val usedKeys = prefs.getStringSet(KEY_USED_KEYS, mutableSetOf()) ?: mutableSetOf()
-        if (usedKeys.contains(trimmed)) return false
+        if (usedKeys.contains(trimmed)) return@withContext false
 
-        prefs.edit()
-            .putBoolean(KEY_IS_PRO, true)
-            .putStringSet(KEY_USED_KEYS, usedKeys.toMutableSet().apply { add(trimmed) })
-            .apply()
+        try {
+            // GitHub raw file se keys download kar ke check karna
+            val jsonString = URL(GITHUB_JSON_URL).readText()
+            val jsonArray = JSONArray(jsonString)
 
-        return true
+            var isValidInRemote = false
+            for (i in 0 until jsonArray.length()) {
+                val remoteKey = jsonArray.getString(i).trim().uppercase()
+                if (remoteKey == trimmed) {
+                    isValidInRemote = true
+                    break
+                }
+            }
+
+            if (isValidInRemote) {
+                val updatedKeys = usedKeys.toMutableSet().apply { add(trimmed) }
+                prefs.edit()
+                    .putBoolean(KEY_IS_PRO, true)
+                    .putStringSet(KEY_USED_KEYS, updatedKeys)
+                    .apply()
+                return@withContext true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        return@withContext false
     }
 
     fun getUsedKeysCount(): Int {
