@@ -106,10 +106,7 @@ fun TopHeader(
                             leadingIcon = {
                                 Checkbox(
                                     checked = isShieldProtectionEnabled,
-                                    onCheckedChange = {
-                                        onShieldProtectionToggle()
-                                        dropdownExpanded = false
-                                    }
+                                    onCheckedChange = null // Double-click se bachne ke liye null rakha hai
                                 )
                             },
                             onClick = {
@@ -123,10 +120,7 @@ fun TopHeader(
                             leadingIcon = {
                                 Checkbox(
                                     checked = isWireGuardEnabled,
-                                    onCheckedChange = {
-                                        onWireGuardToggle()
-                                        dropdownExpanded = false
-                                    }
+                                    onCheckedChange = null // Double-click se bachne ke liye null rakha hai
                                 )
                             },
                             onClick = {
