@@ -6,6 +6,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
@@ -107,11 +108,9 @@ class LicenseManager(context: Context) {
         val trimmed = key.trim().uppercase()
         if (trimmed.isEmpty()) return@withContext false
 
-        // Already Pro user check
         if (isProUser()) return@withContext true
 
         try {
-            // Robust Network Call with Timeouts & User-Agent
             val url = URL(GITHUB_JSON_URL)
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -122,7 +121,10 @@ class LicenseManager(context: Context) {
 
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val jsonString = connection.inputStream.bufferedReader().use { it.readText() }
-                val jsonArray = JSONArray(jsonString)
+                
+                // JSONObject parse karke "valid_keys" array extract kar rahe hain
+                val jsonObject = JSONObject(jsonString)
+                val jsonArray = jsonObject.optJSONArray("valid_keys") ?: JSONArray()
 
                 var isValidInRemote = false
                 for (i in 0 until jsonArray.length()) {
@@ -144,10 +146,10 @@ class LicenseManager(context: Context) {
                     return@withContext true
                 }
             } else {
-                Log.e(TAG, "GitHub Response Error Code: ${connection.responseCode}")
+                Log.e(TAG, "GitHub Response Error: ${connection.responseCode}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Key Validation Failed", e)
+            Log.e(TAG, "Key validation error", e)
         }
 
         return@withContext false
