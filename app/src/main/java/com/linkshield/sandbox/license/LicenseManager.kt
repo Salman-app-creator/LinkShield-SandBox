@@ -17,7 +17,7 @@ class LicenseManager(context: Context) {
         private const val KEY_USED_KEYS = "used_keys"
         private const val KEY_FIRST_LAUNCH = "first_launch_complete"
 
-        private const val TRIAL_DAYS = 30L
+        private const val TRIAL_DAYS = 7L
         private const val FREE_DOWNLOAD_LIMIT = 20
 
         private val VALID_KEYS = setOf(
@@ -91,7 +91,7 @@ class LicenseManager(context: Context) {
             !isTrialActive() && getDownloadCount() >= FREE_DOWNLOAD_LIMIT ->
                 "Trial ended and download limit reached. Upgrade to Pro for unlimited access."
             !isTrialActive() ->
-                "Your 30-day trial has ended. Upgrade to Pro to continue using all features."
+                "Your 7-days trial has ended. Upgrade to Pro to continue using all features."
             getDownloadCount() >= FREE_DOWNLOAD_LIMIT ->
                 "You have used all 20 free downloads. Upgrade to Pro for unlimited downloads."
             else -> ""
