@@ -111,29 +111,40 @@ class LicenseManager(context: Context) {
         if (isProUser()) return@withContext true
 
         try {
-            val url = URL(GITHUB_JSON_URL)
+            // Timestamp add karne se GitHub Cache bypass ho jati hai
+            val urlWithCacheBuster = "$GITHUB_JSON_URL?t=${System.currentTimeMillis()}"
+            val url = URL(urlWithCacheBuster)
+            
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 10000
                 readTimeout = 10000
                 setRequestProperty("User-Agent", "Mozilla/5.0 LinkShieldAndroid")
+                setRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate")
+                setRequestProperty("Pragma", "no-cache")
             }
 
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val jsonString = connection.inputStream.bufferedReader().use { it.readText() }
-                
-                // JSONObject parse karke "valid_keys" array extract kar rahe hain
-                val jsonObject = JSONObject(jsonString)
-                val jsonArray = jsonObject.optJSONArray("valid_keys") ?: JSONArray()
+                val jsonString = connection.inputStream.bufferedReader().use { it.readText() }.trim()
+                Log.d(TAG, "Fetched Remote JSON: $jsonString")
 
-                var isValidInRemote = false
-                for (i in 0 until jsonArray.length()) {
-                    val remoteKey = jsonArray.getString(i).trim().uppercase()
-                    if (remoteKey == trimmed) {
-                        isValidInRemote = true
-                        break
+                val keysList = mutableListOf<String>()
+
+                // Auto-detect JSON Format (Array vs Object)
+                if (jsonString.startsWith("[")) {
+                    val jsonArray = JSONArray(jsonString)
+                    for (i in 0 until jsonArray.length()) {
+                        keysList.add(jsonArray.getString(i).trim().uppercase())
+                    }
+                } else if (jsonString.startsWith("{")) {
+                    val jsonObject = JSONObject(jsonString)
+                    val jsonArray = jsonObject.optJSONArray("valid_keys") ?: JSONArray()
+                    for (i in 0 until jsonArray.length()) {
+                        keysList.add(jsonArray.getString(i).trim().uppercase())
                     }
                 }
+
+                val isValidInRemote = keysList.contains(trimmed)
 
                 if (isValidInRemote) {
                     val usedKeys = prefs.getStringSet(KEY_USED_KEYS, mutableSetOf()) ?: mutableSetOf()
@@ -144,9 +155,11 @@ class LicenseManager(context: Context) {
                         .putStringSet(KEY_USED_KEYS, updatedKeys)
                         .apply()
                     return@withContext true
+                } else {
+                    Log.e(TAG, "Key '$trimmed' not found in remote keys: $keysList")
                 }
             } else {
-                Log.e(TAG, "GitHub Response Error: ${connection.responseCode}")
+                Log.e(TAG, "GitHub Response Error Code: ${connection.responseCode}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Key validation error", e)
