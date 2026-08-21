@@ -20,6 +20,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,12 +54,10 @@ fun UnblockShieldScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // LicenseManager instance for key validation
     val licenseManager = remember {
         LicenseManager(context.applicationContext)
     }
 
-    // Sync existing pro status to DnsManager on first composition
     LaunchedEffect(Unit) {
         if (licenseManager.isProUser()) {
             com.linkshield.sandbox.dns.DnsManager(context).setProUser(true)
@@ -68,7 +67,6 @@ fun UnblockShieldScreen(
     val isProUser by remember { mutableStateOf(licenseManager.isProUser()) }
     val trialDays by remember { mutableIntStateOf(licenseManager.getTrialDaysRemaining()) }
 
-    // WireGuard Engine Manager
     val wireGuardManager = remember {
         WireGuardVpnManager(context.applicationContext)
     }
@@ -77,7 +75,6 @@ fun UnblockShieldScreen(
         mutableStateOf(wireGuardManager.isConnected())
     }
 
-    // Android System VPN Permission Launcher
     val vpnPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult()
@@ -116,25 +113,11 @@ fun UnblockShieldScreen(
 
     val isAdGuardActive = true
 
-    var canBack by remember {
-        mutableStateOf(false)
-    }
-
-    var canForward by remember {
-        mutableStateOf(false)
-    }
-
-    var isLoading by remember {
-        mutableStateOf(false)
-    }
-
-    var webView by remember {
-        mutableStateOf<WebView?>(null)
-    }
-
-    var webViewGeneration by remember {
-        mutableIntStateOf(0)
-    }
+    var canBack by remember { mutableStateOf(false) }
+    var canForward by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var webViewGeneration by remember { mutableIntStateOf(0) }
 
     val tab = try {
         MainTab.valueOf(selectedTab)
@@ -147,11 +130,9 @@ fun UnblockShieldScreen(
             tab == MainTab.BROWSE && canBack -> {
                 webView?.goBack()
             }
-
             tab != MainTab.BROWSE -> {
                 selectedTab = MainTab.BROWSE.name
             }
-
             else -> {
                 (context as? Activity)?.finish()
             }
@@ -164,9 +145,7 @@ fun UnblockShieldScreen(
                 MainTab.values().forEach { item ->
                     NavigationBarItem(
                         selected = tab == item,
-                        onClick = {
-                            selectedTab = item.name
-                        },
+                        onClick = { selectedTab = item.name },
                         icon = {
                             Icon(
                                 imageVector = when (item) {
@@ -177,9 +156,7 @@ fun UnblockShieldScreen(
                                 contentDescription = item.label
                             )
                         },
-                        label = {
-                            Text(item.label)
-                        },
+                        label = { Text(item.label) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -197,9 +174,7 @@ fun UnblockShieldScreen(
                         generation = webViewGeneration,
                         startUrl = browserUrl,
                         currentUrl = url,
-                        onUrlChange = {
-                            url = it
-                        },
+                        onUrlChange = { url = it },
                         isShieldProtectionEnabled = isAdGuardActive,
                         onShieldProtectionToggle = {},
                         isWireGuardEnabled = isWireGuardConnected,
@@ -243,15 +218,9 @@ fun UnblockShieldScreen(
                         onThemeToggle = onThemeToggle,
                         canGoBack = canBack,
                         canGoForward = canForward,
-                        onBack = {
-                            webView?.goBack()
-                        },
-                        onForward = {
-                            webView?.goForward()
-                        },
-                        onReload = {
-                            webView?.reload()
-                        },
+                        onBack = { webView?.goBack() },
+                        onForward = { webView?.goForward() },
+                        onReload = { webView?.reload() },
                         onNavigate = {
                             val target = normalizeUrl(url)
                             if (target.isNotBlank()) {
@@ -261,16 +230,12 @@ fun UnblockShieldScreen(
                             }
                         },
                         isLoading = isLoading,
-                        onReady = {
-                            webView = it
-                        },
+                        onReady = { webView = it },
                         onUrlChanged = {
                             browserUrl = it
                             url = it
                         },
-                        onLoading = {
-                            isLoading = it
-                        },
+                        onLoading = { isLoading = it },
                         onNavigation = { back, forward ->
                             canBack = back
                             canForward = forward
@@ -285,12 +250,8 @@ fun UnblockShieldScreen(
                 MainTab.GRAB -> {
                     runCatching {
                         LinkShieldGrabberScreen(
-                            onBackToBrowser = {
-                                selectedTab = MainTab.BROWSE.name
-                            },
-                            onUpgradeClick = {
-                                selectedTab = MainTab.UPGRADE.name
-                            }
+                            onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
+                            onUpgradeClick = { selectedTab = MainTab.UPGRADE.name }
                         )
                     }.getOrElse {
                         Box(
@@ -322,7 +283,6 @@ fun UnblockShieldScreen(
     }
 }
 
-// Improved URL Normalizer: Fixes white screen on search queries
 private fun normalizeUrl(value: String): String {
     val trimmed = value.trim()
     if (trimmed.isBlank()) return ""
