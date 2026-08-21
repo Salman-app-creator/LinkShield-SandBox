@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 class LicenseManager(context: Context) {
@@ -104,11 +105,20 @@ class LicenseManager(context: Context) {
         }
     }
 
+    // SHA-256 Hash Generator Helper Function
+    private fun hashKey(key: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     suspend fun validateKey(key: String): Boolean = withContext(Dispatchers.IO) {
         val trimmed = key.trim().uppercase()
         if (trimmed.isEmpty()) return@withContext false
 
         if (isProUser()) return@withContext true
+
+        // User ki entering key ka SHA-256 Hash calculate karna
+        val inputHash = hashKey(trimmed)
 
         try {
             // Timestamp add karne se GitHub Cache bypass ho jati hai
@@ -128,23 +138,24 @@ class LicenseManager(context: Context) {
                 val jsonString = connection.inputStream.bufferedReader().use { it.readText() }.trim()
                 Log.d(TAG, "Fetched Remote JSON: $jsonString")
 
-                val keysList = mutableListOf<String>()
+                val remoteHashes = mutableListOf<String>()
 
                 // Auto-detect JSON Format (Array vs Object)
                 if (jsonString.startsWith("[")) {
                     val jsonArray = JSONArray(jsonString)
                     for (i in 0 until jsonArray.length()) {
-                        keysList.add(jsonArray.getString(i).trim().uppercase())
+                        remoteHashes.add(jsonArray.getString(i).trim().lowercase())
                     }
                 } else if (jsonString.startsWith("{")) {
                     val jsonObject = JSONObject(jsonString)
                     val jsonArray = jsonObject.optJSONArray("valid_keys") ?: JSONArray()
                     for (i in 0 until jsonArray.length()) {
-                        keysList.add(jsonArray.getString(i).trim().uppercase())
+                        remoteHashes.add(jsonArray.getString(i).trim().lowercase())
                     }
                 }
 
-                val isValidInRemote = keysList.contains(trimmed)
+                // Check karna k user ke Hash code JSON list mein hai ya nahi
+                val isValidInRemote = remoteHashes.contains(inputHash.lowercase())
 
                 if (isValidInRemote) {
                     val usedKeys = prefs.getStringSet(KEY_USED_KEYS, mutableSetOf()) ?: mutableSetOf()
@@ -156,7 +167,7 @@ class LicenseManager(context: Context) {
                         .apply()
                     return@withContext true
                 } else {
-                    Log.e(TAG, "Key '$trimmed' not found in remote keys: $keysList")
+                    Log.e(TAG, "Hash '$inputHash' for key '$trimmed' not found in remote valid hashes.")
                 }
             } else {
                 Log.e(TAG, "GitHub Response Error Code: ${connection.responseCode}")
