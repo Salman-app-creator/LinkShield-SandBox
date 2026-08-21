@@ -51,7 +51,6 @@
     <application
         android:name=".LinkShieldApp"
         android:allowBackup="true"
-        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="LinkShield Sandbox"
