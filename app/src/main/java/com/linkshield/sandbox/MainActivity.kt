@@ -45,8 +45,9 @@ import androidx.navigation.compose.rememberNavController
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
+// FIX: Import path corrected - ProUpgradeDialog is in license package, NOT ui.license
+import com.linkshield.sandbox.license.ProUpgradeDialog
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
-import com.linkshield.sandbox.ui.license.ProUpgradeDialog
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
@@ -54,14 +55,12 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
-    // FIX: Class-level reactive state taake onNewIntent se update ho sake
     private var interceptedUrl by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // FIX: Intent se URL class property mein store karo
         interceptedUrl = intent?.getStringExtra("url")
 
         val disclaimerManager = DisclaimerManager(this)
@@ -74,7 +73,6 @@ class MainActivity : ComponentActivity() {
             var isDarkTheme      by remember { mutableStateOf(themeManager.isDarkTheme()) }
 
             val dnsManager      = remember { DnsManager(context) }
-            var browserUrl      by remember { mutableStateOf<String?>(null) }
             var isShieldActive  by remember { mutableStateOf(dnsManager.isDohEnabled()) }
 
             val roleRequestLauncher = rememberLauncherForActivityResult(
@@ -118,7 +116,6 @@ class MainActivity : ComponentActivity() {
                 var showDisclaimer  by remember { mutableStateOf(!disclaimerManager.hasAccepted()) }
                 var showProDialog   by remember { mutableStateOf(false) }
 
-                // ── First-launch disclaimer dialog ──────────────────────────
                 if (showDisclaimer) {
                     Dialog(
                         onDismissRequest = {},
@@ -164,7 +161,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // ── Pro Upgrade dialog ──────────────────────────────────────
                 if (showProDialog) {
                     ProUpgradeDialog(
                         licenseManager = licenseManager,
@@ -173,7 +169,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // ── Main scaffold ───────────────────────────────────────────
                 Scaffold(
                     bottomBar = {
                         if (!showDisclaimer) {
@@ -188,21 +183,18 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     if (!showDisclaimer) {
                         MainNavHost(
-                            navController        = navController,
-                            modifier             = Modifier.padding(innerPadding),
-                            licenseManager       = licenseManager,
-                            dnsManager           = dnsManager,
-                            onProRequired        = { showProDialog = true },
-                            interceptedUrl       = interceptedUrl,
-                            onBrowserUrlChanged  = { browserUrl = it },
-                            sharedUrl            = browserUrl,
-                            isDarkTheme          = isDarkTheme,
-                            onToggleTheme        = {
-                                val next = if (isDarkTheme) ThemeManager.THEME_LIGHT else ThemeManager.THEME_DARK
+                            navController   = navController,
+                            modifier        = Modifier.padding(innerPadding),
+                            interceptedUrl  = interceptedUrl,
+                            isDarkTheme     = isDarkTheme,
+                            onThemeToggle   = { newDarkTheme ->
+                                val next = if (newDarkTheme)
+                                    ThemeManager.THEME_DARK
+                                else
+                                    ThemeManager.THEME_LIGHT
                                 themeManager.setTheme(next)
-                                isDarkTheme = !isDarkTheme
-                            },
-                            onShieldStateChanged = { isShieldActive = it }
+                                isDarkTheme = newDarkTheme
+                            }
                         )
                     }
                 }
@@ -210,19 +202,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // FIX: onNewIntent add kiya taake app background mein ho to bhi naya URL receive ho
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        // Sirf tab update karo jab intent mein "url" extra ho (normal launcher intent ignore karo)
         intent?.getStringExtra("url")?.let { url ->
             interceptedUrl = url
         }
     }
 }
-// ──────────────────────────────────────────────────────────────────────────────
-// Bottom Nav — 3 tabs: Shield | Grabber | Upgrade Pro
-// navigationBarsPadding() ensures labels are never clipped by gesture bar.
-// ──────────────────────────────────────────────────────────────────────────────
 @Composable
 fun BottomNavBar(
     navController:  NavHostController,
@@ -234,16 +220,15 @@ fun BottomNavBar(
     val currentDestination  = navBackStackEntry?.destination
     val isPro               = licenseManager.isProUser()
 
-    val shieldActiveColor = Color(0xFF00F0FF)   // Neon Teal — DoH ON
+    val shieldActiveColor = Color(0xFF00F0FF)
 
     NavigationBar(
         modifier         = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding(),           // ← critical: labels never clipped
+            .navigationBarsPadding(),
         containerColor   = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
         tonalElevation   = 0.dp
     ) {
-        // ── Tab 1: Unblock Shield ─────────────────────────────────────────
         val shieldSelected =
             currentDestination?.hierarchy?.any { it.route == Screen.Unblock.route } == true
         val shieldTint = when {
@@ -285,7 +270,6 @@ fun BottomNavBar(
             )
         )
 
-        // ── Tab 2: Media Grabber ──────────────────────────────────────────
         val grabberSelected =
             currentDestination?.hierarchy?.any { it.route == Screen.Grabber.route } == true
         val grabberTint = if (grabberSelected)
@@ -320,7 +304,6 @@ fun BottomNavBar(
             alwaysShowLabel = true
         )
 
-        // ── Tab 3: Upgrade Pro ────────────────────────────────────────────
         val proTint = if (isPro)
             MaterialTheme.colorScheme.primary
         else
@@ -356,22 +339,13 @@ fun BottomNavBar(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// NavHost
-// ──────────────────────────────────────────────────────────────────────────────
 @Composable
 fun MainNavHost(
-    navController:       NavHostController,
-    modifier:            Modifier = Modifier,
-    licenseManager:      LicenseManager,
-    dnsManager:          DnsManager,
-    onProRequired:       () -> Unit,
-    interceptedUrl:      String? = null,
-    onBrowserUrlChanged: (String) -> Unit = {},
-    sharedUrl:           String? = null,
-    isDarkTheme:         Boolean = true,
-    onToggleTheme:       () -> Unit = {},
-    onShieldStateChanged:(Boolean) -> Unit = {}
+    navController:   NavHostController,
+    modifier:        Modifier = Modifier,
+    interceptedUrl:  String? = null,
+    isDarkTheme:     Boolean = true,
+    onThemeToggle:   (Boolean) -> Unit = {}
 ) {
     NavHost(
         navController    = navController,
@@ -379,26 +353,16 @@ fun MainNavHost(
         modifier         = modifier
     ) {
         composable(Screen.Unblock.route) {
-            // FIX: key() use kiya taake interceptedUrl change hone pe
-            // UnblockShieldScreen recreate ho aur naya URL load kare
             key(interceptedUrl ?: "") {
                 UnblockShieldScreen(
-                    initialUrl           = interceptedUrl,
-                    dnsManager           = dnsManager,
-                    onUrlChanged         = onBrowserUrlChanged,
-                    isDarkTheme          = isDarkTheme,
-                    onToggleTheme        = onToggleTheme,
-                    onShieldStateChanged = onShieldStateChanged
+                    initialUrl    = interceptedUrl ?: "",
+                    isDarkTheme   = isDarkTheme,
+                    onThemeToggle = onThemeToggle
                 )
             }
         }
         composable(Screen.Grabber.route) {
-            MediaGrabberScreen(
-                licenseManager = licenseManager,
-                dnsManager     = dnsManager,
-                onProRequired  = onProRequired,
-                sharedUrl      = sharedUrl
-            )
+            MediaGrabberScreen()
         }
     }
 }
@@ -408,9 +372,6 @@ sealed class Screen(val route: String, val title: String) {
     object Grabber : Screen("grabber", "Grabber")
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Default browser lock screen
-// ──────────────────────────────────────────────────────────────────────────────
 @Composable
 fun DefaultBrowserLockScreen(onEnable: () -> Unit) {
     Box(
@@ -488,9 +449,6 @@ fun DefaultBrowserLockScreen(onEnable: () -> Unit) {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Extension helpers
-// ──────────────────────────────────────────────────────────────────────────────
 fun Context.openDefaultBrowserSettings() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
