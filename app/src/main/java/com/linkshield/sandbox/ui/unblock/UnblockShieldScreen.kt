@@ -58,6 +58,16 @@ fun UnblockShieldScreen(
         LicenseManager(context.applicationContext)
     }
 
+    // Sync existing pro status to DnsManager on first composition
+    LaunchedEffect(Unit) {
+        if (licenseManager.isProUser()) {
+            com.linkshield.sandbox.dns.DnsManager(context).setProUser(true)
+        }
+    }
+
+    val isProUser by remember { mutableStateOf(licenseManager.isProUser()) }
+    val trialDays by remember { mutableIntStateOf(licenseManager.getTrialDaysRemaining()) }
+
     // WireGuard Engine Manager
     val wireGuardManager = remember {
         WireGuardVpnManager(context.applicationContext)
@@ -105,10 +115,6 @@ fun UnblockShieldScreen(
     }
 
     val isAdGuardActive = true
-
-    var trialDays by rememberSaveable {
-        mutableIntStateOf(7)
-    }
 
     var canBack by remember {
         mutableStateOf(false)
@@ -232,6 +238,7 @@ fun UnblockShieldScreen(
                             }
                         },
                         trialDaysLeft = trialDays,
+                        isProUser = isProUser,
                         isDarkTheme = isDarkTheme,
                         onThemeToggle = onThemeToggle,
                         canGoBack = canBack,
