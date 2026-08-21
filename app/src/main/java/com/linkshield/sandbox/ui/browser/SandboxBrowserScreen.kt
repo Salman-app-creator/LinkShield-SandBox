@@ -32,6 +32,7 @@ fun SandboxBrowserScreen(
     isWireGuardEnabled: Boolean,
     onWireGuardToggle: () -> Unit,
     trialDaysLeft: Int,
+    isProUser: Boolean = false,
     isDarkTheme: Boolean,
     onThemeToggle: (Boolean) -> Unit,
     canGoBack: Boolean,
@@ -59,6 +60,7 @@ fun SandboxBrowserScreen(
                 isWireGuardEnabled = isWireGuardEnabled,
                 onWireGuardToggle = onWireGuardToggle,
                 trialDaysLeft = trialDaysLeft,
+                isProUser = isProUser,
                 isDarkTheme = isDarkTheme,
                 onThemeToggle = onThemeToggle,
                 canGoBack = canGoBack,
@@ -75,9 +77,19 @@ fun SandboxBrowserScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 factory = { ctx ->
-                    WebView(ctx).apply {
-                        // White screen flash ko rokne ke liye transparent background
-                        setBackgroundColor(Color.TRANSPARENT)
+                    // REUSE existing session WebView if available
+                    SandboxWebViewSession.get()?.also { existing ->
+                        webViewState.value = existing
+                        onReady(existing)
+                        if (startUrl.isNotBlank() && existing.url != startUrl) {
+                            existing.loadUrl(startUrl)
+                        }
+                    } ?: WebView(ctx).apply {
+                        // Use theme background instead of transparent to prevent white flash
+                        setBackgroundColor(
+                            if (isDarkTheme) Color.parseColor("#FF0A0F14")
+                            else Color.parseColor("#FFF0F2F5")
+                        )
 
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -107,7 +119,6 @@ fun SandboxBrowserScreen(
                                     view?.canGoBack() == true,
                                     view?.canGoForward() == true
                                 )
-                                // Back/Forward ke baad address bar ko final URL se sync rakhne k liye
                                 url?.let {
                                     if (it != "about:blank") {
                                         onUrlChanged(it)
@@ -122,6 +133,7 @@ fun SandboxBrowserScreen(
                                 onLoading(false)
                                 runCatching { view?.destroy() }
                                 webViewState.value = null
+                                SandboxWebViewSession.destroy()
                                 onRendererGone()
                                 return true
                             }
@@ -137,6 +149,7 @@ fun SandboxBrowserScreen(
 
                         webChromeClient = WebChromeClient()
                         webViewState.value = this
+                        SandboxWebViewSession.attach(this)
                         onReady(this)
 
                         if (startUrl.isNotBlank()) {
