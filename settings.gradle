@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // FIX: JitPack add kiya for youtube-dl-android
+        maven { url 'https://jitpack.io' }
     }
 }
 rootProject.name = "LinkShield SandBox"
