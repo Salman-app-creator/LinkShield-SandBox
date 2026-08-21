@@ -45,29 +45,33 @@ import androidx.navigation.compose.rememberNavController
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.dns.DnsManager
 import com.linkshield.sandbox.license.LicenseManager
-// FIX: Import path corrected - ProUpgradeDialog is in license package, NOT ui.license
 import com.linkshield.sandbox.license.ProUpgradeDialog
 import com.linkshield.sandbox.ui.grabber.MediaGrabberScreen
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
 
-    private var interceptedUrl by mutableStateOf<String?>(null)
+    // FIX: MutableStateFlow use kiya taake class level pe safe rahe
+    private val interceptedUrlFlow = MutableStateFlow<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        interceptedUrl = intent?.getStringExtra("url")
+        interceptedUrlFlow.value = intent?.getStringExtra("url")
 
         val disclaimerManager = DisclaimerManager(this)
         val licenseManager    = LicenseManager(this)
         val themeManager      = ThemeManager(this)
 
         setContent {
+            // FIX: StateFlow ko Compose state mein convert kiya
+            val interceptedUrl by interceptedUrlFlow.collectAsState()
+
             val context = LocalContext.current
             var isDefaultBrowser by remember { mutableStateOf(context.isDefaultBrowser()) }
             var isDarkTheme      by remember { mutableStateOf(themeManager.isDarkTheme()) }
@@ -205,7 +209,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         intent?.getStringExtra("url")?.let { url ->
-            interceptedUrl = url
+            interceptedUrlFlow.value = url
         }
     }
 }
