@@ -14,8 +14,9 @@ import java.util.concurrent.TimeUnit
 
 class LicenseManager(context: Context) {
 
+    private val appContext = context.applicationContext
     private val prefs: SharedPreferences =
-        context.getSharedPreferences(LICENSE_PREFS, Context.MODE_PRIVATE)
+        appContext.getSharedPreferences(LICENSE_PREFS, Context.MODE_PRIVATE)
 
     companion object {
         private const val TAG               = "LicenseManager"
@@ -105,7 +106,6 @@ class LicenseManager(context: Context) {
 
     // ── SHA-256 hashing ──────────────────────────────────────────────────────
 
-    // FIX: Explicit UTF-8 encoding so hash is identical on all devices
     private fun hashKey(key: String): String {
         val bytes = MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray(Charsets.UTF_8))
@@ -175,7 +175,6 @@ class LicenseManager(context: Context) {
 
             Log.d(TAG, "GitHub JSON length: ${jsonString.length}")
 
-            // Parse — handle both plain array and {valid_keys:[...]} object
             val remoteHashes = mutableSetOf<String>()
             when {
                 jsonString.startsWith("[") -> {
@@ -195,7 +194,6 @@ class LicenseManager(context: Context) {
 
             Log.d(TAG, "Loaded ${remoteHashes.size} hashes from GitHub")
 
-            // Cache the hashes locally for offline fallback
             if (remoteHashes.isNotEmpty()) {
                 prefs.edit().putStringSet(KEY_CACHED_HASHES, remoteHashes).apply()
             }
@@ -209,6 +207,12 @@ class LicenseManager(context: Context) {
             .putBoolean(KEY_IS_PRO, true)
             .putStringSet(KEY_USED_KEYS, usedKeys.toMutableSet().apply { add(key) })
             .apply()
+
+        // CRITICAL: sync to DnsManager so grabber download limits are lifted
+        runCatching {
+            com.linkshield.sandbox.dns.DnsManager(appContext).setProUser(true)
+        }
+
         Log.d(TAG, "Pro activated for key: $key")
     }
 
