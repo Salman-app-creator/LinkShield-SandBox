@@ -40,6 +40,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    // FIX: packagingOptions add kiya taake native libs (FFmpeg, WireGuard) properly package ho
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
 }
 
 dependencies {
@@ -63,7 +70,7 @@ dependencies {
     implementation 'io.coil-kt:coil:2.5.0'
     implementation 'com.wireguard.android:tunnel:1.0.20260102'
 
-    // FIX: youtube-dl-android dependencies add kiye
+    // youtube-dl-android dependencies
     implementation 'com.github.yausername.youtubedl-android:library:0.14.0'
     implementation 'com.github.yausername.youtubedl-android:ffmpeg:0.14.0'
 
