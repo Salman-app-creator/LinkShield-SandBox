@@ -6,7 +6,6 @@ import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
 class WireGuardVpnController(
@@ -24,19 +23,24 @@ class WireGuardVpnController(
 
             val config = Config.parse(configText.byteInputStream())
 
-            // Tunnel Start
-            backend.setState(tunnel, Tunnel.State.UP, config)
+            // Tunnel Start — discard return value
+            @Suppress("UNUSED_VARIABLE")
+            val state = backend.setState(tunnel, Tunnel.State.UP, config)
             
             check(backend.getState(tunnel) == Tunnel.State.UP) {
                 "WireGuard tunnel failed to start"
             }
+
+            Unit
         }
     }
 
     suspend fun disconnect(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             // Always attempt disconnect; don't trust cached state
-            backend.setState(tunnel, Tunnel.State.DOWN, null)
+            @Suppress("UNUSED_VARIABLE")
+            val state = backend.setState(tunnel, Tunnel.State.DOWN, null)
+            Unit
         }
     }
 
