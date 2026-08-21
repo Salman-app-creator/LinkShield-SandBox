@@ -1,16 +1,7 @@
-package com.linkshield.sandbox.grabber
+package com.linkshield.sandbox.ui.grabber
 
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/grabber/GrabberEngine.kt
-// ← NEW FILE (does not exist in repo yet — create at this path)
-//
-// Production singleton for:
-//  • YoutubeDL initialization + auto-update
-//  • Media metadata fetch (title, thumbnail, available qualities)
-//  • Download with FFmpeg mux for 1080p / 4K
-//  • Progress tracking via StateFlow + cold Flow
-//  • Error mapping (private/geo-blocked/timeout/429)
-//
-// UI freeze rule: BACKEND ONLY. No Compose imports allowed here.
+// FIX: Package changed from com.linkshield.sandbox.grabber to com.linkshield.sandbox.ui.grabber
+// to match actual file location.
 
 import android.content.Context
 import android.util.Log
@@ -39,10 +30,10 @@ data class MediaMetadata(
 
 data class MediaFormat(
     val id: String,
-    val label: String,           // "1080p", "720p", "MP3", "4K"
-    val ext: String,             // "mp4", "mp3", "webm"
+    val label: String,
+    val ext: String,
     val isAudioOnly: Boolean,
-    val requiresMerge: Boolean   // true when height >= 1080 (needs FFmpeg mux)
+    val requiresMerge: Boolean
 )
 
 sealed class DownloadState {
@@ -60,9 +51,6 @@ object GrabberEngine {
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState = _downloadState.asStateFlow()
 
-    // ── Init — call from Application.onCreate() ──────────────────────────────
-    // Must run synchronously on the main thread before any download or fetch.
-
     fun init(context: Context) {
         runCatching {
             YoutubeDL.getInstance().init(context)
@@ -71,9 +59,6 @@ object GrabberEngine {
             Log.e(TAG, "YoutubeDL init failed: ${it.message}")
         }
     }
-
-    // ── Auto-update — keeps yt-dlp extractors fresh ──────────────────────────
-    // Call from a background coroutine. Silent failure is fine (offline).
 
     suspend fun updateExtractor(context: Context): Result<String> =
         withContext(Dispatchers.IO) {
@@ -87,8 +72,6 @@ object GrabberEngine {
                 Log.w(TAG, "Extractor update failed (OK if offline): ${it.message}")
             }
         }
-
-    // ── Metadata fetch ────────────────────────────────────────────────────────
 
     suspend fun fetchMetadata(url: String): Result<MediaMetadata> =
         withContext(Dispatchers.IO) {
@@ -124,16 +107,6 @@ object GrabberEngine {
             }
         }
 
-    // ── Download ──────────────────────────────────────────────────────────────
-    // Returns a cold Flow — collect inside viewModelScope.launch { }.
-    //
-    // Usage:
-    //   viewModelScope.launch {
-    //       GrabberEngine.download(context, url, format, outputDir).collect { state ->
-    //           _uiState.value = _uiState.value.copy(downloadState = state)
-    //       }
-    //   }
-
     fun download(
         context: Context,
         url: String,
@@ -158,18 +131,15 @@ object GrabberEngine {
 
                     when {
                         format.isAudioOnly -> {
-                            // Extract audio, convert to MP3
                             addOption("-x")
                             addOption("--audio-format", "mp3")
-                            addOption("--audio-quality", "0")   // 0 = best VBR
+                            addOption("--audio-quality", "0")
                         }
                         format.requiresMerge -> {
-                            // 1080p / 4K: best video stream + best audio, mux via FFmpeg
                             addOption("-f", "bestvideo[height<=${heightFor(format.label)}]+bestaudio/best")
                             addOption("--merge-output-format", "mp4")
                         }
                         else -> {
-                            // 360p – 720p: single combined stream, no FFmpeg needed
                             addOption(
                                 "-f",
                                 "bestvideo[height<=${heightFor(format.label)}][ext=mp4]" +
@@ -178,7 +148,6 @@ object GrabberEngine {
                         }
                     }
 
-                    // Point yt-dlp to the bundled FFmpeg binary
                     addOption("--ffmpeg-location", getFFmpegPath(context))
                 }
 
@@ -187,7 +156,7 @@ object GrabberEngine {
 
                 YoutubeDL.getInstance().execute(
                     request,
-                    processId = processId
+                    processId
                 ) { progress, eta, line ->
                     val state = DownloadState.Progress(
                         percent = progress,
@@ -196,18 +165,16 @@ object GrabberEngine {
                     )
                     _downloadState.value = state
 
-                    // Track output file from yt-dlp progress lines
                     if (line.contains("[download] Destination:")) {
                         val path = line.substringAfter("[download] Destination:").trim()
-                        trackedFile = File(path)
+                        trackedFile = java.io.File(path)
                     }
                 }
 
-                // Resolve output file
                 trackedFile
                     ?: outputDir.listFiles()
-                        ?.filter { it.isFile }
-                        ?.maxByOrNull { it.lastModified() }
+                        ?.filter { f -> f.isFile }
+                        ?.maxByOrNull { f -> f.lastModified() }
                     ?: throw IllegalStateException("Downloaded file not found in $outputDir")
             }
         }
@@ -228,8 +195,6 @@ object GrabberEngine {
         )
     }
 
-    // ── Cancel ────────────────────────────────────────────────────────────────
-
     fun cancel(processId: String) {
         runCatching { YoutubeDL.getInstance().destroyProcessById(processId) }
         _downloadState.value = DownloadState.Idle
@@ -239,12 +204,9 @@ object GrabberEngine {
         _downloadState.value = DownloadState.Idle
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
     private fun buildFormatList(info: VideoInfo): List<MediaFormat> {
         val result = mutableListOf<MediaFormat>()
 
-        // Always offer MP3 (audio-only)
         result.add(
             MediaFormat(
                 id            = "mp3",
@@ -255,16 +217,13 @@ object GrabberEngine {
             )
         )
 
-        // Video formats: 360p → 4K, only offer what the source supports
         val availableHeights: Set<Int> = info.formats
-            ?.mapNotNull { it.height?.toInt() }
+            ?.mapNotNull { fmt -> fmt.height?.toInt() }
             ?.toSet() ?: emptySet()
 
         val targetHeights = listOf(360, 480, 720, 1080, 2160)
         for (h in targetHeights) {
-            // Offer quality if source has at least this height,
-            // or if we can't determine available heights (offer all)
-            if (availableHeights.isEmpty() || availableHeights.any { it >= h }) {
+            if (availableHeights.isEmpty() || availableHeights.any { height -> height >= h }) {
                 val label = if (h == 2160) "4K" else "${h}p"
                 result.add(
                     MediaFormat(
@@ -272,7 +231,7 @@ object GrabberEngine {
                         label         = label,
                         ext           = "mp4",
                         isAudioOnly   = false,
-                        requiresMerge = h >= 1080  // FFmpeg mux needed for 1080p+
+                        requiresMerge = h >= 1080
                     )
                 )
             }
@@ -289,16 +248,13 @@ object GrabberEngine {
         else    -> 360
     }
 
-    /** youtubedl-android ships FFmpeg inside the app's native library dir. */
     private fun getFFmpegPath(context: Context): String {
         val nativeDir  = context.applicationInfo.nativeLibraryDir
-        val ffmpegFile = File(nativeDir, "libffmpeg.so")
+        val ffmpegFile = java.io.File(nativeDir, "libffmpeg.so")
         return if (ffmpegFile.exists()) ffmpegFile.absolutePath else nativeDir
     }
 
-    /** Extract download speed from a yt-dlp progress log line. */
     private fun extractSpeed(line: String): String {
-        // Example line: "[download]  12.3% of 45.00MiB at  2.10MiB/s ETA 00:19"
         val regex = Regex("""at\s+([\d.]+\s*\w+/s)""")
         return regex.find(line)?.groupValues?.getOrNull(1) ?: ""
     }
