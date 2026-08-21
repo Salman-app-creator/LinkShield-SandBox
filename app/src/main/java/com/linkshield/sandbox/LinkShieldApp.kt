@@ -8,10 +8,11 @@ package com.linkshield.sandbox
 //  2. AdBlock import fixed: repo uses lowercase "adblock" package
 //  3. GrabberEngine.init() added (YoutubeDL bootstrap — must be synchronous)
 //  4. GrabberEngine.updateExtractor() launched async in background
+//  5. FIX: GrabberEngine import path corrected to match actual file location (ui.grabber)
 
 import android.app.Application
 import com.linkshield.sandbox.adblock.AdBlockEngine          // ← lowercase "adblock" matches repo
-import com.linkshield.sandbox.grabber.GrabberEngine
+import com.linkshield.sandbox.ui.grabber.GrabberEngine       // ← FIX: was "grabber", now "ui.grabber"
 import com.linkshield.sandbox.vpn.VpnNotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
