@@ -9,8 +9,10 @@ package com.linkshield.sandbox
 //  3. GrabberEngine.init() added (YoutubeDL bootstrap — must be synchronous)
 //  4. GrabberEngine.updateExtractor() launched async in background
 //  5. FIX: GrabberEngine import path corrected to match actual file location (ui.grabber)
+//  6. FIX: GrabberEngine.init() wrapped in try-catch to prevent startup crash
 
 import android.app.Application
+import android.util.Log
 import com.linkshield.sandbox.adblock.AdBlockEngine          // ← lowercase "adblock" matches repo
 import com.linkshield.sandbox.ui.grabber.GrabberEngine       // ← FIX: was "grabber", now "ui.grabber"
 import com.linkshield.sandbox.vpn.VpnNotificationHelper
@@ -40,11 +42,20 @@ class LinkShieldApp : Application() {
 
         // ── YoutubeDL (Grabber) ───────────────────────────────────────────────
         // init() MUST be synchronous on main thread before any download call.
-        GrabberEngine.init(this)
+        // FIX: Wrapped in try-catch so app doesn't crash if YoutubeDL init fails
+        runCatching {
+            GrabberEngine.init(this)
+        }.onFailure {
+            Log.e("LinkShieldApp", "GrabberEngine init failed: ${it.message}")
+        }
 
         // Async extractor update — silent failure is acceptable (offline users)
         appScope.launch(Dispatchers.IO) {
-            GrabberEngine.updateExtractor(this@LinkShieldApp)
+            runCatching {
+                GrabberEngine.updateExtractor(this@LinkShieldApp)
+            }.onFailure {
+                Log.w("LinkShieldApp", "Extractor update failed: ${it.message}")
+            }
         }
     }
 }
