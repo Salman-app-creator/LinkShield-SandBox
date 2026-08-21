@@ -60,11 +60,12 @@ object GrabberEngine {
         }
     }
 
-    suspend fun updateExtractor(context: Context): Result<String> =
+       suspend fun updateExtractor(context: Context): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val status = YoutubeDL.getInstance()
-                    .updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE)
+                // FIX: Version 0.14.0 mein sirf Context parameter chahiye
+                // UpdateChannel enum exist nahi karta is version mein
+                val status = YoutubeDL.getInstance().updateYoutubeDL(context)
                 val msg = "Extractor update: $status"
                 Log.i(TAG, msg)
                 msg
@@ -72,6 +73,7 @@ object GrabberEngine {
                 Log.w(TAG, "Extractor update failed (OK if offline): ${it.message}")
             }
         }
+        
 
     suspend fun fetchMetadata(url: String): Result<MediaMetadata> =
         withContext(Dispatchers.IO) {
