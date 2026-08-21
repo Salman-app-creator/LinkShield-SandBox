@@ -62,9 +62,8 @@ fun TopHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // LEFT: Logo
-        // FIX: R.drawable.ic_app_logo → R.mipmap.ic_launcher (drawable exist nahi karta)
         Image(
-            painter = painterResource(id = R.mipmap.ic_launcher),
+            painter = painterResource(id = R.drawable.ic_app_logo),
             contentDescription = "App Logo",
             modifier = Modifier
                 .size(56.dp)
