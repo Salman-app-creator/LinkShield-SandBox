@@ -1,30 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- ============================================================
+         NETWORK
+         ============================================================ -->
+
+    <uses-permission
+        android:name="android.permission.INTERNET" />
+
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+
+    <!-- ============================================================
+         STORAGE
+         Android 9 and below
+         ============================================================ -->
 
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- Android 8+ background service requirement -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <!-- Android 14+ VPN foreground service requirement -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- ============================================================
+         FOREGROUND SERVICE
+         ============================================================ -->
 
-    <!-- Android 13+ notification permission -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- Android 14+ VPN foreground service -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+
+    <!-- ============================================================
+         NOTIFICATIONS
+         Android 13+
+         ============================================================ -->
+
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS" />
+
+
+    <!-- ============================================================
+         APPLICATION
+         ============================================================ -->
 
     <application
         android:name=".LinkShieldApp"
         android:allowBackup="true"
+        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="LinkShield Sandbox"
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShieldSandbox">
+
+
+        <!-- ========================================================
+             MAIN ACTIVITY
+             ======================================================== -->
 
         <activity
             android:name=".MainActivity"
@@ -32,11 +69,23 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask">
+
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+
+                <action
+                    android:name="android.intent.action.MAIN" />
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+
             </intent-filter>
+
         </activity>
+
+
+        <!-- ========================================================
+             LINK INTERCEPTOR
+             ======================================================== -->
 
         <activity
             android:name=".LinkInterceptorActivity"
@@ -45,15 +94,29 @@
             android:launchMode="singleTask">
 
             <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
+
+                <action
+                    android:name="android.intent.action.VIEW" />
+
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+
+                <category
+                    android:name="android.intent.category.BROWSABLE" />
+
                 <data android:scheme="http" />
+
                 <data android:scheme="https" />
+
             </intent-filter>
+
         </activity>
 
-        <!-- WireGuard VPN service — foregroundServiceType added for Android 14+ -->
+
+        <!-- ========================================================
+             WIREGUARD VPN SERVICE
+             ======================================================== -->
+
         <service
             android:name=".vpn.WireGuardVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
@@ -61,18 +124,30 @@
             android:foregroundServiceType="connectedDevice">
 
             <intent-filter>
-                <action android:name="android.net.VpnService" />
+
+                <action
+                    android:name="android.net.VpnService" />
+
             </intent-filter>
 
         </service>
 
-        <!-- Handles Disconnect tap on VPN foreground notification -->
+
+        <!-- ========================================================
+             VPN DISCONNECT ACTION RECEIVER
+             ======================================================== -->
+
         <receiver
             android:name=".vpn.VpnActionReceiver"
             android:exported="false">
+
             <intent-filter>
-                <action android:name="com.linkshield.sandbox.VPN_DISCONNECT" />
+
+                <action
+                    android:name="com.linkshield.sandbox.VPN_DISCONNECT" />
+
             </intent-filter>
+
         </receiver>
 
     </application>
