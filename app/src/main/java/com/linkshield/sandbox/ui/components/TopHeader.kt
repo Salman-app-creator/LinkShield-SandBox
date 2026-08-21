@@ -106,7 +106,7 @@ fun TopHeader(
                             leadingIcon = {
                                 Checkbox(
                                     checked = isShieldProtectionEnabled,
-                                    onCheckedChange = null // Double-click se bachne ke liye null rakha hai
+                                    onCheckedChange = null
                                 )
                             },
                             onClick = {
@@ -120,7 +120,7 @@ fun TopHeader(
                             leadingIcon = {
                                 Checkbox(
                                     checked = isWireGuardEnabled,
-                                    onCheckedChange = null // Double-click se bachne ke liye null rakha hai
+                                    onCheckedChange = null
                                 )
                             },
                             onClick = {
@@ -174,7 +174,7 @@ fun TopHeader(
                 }
             }
 
-            // ROW 2: Balanced Nav Buttons & Compact Address Bar
+            // ROW 2: Balanced Nav Buttons & Compact Address Bar + GO
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -286,6 +286,22 @@ fun TopHeader(
                             )
                         }
                     }
+                }
+
+                // GO Button
+                IconButton(
+                    onClick = {
+                        keyboardController?.hide()
+                        onNavigate()
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Go",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
