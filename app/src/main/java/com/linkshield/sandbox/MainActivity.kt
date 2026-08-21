@@ -30,13 +30,30 @@ import com.linkshield.sandbox.ui.MainScreen
 private enum class SetupStage { DISCLAIMER, ENABLE_SHIELD, MAIN }
 
 class MainActivity : ComponentActivity() {
+
+    // Holds the latest intercepted URL so onNewIntent can push it into Compose
+    val interceptedUrl = mutableStateOf("")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        readUrlFromIntent(intent)
         setContent {
             MainAppContent(
-                initialUrl = intent?.dataString ?: intent?.getStringExtra("url") ?: ""
+                initialUrl = interceptedUrl.value
             )
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        readUrlFromIntent(intent)
+    }
+
+    private fun readUrlFromIntent(intent: Intent?) {
+        val url = intent?.dataString ?: intent?.getStringExtra("url") ?: ""
+        if (url.isNotBlank()) {
+            interceptedUrl.value = url
         }
     }
 }
@@ -57,6 +74,16 @@ private fun MainAppContent(initialUrl: String) {
         )
     }
     val stage = SetupStage.valueOf(stageName)
+
+    // Observe intercepted URL changes from onNewIntent
+    val activity = context as MainActivity
+    val intercepted by activity.interceptedUrl
+    var currentUrl by remember { mutableStateOf(initialUrl) }
+    LaunchedEffect(intercepted) {
+        if (intercepted.isNotBlank()) {
+            currentUrl = intercepted
+        }
+    }
 
     val browserRoleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -114,7 +141,7 @@ private fun MainAppContent(initialUrl: String) {
                 )
 
                 SetupStage.MAIN -> MainScreen(
-                    initialUrl = initialUrl,
+                    initialUrl = currentUrl,
                     isDarkTheme = isDarkTheme,
                     onThemeToggle = { dark ->
                         isDarkTheme = dark
