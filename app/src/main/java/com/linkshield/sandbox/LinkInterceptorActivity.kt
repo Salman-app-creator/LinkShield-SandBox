@@ -47,7 +47,8 @@ class LinkInterceptorActivity : ComponentActivity() {
                             onClick = {
                                 val intent = Intent(this@LinkInterceptorActivity, MainActivity::class.java).apply {
                                     putExtra("url", url)
-                                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    // FIX: SINGLE_TOP add kiya taake onNewIntent trigger ho
+                                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                                 }
                                 startActivity(intent)
                                 finish()
