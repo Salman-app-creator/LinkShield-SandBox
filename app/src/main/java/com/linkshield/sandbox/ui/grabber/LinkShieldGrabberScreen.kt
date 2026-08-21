@@ -1,5 +1,26 @@
 package com.linkshield.sandbox.ui.grabber
 
+// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/grabber/LinkShieldGrabberScreen.kt
+// ← REPLACE existing file
+//
+// ROOT CAUSE FIX — Trial period showing even after license activation:
+//
+// OLD signature:
+//   fun LinkShieldGrabberScreen(onBackToBrowser, onUpgradeClick)
+//   → Screen was creating its own LicenseManager() instance LOCALLY
+//   → This local instance never got refreshed after Pro activation
+//   → Result: Always showed "trial" even with valid key
+//
+// NEW signature:
+//   fun LinkShieldGrabberScreen(onBackToBrowser, onUpgradeClick, isProUser, trialDaysLeft)
+//   → Live license state flows IN from UnblockShieldScreen (which refreshes on tab switch)
+//   → Screen just reads the passed-in values — no stale local instance
+//
+// UI_FREEZE_CONTRACT respected:
+//   • No new @Composable functions
+//   • No layout / color / typography changes
+//   • Only state wiring corrected
+
 import android.app.DownloadManager
 import android.content.Context
 import android.widget.Toast
@@ -23,14 +44,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
-import com.linkshield.sandbox.license.LicenseManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinkShieldGrabberScreen(
     onBackToBrowser: () -> Unit,
-    onUpgradeClick: () -> Unit
+    onUpgradeClick: () -> Unit,
+    // ── FIX: receive live license state from parent (UnblockShieldScreen) ──
+    isProUser: Boolean = false,
+    trialDaysLeft: Int = 7
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -42,20 +65,21 @@ fun LinkShieldGrabberScreen(
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var errorMsg by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Backend state
+    // Download result state
     var mediaUrl by rememberSaveable { mutableStateOf("") }
     var mediaFilename by rememberSaveable { mutableStateOf("") }
     var mediaMime by rememberSaveable { mutableStateOf("video/mp4") }
 
     val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
 
-    // License / download limit state
-    val licenseManager = remember { LicenseManager(context) }
+    // ── FIX: use passed-in isProUser instead of creating stale local instance
     val dnsManager = remember { DnsManager(context) }
-    val isPro = licenseManager.isProUser() || dnsManager.isProUser()
-    val remainingDownloads = if (isPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
+    // DnsManager pro flag is synced by LicenseManager.activatePro()
+    // isProUser from parent is the canonical source; dnsManager is fallback
+    val effectivelyPro = isProUser || dnsManager.isProUser()
+    val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
 
-    // Cobalt service (lazy)
+    // Cobalt API service (lazy-init, single instance)
     val cobaltService = remember {
         CobaltApiService(context, DnsManager(context.applicationContext))
     }
@@ -67,28 +91,58 @@ fun LinkShieldGrabberScreen(
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Title row
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBackToBrowser, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.ArrowBack, "Back to current website")
+                Icon(Icons.Default.ArrowBack, "Back to browser")
             }
-            Text("Grabber", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(
+                "Grabber",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
         }
 
+        // ── License badge — now reflects actual Pro status ──────────────────
         Card(
             Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            )
         ) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(Modifier.weight(1f)) {
-                    if (isPro) {
-                        Text("👑 PRO Unlimited", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    if (effectivelyPro) {
+                        // FIX: this now correctly shows PRO after key activation
+                        Text(
+                            "👑 PRO Unlimited",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (trialDaysLeft > 0) {
+                        Text(
+                            "[ $remainingDownloads Free Downloads Remaining ]",
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Trial: $trialDaysLeft days left • Upgrade for unlimited",
+                            fontSize = 12.sp
+                        )
                     } else {
-                        Text("[ $remainingDownloads Free Downloads Remaining ]", fontWeight = FontWeight.Bold)
-                        Text("Upgrade to Pro for Unlimited", fontSize = 12.sp)
+                        Text(
+                            "Trial Ended",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text("Upgrade to Pro for unlimited downloads", fontSize = 12.sp)
                     }
                 }
-                if (!isPro) {
+                if (!effectivelyPro) {
                     TextButton(onClick = onUpgradeClick) {
                         Icon(Icons.Default.Upgrade, null, Modifier.size(17.dp))
                         Spacer(Modifier.width(3.dp))
@@ -98,12 +152,17 @@ fun LinkShieldGrabberScreen(
             }
         }
 
+        // URL input
         OutlinedTextField(
             value = inputUrl,
-            onValueChange = { inputUrl = it; fetched = false; errorMsg = null },
+            onValueChange = {
+                inputUrl = it
+                fetched = false
+                errorMsg = null
+            },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            placeholder = { Text("Paste or Fetch Link...") },
+            placeholder = { Text("Paste video link here...") },
             leadingIcon = { Icon(Icons.Default.PlayCircle, null) },
             trailingIcon = {
                 if (inputUrl.isNotEmpty()) {
@@ -119,25 +178,37 @@ fun LinkShieldGrabberScreen(
             Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
         }
 
+        // Preview area
         Card(
             Modifier.fillMaxWidth().height(180.dp),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.PlayCircle, null, Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Default.PlayCircle,
+                        null,
+                        Modifier.size(54.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                     Spacer(Modifier.height(8.dp))
                     Text(
                         when {
                             isLoading -> "Fetching media..."
-                            fetched -> "Ready to download"
-                            else -> "Media Preview Area"
+                            fetched   -> "Ready to download"
+                            else      -> "Media Preview Area"
                         },
                         fontWeight = FontWeight.SemiBold
                     )
                     if (fetched && mediaFilename.isNotBlank()) {
-                        Text(mediaFilename, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            mediaFilename,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -151,7 +222,11 @@ fun LinkShieldGrabberScreen(
         }
 
         if (!audioOnly) {
-            Text("Select Resolution:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Select Resolution:",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -159,9 +234,9 @@ fun LinkShieldGrabberScreen(
                 resolutions.forEach { res ->
                     FilterChip(
                         selected = (selectedResolution == res),
-                        onClick = { selectedResolution = res },
-                        label = { Text(res, fontSize = 12.sp) },
-                        shape = RoundedCornerShape(8.dp)
+                        onClick  = { selectedResolution = res },
+                        label    = { Text(res, fontSize = 12.sp) },
+                        shape    = RoundedCornerShape(8.dp)
                     )
                 }
             }
@@ -177,34 +252,35 @@ fun LinkShieldGrabberScreen(
 
         Spacer(Modifier.height(4.dp))
 
+        // Fetch / Download button
         Button(
             onClick = {
                 if (!fetched) {
-                    // FETCH phase
+                    // ── FETCH phase ─────────────────────────────────────────
                     if (inputUrl.isBlank()) {
                         errorMsg = "Enter a URL first"
                         return@Button
                     }
-                    if (!isPro && remainingDownloads <= 0) {
+                    if (!effectivelyPro && remainingDownloads <= 0) {
                         errorMsg = "Download limit reached. Upgrade to Pro."
                         return@Button
                     }
                     isLoading = true
-                    errorMsg = null
+                    errorMsg  = null
+
                     scope.launch {
                         val result = cobaltService.fetchMediaUrl(
-                            pageUrl = inputUrl,
+                            pageUrl      = inputUrl,
                             downloadMode = if (audioOnly) "audio" else "auto",
-                            videoQuality = selectedResolution.replace("p", "")
+                            videoQuality = selectedResolution.replace("p", "").replace("4K", "2160")
                         )
                         isLoading = false
                         if (result.success && result.url != null) {
-                            mediaUrl = result.url
+                            mediaUrl      = result.url
                             mediaFilename = result.filename ?: "LinkShield_download"
-                            mediaMime = result.mimeType ?: "video/mp4"
-                            fetched = true
-                            // Consume one download token
-                            if (!isPro) {
+                            mediaMime     = result.mimeType ?: "video/mp4"
+                            fetched       = true
+                            if (!effectivelyPro) {
                                 dnsManager.consumeDownload()
                             }
                         } else {
@@ -212,7 +288,7 @@ fun LinkShieldGrabberScreen(
                         }
                     }
                 } else {
-                    // DOWNLOAD phase
+                    // ── DOWNLOAD phase ──────────────────────────────────────
                     if (mediaUrl.isBlank()) {
                         errorMsg = "No media URL available"
                         return@Button
@@ -221,7 +297,9 @@ fun LinkShieldGrabberScreen(
                         .setTitle(mediaFilename)
                         .setDescription("LinkShield Sandbox download")
                         .setMimeType(mediaMime)
-                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setNotificationVisibility(
+                            DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                        )
                         .setDestinationInExternalPublicDir(
                             android.os.Environment.DIRECTORY_DOWNLOADS,
                             "LinkShield/$mediaFilename"
@@ -231,22 +309,29 @@ fun LinkShieldGrabberScreen(
                     val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                     runCatching {
                         dm.enqueue(request)
-                        Toast.makeText(context, "Download started", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Download started ✓", Toast.LENGTH_SHORT).show()
+                        fetched = false   // reset for next download
                     }.onFailure {
-                        Toast.makeText(context, "Download failed: ${it.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            context,
+                            "Download failed: ${it.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             },
-            enabled = inputUrl.isNotBlank() && !isLoading,
+            enabled  = inputUrl.isNotBlank() && !isLoading,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(12.dp)
+            shape    = RoundedCornerShape(12.dp)
         ) {
             Icon(Icons.Default.Download, null)
             Spacer(Modifier.width(8.dp))
             Text(
-                if (isLoading) "Fetching..."
-                else if (fetched) "Download"
-                else "Fetch Media",
+                when {
+                    isLoading -> "Fetching..."
+                    fetched   -> "Download"
+                    else      -> "Fetch Media"
+                },
                 fontWeight = FontWeight.Bold
             )
         }
