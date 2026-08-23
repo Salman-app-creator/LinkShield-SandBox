@@ -52,6 +52,7 @@ import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.ui.window.DialogProperties
 
 class MainActivity : ComponentActivity() {
 
