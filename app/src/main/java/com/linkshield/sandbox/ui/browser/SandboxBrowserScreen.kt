@@ -20,9 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.ui.components.TopHeader
 
-/**
- * Canonical browser tab. TopHeader is intentionally owned by this screen only.
- */
 @Composable
 fun SandboxBrowserScreen(
     generation: Int,
@@ -79,7 +76,6 @@ fun SandboxBrowserScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 factory = { ctx ->
-                    // REUSE existing session WebView if available
                     SandboxWebViewSession.get()?.also { existing ->
                         webViewState.value = existing
                         onReady(existing)
@@ -87,7 +83,6 @@ fun SandboxBrowserScreen(
                             existing.loadUrl(startUrl)
                         }
                     } ?: WebView(ctx).apply {
-                        // Use theme background instead of transparent to prevent white flash
                         setBackgroundColor(
                             if (isDarkTheme) Color.parseColor("#FF0A0F14")
                             else Color.parseColor("#FFF0F2F5")
