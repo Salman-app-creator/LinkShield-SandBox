@@ -34,8 +34,6 @@ import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
-import com.linkshield.sandbox.update.UpdateChecker
-import com.linkshield.sandbox.update.UpdateDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -65,7 +63,6 @@ class MainActivity : ComponentActivity() {
                 contract = ActivityResultContracts.StartActivityForResult()
             ) { isDefaultBrowser = context.isDefaultBrowser() }
 
-            // Poll default browser status every 2s
             LaunchedEffect(Unit) {
                 while (true) {
                     isDefaultBrowser = context.isDefaultBrowser()
@@ -75,30 +72,6 @@ class MainActivity : ComponentActivity() {
 
             LinkShieldTheme(darkTheme = isDarkTheme) {
 
-                // Update check
-                var showUpdateDialog by remember { mutableStateOf(false) }
-                var updateInfo       by remember { mutableStateOf<com.linkshield.sandbox.update.UpdateInfo?>(null) }
-
-                LaunchedEffect(Unit) {
-                    runCatching {
-                        val result = UpdateChecker(context).checkForUpdate()
-                        result.getOrNull()?.let {
-                            if (it.updateAvailable) {
-                                updateInfo       = it
-                                showUpdateDialog = true
-                            }
-                        }
-                    }
-                }
-
-                if (showUpdateDialog && updateInfo != null) {
-                    UpdateDialog(
-                        updateInfo = updateInfo!!,
-                        onDismiss  = { showUpdateDialog = false }
-                    )
-                }
-
-                // Step 1: Default browser check
                 if (!isDefaultBrowser) {
                     DefaultBrowserLockScreen(
                         onEnable = {
@@ -121,7 +94,6 @@ class MainActivity : ComponentActivity() {
                     return@LinkShieldTheme
                 }
 
-                // Step 2: Disclaimer check
                 var showDisclaimer by remember { mutableStateOf(!disclaimerManager.hasAccepted()) }
 
                 if (showDisclaimer) {
@@ -134,7 +106,6 @@ class MainActivity : ComponentActivity() {
                     return@LinkShieldTheme
                 }
 
-                // Step 3: Main app
                 UnblockShieldScreen(
                     initialUrl    = interceptedUrl ?: "",
                     isDarkTheme   = isDarkTheme,
