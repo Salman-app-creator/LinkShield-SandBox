@@ -41,6 +41,13 @@ android {
         }
     }
 
+    // APK file name
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "LinkShield-v${defaultConfig.versionName}.apk"
+        }
+    }
+
     // FIX: packagingOptions add kiya taake native libs (FFmpeg, WireGuard) properly package ho
     packagingOptions {
         jniLibs {
