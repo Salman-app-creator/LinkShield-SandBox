@@ -53,6 +53,8 @@ import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.ui.window.DialogProperties
+import com.linkshield.sandbox.update.UpdateChecker
+import com.linkshield.sandbox.update.UpdateDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -93,7 +95,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LinkShieldTheme(darkTheme = isDarkTheme) {
+            LinkShieldTheme(darkTheme = isDarkTheme) { LinkShieldTheme(darkTheme = isDarkTheme) {
+
+                // ── Update check ─────────────────────────────────────────────
+                var showUpdateDialog by remember { mutableStateOf(false) }
+                var updateInfo by remember { mutableStateOf<com.linkshield.sandbox.update.UpdateInfo?>(null) }
+
+                LaunchedEffect(Unit) {
+                    runCatching {
+                        val checker = UpdateChecker(context)
+                        val result  = checker.checkForUpdate()
+                        result.getOrNull()?.let {
+                            if (it.updateAvailable) {
+                                updateInfo       = it
+                                showUpdateDialog = true
+                            }
+                        }
+                    }
+                }
+
+                if (showUpdateDialog && updateInfo != null) {
+                    UpdateDialog(
+                        updateInfo = updateInfo!!,
+                        onDismiss  = { showUpdateDialog = false }
+                    )
+                }
+
+                if (!isDefaultBrowser) {
+                    
                 if (!isDefaultBrowser) {
                     DefaultBrowserLockScreen(
                         onEnable = {
