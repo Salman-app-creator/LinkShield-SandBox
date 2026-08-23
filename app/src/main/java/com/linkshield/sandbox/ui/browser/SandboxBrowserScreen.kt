@@ -9,6 +9,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.Composable
@@ -52,7 +53,7 @@ fun SandboxBrowserScreen(
     val webViewState = remember { mutableStateOf<WebView?>(null) }
 
     key(generation) {
-        Column {
+        Column(modifier = Modifier.fillMaxSize()) {
             TopHeader(
                 currentUrl = currentUrl,
                 onUrlChange = onUrlChange,
