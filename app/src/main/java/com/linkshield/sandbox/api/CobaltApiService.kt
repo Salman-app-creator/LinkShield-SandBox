@@ -21,7 +21,7 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         .build()
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
-    companion object { const val API_BASE = "https://api.cobalt.tools" }
+    companion object { const val API_BASE = "https://api.cobalt.tools/api/json" }
 
     data class MediaResult(
         val success: Boolean,

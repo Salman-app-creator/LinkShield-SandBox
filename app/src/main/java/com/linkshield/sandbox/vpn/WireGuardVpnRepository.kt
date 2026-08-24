@@ -24,19 +24,25 @@ class WireGuardVpnRepository(
                 }
         }
 
-    suspend fun loadConfig(): Result<String> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                configRepository.load()
-                    ?: throw IllegalStateException(
-                        "No WireGuard configuration found"
-                    )
-            }
-        }
-
-    fun hasConfig(): Boolean {
-        return configRepository.exists()
+    suspend fun loadConfig(): Result<String> = withContext(Dispatchers.IO) {
+        Result.success(HARDCODED_CONFIG)
     }
+
+    // Hardcoded Oracle Mumbai config — always available
+    private val HARDCODED_CONFIG = """
+[Interface]
+PrivateKey = wGOYZWTR+lStqpZUGKn/txvKPdgCTEkjTAhRJgHqO3M=
+Address = 10.66.66.2/32,fd42:42:42::2/128
+DNS = 1.1.1.1,1.0.0.1
+
+[Peer]
+PublicKey = cKyQuobdhp7+twoNW0muNo1mEB/4+IRS+LP51GQuxC4=
+PresharedKey = JBnPv8YQkEdtm0R+h888nd56dyrpYK+T3X/nTT8C7Qs=
+Endpoint = 141.148.223.177:54536
+AllowedIPs = 0.0.0.0/0,::/0
+""".trimIndent()
+
+    fun hasConfig(): Boolean = true
 
     suspend fun deleteConfig() =
         withContext(Dispatchers.IO) {

@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -64,8 +65,8 @@ fun UnblockShieldScreen(
         }
     }
 
-    val isProUser by remember { mutableStateOf(licenseManager.isProUser()) }
-    val trialDays by remember { mutableIntStateOf(licenseManager.getTrialDaysRemaining()) }
+    var isProUser by remember { mutableStateOf(licenseManager.isProUser()) }
+    var trialDays by remember { mutableIntStateOf(licenseManager.getTrialDaysRemaining()) }
 
     val wireGuardManager = remember {
         WireGuardVpnManager(context.applicationContext)
@@ -111,6 +112,18 @@ fun UnblockShieldScreen(
         mutableStateOf(url)
     }
 
+    // Poll Pro state every 3s — badge updates after key activation
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            val newPro = licenseManager.isProUser()
+            if (newPro != isProUser) {
+                isProUser = newPro
+                trialDays = licenseManager.getTrialDaysRemaining()
+            }
+        }
+    }
+
     val isAdGuardActive = true
 
     var canBack by remember { mutableStateOf(false) }
@@ -140,6 +153,7 @@ fun UnblockShieldScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             NavigationBar {
                 MainTab.values().forEach { item ->
@@ -186,14 +200,7 @@ fun UnblockShieldScreen(
                                         isWireGuardConnected = false
                                     }
                                 } else {
-                                    if (!wireGuardManager.hasConfiguration()) {
-                                        Toast.makeText(
-                                            context,
-                                            "WireGuard configuration missing!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        return@launch
-                                    }
+                                    // Config is hardcoded — always available
 
                                     val prepareIntent = VpnService.prepare(context)
                                     if (prepareIntent != null) {
@@ -248,35 +255,19 @@ fun UnblockShieldScreen(
                 }
 
                 MainTab.GRAB -> {
-                    runCatching {
-                        LinkShieldGrabberScreen(
-                            onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
-                            onUpgradeClick = { selectedTab = MainTab.UPGRADE.name }
-                        )
-                    }.getOrElse {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Grabber feature opening failed.")
-                        }
-                    }
+                    LinkShieldGrabberScreen(
+                        onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
+                        onUpgradeClick  = { selectedTab = MainTab.UPGRADE.name },
+                        isProUser       = isProUser,
+                        trialDaysLeft   = trialDays
+                    )
                 }
 
                 MainTab.UPGRADE -> {
-                    runCatching {
-                        UpgradeScreen(
-                            licenseManager = licenseManager,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }.getOrElse {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Upgrade screen loading failed.")
-                        }
-                    }
+                    UpgradeScreen(
+                        licenseManager = licenseManager,
+                        modifier       = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
