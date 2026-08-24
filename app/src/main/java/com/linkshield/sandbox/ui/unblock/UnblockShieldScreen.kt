@@ -155,10 +155,7 @@ fun UnblockShieldScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
-            NavigationBar(
-                tonalElevation = 0.dp,
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
+            NavigationBar {
                 MainTab.values().forEach { item ->
                     NavigationBarItem(
                         selected = tab == item,
@@ -170,11 +167,10 @@ fun UnblockShieldScreen(
                                     MainTab.GRAB -> Icons.Default.Download
                                     MainTab.UPGRADE -> Icons.Default.Star
                                 },
-                                contentDescription = item.label,
-                                modifier = Modifier.size(22.dp)
+                                contentDescription = item.label
                             )
                         },
-                        label = { Text(item.label, fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)) },
+                        label = { Text(item.label) },
                         modifier = Modifier.weight(1f)
                     )
                 }
