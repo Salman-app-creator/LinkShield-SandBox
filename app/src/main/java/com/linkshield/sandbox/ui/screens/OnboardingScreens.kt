@@ -34,7 +34,7 @@ fun DisclaimerScreen(onAccept: () -> Unit) {
     val canContinue = scroll.maxValue == 0 || scroll.value >= scroll.maxValue - 24
     BackHandler(enabled = true) {}
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -84,12 +84,17 @@ fun EnableShieldScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var isDefault by remember { mutableStateOf(checkIsDefaultBrowser(context)) }
 
+    // Poll every 500ms — button updates when user returns from settings
     LaunchedEffect(Unit) {
-        isDefault = checkIsDefaultBrowser(context)
+        while (true) {
+            isDefault = checkIsDefaultBrowser(context)
+            if (isDefault) break
+            kotlinx.coroutines.delay(500)
+        }
     }
 
     Column(
-        Modifier.fillMaxSize().padding(22.dp),
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
