@@ -324,50 +324,17 @@ fun openDefaultBrowserSettings(
     context: Context
 ) {
     /*
-     * Android 10+:
-     * Use the official browser RoleManager flow.
-     */
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-        runCatching {
-
-            val roleManager =
-                context.getSystemService(
-                    RoleManager::class.java
-                )
-
-            if (
-                roleManager != null &&
-                roleManager.isRoleAvailable(
-                    RoleManager.ROLE_BROWSER
-                )
-            ) {
-
-                val intent =
-                    roleManager.createRequestRoleIntent(
-                        RoleManager.ROLE_BROWSER
-                    )
-
-                context.startActivity(intent)
-
-                return
-            }
-        }
-    }
-
-    /*
-     * Fallback for devices where RoleManager is unavailable.
+     * Open Android's actual Default Apps settings directly.
+     *
+     * Some OEM Android builds do not reliably launch/return from the
+     * RoleManager browser request dialog. The Settings page is the
+     * most compatible path and lets the user select LinkShield manually.
      */
     runCatching {
-
         context.startActivity(
-            Intent(
-                Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
-            )
+            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
         )
-
     }.onFailure {
-
         runCatching {
             context.startActivity(
                 Intent(Settings.ACTION_SETTINGS)
