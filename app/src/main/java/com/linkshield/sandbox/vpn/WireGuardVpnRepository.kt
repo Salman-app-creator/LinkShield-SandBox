@@ -39,7 +39,7 @@ DNS = 1.1.1.1,1.0.0.1
 PublicKey = cKyQuobdhp7+twoNW0muNo1mEB/4+IRS+LP51GQuxC4=
 PresharedKey = JBnPv8YQkEdtm0R+h888nd56dyrpYK+T3X/nTT8C7Qs=
 Endpoint = 141.148.223.177:54536
-AllowedIPs = 0.0.0.0/0,::/0
+AllowedIPs = 0.0.0.0/1,128.0.0.0/1,::/0
 """.trimIndent()
 
     fun hasConfig(): Boolean = true
