@@ -1,53 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- ============================================================
          NETWORK
          ============================================================ -->
-
-    <uses-permission
-        android:name="android.permission.INTERNET" />
-
-    <uses-permission
-        android:name="android.permission.ACCESS_NETWORK_STATE" />
-
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- ============================================================
-         STORAGE
-         Android 9 and below
+         STORAGE — Android 9 and below
          ============================================================ -->
-
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-
     <!-- ============================================================
          FOREGROUND SERVICE
          ============================================================ -->
-
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE" />
-
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Android 14+ VPN foreground service -->
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <!-- ============================================================
-         NOTIFICATIONS
-         Android 13+
+         NOTIFICATIONS — Android 13+
          ============================================================ -->
-
-    <uses-permission
-        android:name="android.permission.POST_NOTIFICATIONS" />
-
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- ============================================================
          APPLICATION
          ============================================================ -->
-
     <application
         android:name=".LinkShieldApp"
         android:allowBackup="true"
@@ -57,24 +38,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShieldSandbox">
 
-<intent-filter>
-
-    <action android:name="android.intent.action.VIEW" />
-
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-    <!-- ADD THIS LINE ↓ -->
-    <category android:name="android.intent.category.APP_BROWSER" />
-
-    <data android:scheme="http" />
-    <data android:scheme="https" />
-
-</intent-filter>
-        
         <!-- ========================================================
              MAIN ACTIVITY
              ======================================================== -->
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -83,34 +49,24 @@
             android:launchMode="singleTask">
 
             <intent-filter>
-
-                <action
-                    android:name="android.intent.action.MAIN" />
-
-                <category
-                    android:name="android.intent.category.LAUNCHER" />
-
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
             <intent-filter>
-
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
+                <category android:name="android.intent.category.APP_BROWSER" />
                 <data android:scheme="http" />
                 <data android:scheme="https" />
-
             </intent-filter>
 
         </activity>
 
-
         <!-- ========================================================
              LINK INTERCEPTOR
              ======================================================== -->
-
         <activity
             android:name=".LinkInterceptorActivity"
             android:exported="true"
@@ -118,29 +74,18 @@
             android:launchMode="singleTask">
 
             <intent-filter>
-
-                <action
-                    android:name="android.intent.action.VIEW" />
-
-                <category
-                    android:name="android.intent.category.DEFAULT" />
-
-                <category
-                    android:name="android.intent.category.BROWSABLE" />
-
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="http" />
-
                 <data android:scheme="https" />
-
             </intent-filter>
 
         </activity>
 
-
         <!-- ========================================================
              WIREGUARD VPN SERVICE
              ======================================================== -->
-
         <service
             android:name=".vpn.WireGuardVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
@@ -148,28 +93,20 @@
             android:foregroundServiceType="connectedDevice">
 
             <intent-filter>
-
-                <action
-                    android:name="android.net.VpnService" />
-
+                <action android:name="android.net.VpnService" />
             </intent-filter>
 
         </service>
 
-
         <!-- ========================================================
              VPN DISCONNECT ACTION RECEIVER
              ======================================================== -->
-
         <receiver
             android:name=".vpn.VpnActionReceiver"
             android:exported="false">
 
             <intent-filter>
-
-                <action
-                    android:name="com.linkshield.sandbox.VPN_DISCONNECT" />
-
+                <action android:name="com.linkshield.sandbox.VPN_DISCONNECT" />
             </intent-filter>
 
         </receiver>
