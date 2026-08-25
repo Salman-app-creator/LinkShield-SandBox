@@ -45,6 +45,11 @@ import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.launch
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +74,7 @@ fun LinkShieldGrabberScreen(
     var mediaUrl by rememberSaveable { mutableStateOf("") }
     var mediaFilename by rememberSaveable { mutableStateOf("") }
     var mediaMime by rememberSaveable { mutableStateOf("video/mp4") }
+    var thumbnailUrl by rememberSaveable { mutableStateOf("") }
 
     val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
 
@@ -178,37 +184,43 @@ fun LinkShieldGrabberScreen(
             Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
         }
 
-        // Preview area
+        // Preview area with thumbnail
         Card(
             Modifier.fillMaxWidth().height(180.dp),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.PlayCircle,
-                        null,
-                        Modifier.size(54.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                if (thumbnailUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(thumbnailUrl).crossfade(true).build(),
+                        contentDescription = "Thumbnail",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        when {
-                            isLoading -> "Fetching media..."
-                            fetched   -> "Ready to download"
-                            else      -> "Media Preview Area"
-                        },
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (fetched && mediaFilename.isNotBlank()) {
+                    Box(
+                        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.BottomStart
+                    ) {
+                        Column(Modifier.padding(10.dp)) {
+                            Text(
+                                if (fetched) "✅ Ready to download" else "🎬 Tap Fetch",
+                                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                            )
+                            if (fetched && mediaFilename.isNotBlank())
+                                Text(mediaFilename, fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                        }
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PlayCircle, null, Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            mediaFilename,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            when { isLoading -> "Fetching media..." fetched -> "Ready to download" else -> "Paste URL and tap Fetch" },
+                            fontWeight = FontWeight.SemiBold
                         )
+                        if (fetched && mediaFilename.isNotBlank())
+                            Text(mediaFilename, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -269,6 +281,7 @@ fun LinkShieldGrabberScreen(
                     errorMsg  = null
 
                     scope.launch {
+                        thumbnailUrl = extractYoutubeThumbnail(inputUrl)
                         val result = cobaltService.fetchMediaUrl(
                             pageUrl      = inputUrl,
                             downloadMode = if (audioOnly) "audio" else "auto",
@@ -335,5 +348,20 @@ fun LinkShieldGrabberScreen(
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+}
+
+private fun extractYoutubeThumbnail(url: String): String {
+    val clean = url.trim().lowercase()
+    return when {
+        "youtube.com/watch" in clean || "youtu.be/" in clean -> {
+            val videoId = when {
+                "youtu.be/" in clean -> url.substringAfter("youtu.be/").substringBefore("?").substringBefore("&").take(11)
+                "v=" in clean -> url.substringAfter("v=").substringBefore("&").substringBefore("#").take(11)
+                else -> ""
+            }
+            if (videoId.isNotBlank()) "https://img.youtube.com/vi/$videoId/hqdefault.jpg" else ""
+        }
+        else -> ""
     }
 }
