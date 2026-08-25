@@ -6,6 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.ui.screens.DisclaimerScreen
 import com.linkshield.sandbox.ui.screens.EnableShieldScreen
@@ -16,12 +19,14 @@ import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
 import com.linkshield.sandbox.update.UpdateChecker
 import com.linkshield.sandbox.update.UpdateDialog
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val interceptedUrlFlow = MutableStateFlow<String?>(null)
+    // Fires true every time onResume runs — triggers recheck in Compose
+    private val resumeTickFlow = MutableStateFlow(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,12 +38,23 @@ class MainActivity : ComponentActivity() {
         val themeManager      = ThemeManager(this)
 
         setContent {
-            val interceptedUrl   by interceptedUrlFlow.collectAsState()
-            val context          = LocalContext.current
-            var isDarkTheme      by remember { mutableStateOf(themeManager.isDarkTheme()) }
-            var hasAccepted      by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
-            var hasBrowserSet    by remember { mutableStateOf(disclaimerManager.hasBrowserSet()) }
-            var isDefaultBrowser by remember { mutableStateOf(checkIsDefaultBrowser(context)) }
+            val interceptedUrl by interceptedUrlFlow.collectAsState()
+            val resumeTick     by resumeTickFlow.collectAsState()
+            val context        = LocalContext.current
+
+            var isDarkTheme   by remember { mutableStateOf(themeManager.isDarkTheme()) }
+            var hasAccepted   by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
+            var hasBrowserSet by remember { mutableStateOf(disclaimerManager.hasBrowserSet()) }
+
+            // Re-check every time activity resumes (e.g. returning from RoleManager dialog)
+            LaunchedEffect(resumeTick) {
+                if (hasAccepted && !hasBrowserSet) {
+                    if (checkIsDefaultBrowser(context)) {
+                        disclaimerManager.markBrowserSet()
+                        hasBrowserSet = true
+                    }
+                }
+            }
 
             // Update check
             var showUpdateDialog by remember { mutableStateOf(false) }
@@ -53,21 +69,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Poll browser default status every 500ms while on EnableShield screen
-            LaunchedEffect(hasAccepted, hasBrowserSet) {
-                if (hasAccepted && !hasBrowserSet) {
-                    while (true) {
-                        isDefaultBrowser = checkIsDefaultBrowser(context)
-                        if (isDefaultBrowser) {
-                            disclaimerManager.markBrowserSet()
-                            hasBrowserSet = true
-                            break
-                        }
-                        delay(500)
-                    }
-                }
-            }
-
             LinkShieldTheme(darkTheme = isDarkTheme) {
 
                 if (showUpdateDialog && updateInfo != null) {
@@ -75,16 +76,13 @@ class MainActivity : ComponentActivity() {
                 }
 
                 when {
-                    // Step 1: Original DisclaimerScreen — logo + original content
                     !hasAccepted -> DisclaimerScreen(
                         onAccept = {
                             disclaimerManager.accept()
                             hasAccepted = true
-                            isDefaultBrowser = checkIsDefaultBrowser(context)
                         }
                     )
 
-                    // Step 2: Original EnableShieldScreen — logo + original content
                     !hasBrowserSet -> EnableShieldScreen(
                         onBrowserSet = {
                             disclaimerManager.markBrowserSet()
@@ -93,7 +91,6 @@ class MainActivity : ComponentActivity() {
                         onRequestBrowserRole = { openDefaultBrowserSettings(context) }
                     )
 
-                    // Step 3: Main app
                     else -> UnblockShieldScreen(
                         initialUrl    = interceptedUrl ?: "",
                         isDarkTheme   = isDarkTheme,
@@ -105,6 +102,13 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+            }
+        }
+
+        // Increment tick every time activity comes to foreground
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                resumeTickFlow.value++
             }
         }
     }
