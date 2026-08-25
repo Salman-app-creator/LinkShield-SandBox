@@ -216,7 +216,11 @@ fun LinkShieldGrabberScreen(
                         Icon(Icons.Default.PlayCircle, null, Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            when { isLoading -> "Fetching media..." fetched -> "Ready to download" else -> "Paste URL and tap Fetch" },
+                            when {
+                                isLoading -> "Fetching media..."
+                                fetched -> "Ready to download"
+                                else -> "Paste URL and tap Fetch"
+                            },
                             fontWeight = FontWeight.SemiBold
                         )
                         if (fetched && mediaFilename.isNotBlank())
