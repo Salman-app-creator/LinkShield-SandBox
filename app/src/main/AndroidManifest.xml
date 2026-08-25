@@ -57,7 +57,20 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShieldSandbox">
 
+<intent-filter>
 
+    <action android:name="android.intent.action.VIEW" />
+
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <!-- ADD THIS LINE ↓ -->
+    <category android:name="android.intent.category.APP_BROWSER" />
+
+    <data android:scheme="http" />
+    <data android:scheme="https" />
+
+</intent-filter>
+        
         <!-- ========================================================
              MAIN ACTIVITY
              ======================================================== -->
