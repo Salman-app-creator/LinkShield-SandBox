@@ -11,7 +11,6 @@ import java.io.StringReader
 
 class WireGuardVpnRepository(private val context: Context) {
 
-    // ── Single companion object — merged ──────────────────────────────────────
     companion object {
         private const val PREFS_FILE = "wg_config_prefs"
         private const val KEY_CONFIG = "wireguard_config"
@@ -31,8 +30,6 @@ PersistentKeepalive = 25
 """
     }
 
-    // ── EncryptedSharedPreferences ────────────────────────────────────────────
-
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -46,8 +43,6 @@ PersistentKeepalive = 25
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
-
-    // ── Public API ────────────────────────────────────────────────────────────
 
     fun hasConfig(): Boolean = true
 
