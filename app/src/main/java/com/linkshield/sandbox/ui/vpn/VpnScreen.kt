@@ -133,16 +133,6 @@ private fun ShieldButton(
         label = "pulseScale"
     )
 
-    // Spinner rotation when busy
-    val rotation by infiniteTransition.animateFloat(
-        initialValue  = 0f,
-        targetValue   = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing)
-        ),
-        label = "spinnerRotation"
-    )
-
     val ringColors = when (state) {
         is VpnConnectionState.Connected     -> VpnTheme.ringConnected
         is VpnConnectionState.Error         -> VpnTheme.ringError
