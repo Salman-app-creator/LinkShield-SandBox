@@ -9,20 +9,26 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.StringReader
 
-/**
- * WireGuardVpnRepository.kt
- *
- * Handles persistence and retrieval of the WireGuard tunnel configuration.
- * Config is stored in EncryptedSharedPreferences so private keys are
- * never stored in plaintext on disk.
- *
- * Called by WireGuardVpnManager — do not access directly from UI.
- */
 class WireGuardVpnRepository(private val context: Context) {
 
+    // ── Single companion object — merged ──────────────────────────────────────
     companion object {
-        private const val PREFS_FILE  = "wg_config_prefs"
-        private const val KEY_CONFIG  = "wireguard_config"
+        private const val PREFS_FILE = "wg_config_prefs"
+        private const val KEY_CONFIG = "wireguard_config"
+
+        private const val BUILT_IN_CONFIG = """
+[Interface]
+PrivateKey = OH1Y55pIvy330HQrKaEz4q53to+RtrF8jLVK85kLY1k=
+Address = 10.66.66.3/32,fd42:42:42::3/128
+DNS = 1.1.1.1,1.0.0.1
+
+[Peer]
+PublicKey = cKyQuobdhp7+twoNW0muNo1mEB/4+IRS+LP51GQuxC4=
+PresharedKey = KF/W4IBCsLpN33tq6BEBLnkBQjbl+aznxffKQqafQ8g=
+Endpoint = 141.148.223.177:54536
+AllowedIPs = 0.0.0.0/0,::/0
+PersistentKeepalive = 25
+"""
     }
 
     // ── EncryptedSharedPreferences ────────────────────────────────────────────
@@ -43,40 +49,23 @@ class WireGuardVpnRepository(private val context: Context) {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /** Returns true if a saved config exists. */
-    fun hasConfig(): Boolean =
-        prefs.contains(KEY_CONFIG)
+    fun hasConfig(): Boolean = true
 
-    /**
-     * Load and parse the saved WireGuard config.
-     * Returns Result.failure if no config is saved or parsing fails.
-     */
     suspend fun loadConfig(): Result<Config> = withContext(Dispatchers.IO) {
         runCatching {
-            val raw = prefs.getString(KEY_CONFIG, null)
-                ?: error("No WireGuard configuration found. Please import a .conf file.")
-
+            val raw = prefs.getString(KEY_CONFIG, null) ?: BUILT_IN_CONFIG
             Config.parse(BufferedReader(StringReader(raw)))
         }
     }
 
-    /**
-     * Encrypt and persist the raw WireGuard config text.
-     * Pass the content of a standard .conf file.
-     */
     suspend fun saveConfig(configText: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                // Validate the config before saving
                 Config.parse(BufferedReader(StringReader(configText)))
-
-                prefs.edit()
-                    .putString(KEY_CONFIG, configText)
-                    .apply()
+                prefs.edit().putString(KEY_CONFIG, configText).apply()
             }
         }
 
-    /** Remove the stored config (e.g. on logout / reset). */
     suspend fun deleteConfig(): Unit = withContext(Dispatchers.IO) {
         prefs.edit().remove(KEY_CONFIG).apply()
     }
