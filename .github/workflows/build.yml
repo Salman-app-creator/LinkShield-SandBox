@@ -39,21 +39,60 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.7
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.7"
 
-      - name: Verify Gradle version
-        run: gradle --version
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee build_output.txt
+        continue-on-error: true
 
-      - name: Upload Debug APK
-        if: success()
+      - name: Check build result
+        run: |
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            echo "BUILD_SUCCESS=true" >> $GITHUB_ENV
+            echo "✅ BUILD SUCCEEDED"
+            ls -lh app/build/outputs/apk/debug/
+          else
+            echo "BUILD_SUCCESS=false" >> $GITHUB_ENV
+            echo "❌ BUILD FAILED — see build_output.txt artifact"
+          fi
+
+      - name: Upload APK
+        if: env.BUILD_SUCCESS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: LinkShield-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-Log
+          path: build_output.txt
           retention-days: 7
+
+      - name: Create Release with APK
+        if: env.BUILD_SUCCESS == 'true' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "LinkShield Debug Build #${{ github.run_number }}"
+          body: |
+            🤖 Auto-build from commit ${{ github.sha }}
+            
+            **Install karne ke liye:**
+            1. Neeche Assets mein `app-debug.apk` tap karo
+            2. Download karo
+            3. Install karo
+          files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
