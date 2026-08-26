@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,14 @@ fun SandboxBrowserScreen(
     onRendererGone: () -> Unit
 ) {
     val webViewState = remember { mutableStateOf<WebView?>(null) }
+
+    // Navigation fix: Jab startUrl update ho to WebView par loadUrl call karein
+    LaunchedEffect(startUrl) {
+        val currentWebView = webViewState.value
+        if (currentWebView != null && startUrl.isNotBlank() && currentWebView.url != startUrl) {
+            currentWebView.loadUrl(startUrl)
+        }
+    }
 
     key(generation) {
         Column(modifier = Modifier.fillMaxSize()) {
