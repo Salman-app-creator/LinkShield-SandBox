@@ -29,7 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Upgrade
@@ -100,7 +100,7 @@ fun LinkShieldGrabberScreen(
         // Title row
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBackToBrowser, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.ArrowBack, "Back to browser")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to browser")
             }
             Text(
                 "Grabber",
@@ -173,7 +173,7 @@ fun LinkShieldGrabberScreen(
             trailingIcon = {
                 if (inputUrl.isNotEmpty()) {
                     IconButton(onClick = { inputUrl = ""; fetched = false }) {
-                        Icon(Icons.Default.ArrowBack, "Clear", Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Clear", Modifier.size(18.dp))
                     }
                 }
             },
