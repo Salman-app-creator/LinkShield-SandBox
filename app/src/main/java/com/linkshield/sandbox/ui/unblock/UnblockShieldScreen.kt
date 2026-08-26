@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Public
@@ -38,6 +41,8 @@ import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
 import com.linkshield.sandbox.vpn.WireGuardVpnManager
 import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import java.net.URLEncoder
 
 private enum class MainTab(val label: String) {
@@ -155,7 +160,11 @@ fun UnblockShieldScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
-            NavigationBar {
+            // FIX: slim nav bar — toneDp 0 removes extra Material3 height
+            NavigationBar(
+                tonalElevation = 0.dp,
+                modifier = Modifier.height(56.dp)
+            ) {
                 MainTab.values().forEach { item ->
                     NavigationBarItem(
                         selected = tab == item,
@@ -167,10 +176,17 @@ fun UnblockShieldScreen(
                                     MainTab.GRAB -> Icons.Default.Download
                                     MainTab.UPGRADE -> Icons.Default.Star
                                 },
-                                contentDescription = item.label
+                                contentDescription = item.label,
+                                modifier = Modifier.size(20.dp)
                             )
                         },
-                        label = { Text(item.label) },
+                        label = {
+                            Text(
+                                text = item.label,
+                                fontSize = 10.sp,
+                                maxLines = 1
+                            )
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
