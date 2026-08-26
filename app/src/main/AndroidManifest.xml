@@ -18,8 +18,9 @@
          FOREGROUND SERVICE
          ============================================================ -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- Android 14+ VPN foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Android 14+ specialUse for VPN -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- ============================================================
          NOTIFICATIONS — Android 13+
@@ -48,18 +49,36 @@
             android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask">
 
+            <!-- Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+                DEFAULT BROWSER intent filter.
+                ALL four of these are required for Android to offer this
+                app in the "Default browser" / RoleManager.ROLE_BROWSER dialog.
+                Missing any one of them causes the role request to silently fail.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
             </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <category android:name="android.intent.category.APP_BROWSER" />
-                <data android:scheme="http" />
                 <data android:scheme="https" />
+            </intent-filter>
+
+            <!-- Required for Android to recognize app as a browser candidate -->
+            <intent-filter>
+                <action android:name="android.intent.action.WEB_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
         </activity>
@@ -95,6 +114,25 @@
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
+
+        </service>
+
+        <!-- ========================================================
+             SHADOWSOCKS VPN SERVICE (1-Click VPN)
+             ======================================================== -->
+        <service
+            android:name=".vpn.ShadowsocksVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Establishes a secure VPN tunnel for privacy protection" />
 
         </service>
 

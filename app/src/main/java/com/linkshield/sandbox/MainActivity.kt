@@ -1,9 +1,16 @@
 package com.linkshield.sandbox
 
+import android.app.Activity
+import android.app.role.RoleManager
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -13,7 +20,6 @@ import com.linkshield.sandbox.disclaimer.DisclaimerManager
 import com.linkshield.sandbox.ui.screens.DisclaimerScreen
 import com.linkshield.sandbox.ui.screens.EnableShieldScreen
 import com.linkshield.sandbox.ui.screens.checkIsDefaultBrowser
-import com.linkshield.sandbox.ui.screens.openDefaultBrowserSettings
 import com.linkshield.sandbox.ui.theme.LinkShieldTheme
 import com.linkshield.sandbox.ui.theme.ThemeManager
 import com.linkshield.sandbox.ui.unblock.UnblockShieldScreen
@@ -25,14 +31,27 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val interceptedUrlFlow = MutableStateFlow<String?>(null)
-    // Fires true every time onResume runs — triggers recheck in Compose
-    private val resumeTickFlow = MutableStateFlow(0)
+    private val resumeTickFlow     = MutableStateFlow(0)
+
+    // ── Browser role launcher ─────────────────────────────────────────────────
+    // Must be registered here (not inside Compose) — this is the correct way
+    // to use startActivityForResult in a ComponentActivity.
+    private lateinit var browserRoleLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         interceptedUrlFlow.value = intent?.getStringExtra("url")
+
+        // Register launcher BEFORE setContent
+        browserRoleLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            // Result comes back here after user picks default browser
+            // resumeTickFlow increment triggers re-check in Compose
+            resumeTickFlow.value++
+        }
 
         val disclaimerManager = DisclaimerManager(this)
         val themeManager      = ThemeManager(this)
@@ -46,7 +65,7 @@ class MainActivity : ComponentActivity() {
             var hasAccepted   by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
             var hasBrowserSet by remember { mutableStateOf(disclaimerManager.hasBrowserSet()) }
 
-            // Re-check every time activity resumes (e.g. returning from RoleManager dialog)
+            // Re-check every time resumeTick changes (after returning from browser dialog)
             LaunchedEffect(resumeTick) {
                 if (hasAccepted && !hasBrowserSet) {
                     if (checkIsDefaultBrowser(context)) {
@@ -72,7 +91,10 @@ class MainActivity : ComponentActivity() {
             LinkShieldTheme(darkTheme = isDarkTheme) {
 
                 if (showUpdateDialog && updateInfo != null) {
-                    UpdateDialog(updateInfo = updateInfo!!, onDismiss = { showUpdateDialog = false })
+                    UpdateDialog(
+                        updateInfo = updateInfo!!,
+                        onDismiss  = { showUpdateDialog = false }
+                    )
                 }
 
                 when {
@@ -88,7 +110,10 @@ class MainActivity : ComponentActivity() {
                             disclaimerManager.markBrowserSet()
                             hasBrowserSet = true
                         },
-                        onRequestBrowserRole = { openDefaultBrowserSettings(context) }
+                        onRequestBrowserRole = {
+                            // Launch browser picker using proper ActivityResultLauncher
+                            launchBrowserRolePicker()
+                        }
                     )
 
                     else -> UnblockShieldScreen(
@@ -96,7 +121,8 @@ class MainActivity : ComponentActivity() {
                         isDarkTheme   = isDarkTheme,
                         onThemeToggle = { newDark ->
                             themeManager.setTheme(
-                                if (newDark) ThemeManager.THEME_DARK else ThemeManager.THEME_LIGHT
+                                if (newDark) ThemeManager.THEME_DARK
+                                else         ThemeManager.THEME_LIGHT
                             )
                             isDarkTheme = newDark
                         }
@@ -105,10 +131,44 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Increment tick every time activity comes to foreground
+        // Increment tick every time activity resumes
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 resumeTickFlow.value++
+            }
+        }
+    }
+
+    /**
+     * Launches the system browser picker using ActivityResultLauncher.
+     *
+     * On Android 10+ (Q): uses RoleManager — shows a proper dialog.
+     * On Android 9-:      opens Default Apps settings page directly.
+     *
+     * Plain context.startActivity() does NOT work for RoleManager intents —
+     * they require startActivityForResult which is what the launcher does.
+     */
+    private fun launchBrowserRolePicker() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager?.isRoleAvailable(RoleManager.ROLE_BROWSER) == true &&
+                    roleManager.isRoleHeld(RoleManager.ROLE_BROWSER).not()
+                ) {
+                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER)
+                    browserRoleLauncher.launch(intent)
+                    return
+                }
+            }
+        }
+        // Fallback: open Default Apps settings
+        runCatching {
+            browserRoleLauncher.launch(
+                Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+            )
+        }.onFailure {
+            runCatching {
+                browserRoleLauncher.launch(Intent(Settings.ACTION_SETTINGS))
             }
         }
     }
