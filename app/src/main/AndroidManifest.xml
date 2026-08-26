@@ -31,17 +31,15 @@
          APPLICATION
          ============================================================ -->
     <application
-        <application
         android:name=".LinkShieldApp"
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
-        android:networkSecurityConfig="@xml/network_security_config"   <!-- YEH ADD KAREIN -->
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:icon="@drawable/ic_app_logo"
+        android:roundIcon="@drawable/ic_app_logo"
         android:label="LinkShield Sandbox"
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShieldSandbox">
-
 
         <!-- ========================================================
              MAIN ACTIVITY
@@ -59,12 +57,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!--
-                DEFAULT BROWSER intent filter.
-                ALL four of these are required for Android to offer this
-                app in the "Default browser" / RoleManager.ROLE_BROWSER dialog.
-                Missing any one of them causes the role request to silently fail.
-            -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
