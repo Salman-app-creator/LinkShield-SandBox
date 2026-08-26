@@ -48,6 +48,7 @@ fun UpgradeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .statusBarsPadding() // Top Header ko Status Bar se neeche shift karega
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
