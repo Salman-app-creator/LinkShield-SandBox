@@ -1,0 +1,60 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract replacement zip (if present)
+        run: |
+          ZIP=$(find . -maxdepth 2 -name "*.zip" | head -1)
+          if [ -n "$ZIP" ]; then
+            echo "Found zip: $ZIP"
+            unzip -o "$ZIP" -d _extracted
+            # Find the inner folder (e.g. LinkShield-SandBox-main)
+            INNER=$(find _extracted -mindepth 1 -maxdepth 1 -type d | head -1)
+            if [ -n "$INNER" ]; then
+              echo "Merging from: $INNER"
+              cp -rf "$INNER/." .
+            else
+              cp -rf _extracted/. .
+            fi
+            echo "Merge complete"
+          else
+            echo "No zip found — building existing repo"
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.7"
+
+      - name: Verify Gradle version
+        run: gradle --version
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --stacktrace --no-daemon
+
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkShield-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
