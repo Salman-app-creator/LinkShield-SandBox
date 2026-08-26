@@ -1,18 +1,19 @@
 package com.linkshield.sandbox.api
 
+// REPO PATH: app/src/main/java/com/linkshield/sandbox/api/CobaltApiService.kt
+
 import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
-import com.linkshield.sandbox.dns.DnsManager
 
 class CobaltApiService(context: Context, dnsManager: DnsManager) {
     private val client = dnsManager.getClient().newBuilder()
@@ -21,7 +22,10 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         .build()
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
-    companion object { const val API_BASE = "https://api.cobalt.tools/api/json" }
+    companion object { 
+        // Aap ke Oracle Cloud OCI server ka direct FastAPI endpoint
+        private const val ORACLE_API_BASE = "http://141.148.223.177:8000/extract"
+    }
 
     data class MediaResult(
         val success: Boolean,
@@ -38,69 +42,48 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         videoQuality: String = "720"
     ): MediaResult = withContext(Dispatchers.IO) {
         try {
-            val jsonBody = JSONObject().apply {
-                put("url", pageUrl)
-                put("vQuality", videoQuality)
-                put("aFormat", "mp3")
-                put("isAudioOnly", downloadMode == "audio")
-                put("isNoTTWatermark", true)
-                put("isTTFullAudio", false)
-                put("isAudioMuted", false)
-                put("dubLang", false)
-                put("disableMetadata", false)
-                put("twitterGif", true)
-                put("vimeoDash", false)
-            }
+            val encodedUrl = URLEncoder.encode(pageUrl, "UTF-8")
+            val targetUrl = "$ORACLE_API_BASE?url=$encodedUrl"
+
             val request = Request.Builder()
-                .url(API_BASE)
+                .url(targetUrl)
+                .get()
                 .addHeader("Accept", "application/json")
-                .addHeader("Content-Type", "application/json")
                 .addHeader("User-Agent", "LinkShieldSandbox/2.1")
-                .post(jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull()))
                 .build()
 
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string()
                 if (!response.isSuccessful || body.isNullOrBlank()) {
-                    return@withContext MediaResult(false, error = "Cobalt API error: HTTP ${response.code}")
+                    return@withContext MediaResult(false, error = "Server Error: HTTP ${response.code}")
                 }
+
                 val json = JSONObject(body)
-                when (json.optString("status")) {
-                    "redirect", "tunnel", "stream" -> {
-                        val url = json.optString("url")
-                        if (url.isBlank()) MediaResult(false, error = "Cobalt returned an empty media URL")
-                        else {
-                            val filename = json.optString("filename").ifBlank { "download" }
-                            MediaResult(
-                                true,
-                                url = url,
-                                filename = filename,
-                                mimeType = mimeFromFilename(filename, url),
-                                isDirectDownload = json.optString("status") == "tunnel"
-                            )
-                        }
+                val status = json.optString("status")
+
+                if (status == "success") {
+                    val mediaUrl = json.optString("url")
+                    val title = json.optString("title").ifBlank { "LinkShield_Media" }
+                    val ext = if (downloadMode == "audio") "mp3" else "mp4"
+                    
+                    // Filename cleanup
+                    val safeTitle = title.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
+                    val filename = "$safeTitle.$ext"
+
+                    if (mediaUrl.isBlank()) {
+                        MediaResult(false, error = "Server returned empty URL")
+                    } else {
+                        MediaResult(
+                            success = true,
+                            url = mediaUrl,
+                            filename = filename,
+                            mimeType = if (downloadMode == "audio") "audio/mpeg" else "video/mp4",
+                            isDirectDownload = true
+                        )
                     }
-                    "picker" -> {
-                        val picker = json.optJSONArray("picker")
-                        val first = picker?.optJSONObject(0)
-                        val url = first?.optString("url").orEmpty()
-                        if (url.isBlank()) MediaResult(false, error = "Cobalt returned no selectable media")
-                        else MediaResult(true, url = url, filename = "download.mp4", mimeType = "video/mp4")
-                    }
-                    "local-processing" -> {
-                        val tunnels = json.optJSONArray("tunnel")
-                        val url = tunnels?.optString(0).orEmpty()
-                        val output = json.optJSONObject("output")
-                        val filename = output?.optString("filename").orEmpty().ifBlank { "download" }
-                        val mime = output?.optString("type").orEmpty().ifBlank { mimeFromFilename(filename, url) }
-                        if (url.isBlank()) MediaResult(false, error = "Cobalt requires local media processing")
-                        else MediaResult(true, url = url, filename = filename, mimeType = mime)
-                    }
-                    "error" -> {
-                        val errorObject = json.optJSONObject("error")
-                        MediaResult(false, error = errorObject?.optString("code")?.ifBlank { null } ?: "Cobalt rejected the URL")
-                    }
-                    else -> MediaResult(false, error = "Unexpected Cobalt response")
+                } else {
+                    val detail = json.optString("detail").ifBlank { "Media extraction failed" }
+                    MediaResult(false, error = detail)
                 }
             }
         } catch (e: IOException) {
@@ -126,20 +109,5 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
     fun isDirectFileLink(url: String): Boolean {
         val clean = url.substringBefore("?").substringBefore("#").lowercase()
         return listOf(".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".pdf", ".zip", ".jpg", ".png").any { clean.endsWith(it) }
-    }
-
-    private fun mimeFromFilename(filename: String, url: String): String {
-        val value = (filename + " " + url).lowercase()
-        return when {
-            ".mp3" in value -> "audio/mpeg"
-            ".m4a" in value -> "audio/mp4"
-            ".aac" in value -> "audio/aac"
-            ".ogg" in value -> "audio/ogg"
-            ".webm" in value -> "video/webm"
-            ".m3u8" in value -> "application/vnd.apple.mpegurl"
-            ".mpd" in value -> "application/dash+xml"
-            ".mp4" in value -> "video/mp4"
-            else -> "video/mp4"
-        }
     }
 }
