@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         // Register launcher BEFORE setContent
         browserRoleLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
-        ) { result ->
+        ) { _ ->
             // Result comes back here after user picks default browser
             // resumeTickFlow increment triggers re-check in Compose
             resumeTickFlow.value++
