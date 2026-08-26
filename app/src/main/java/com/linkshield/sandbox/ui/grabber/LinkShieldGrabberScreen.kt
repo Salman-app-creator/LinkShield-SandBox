@@ -76,14 +76,16 @@ fun LinkShieldGrabberScreen(
         CobaltApiService(context, DnsManager(context.applicationContext))
     }
 
-    Column(
+        Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding() // <-- FIX: Top status bar/notification bar padding added
+            .statusBarsPadding()
+            .padding(top = 16.dp) // <-- Back button notification bar se neeche shift hoga
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+
         // Title row with clean spacing
         Row(
             Modifier
