@@ -11,7 +11,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -33,9 +39,6 @@ class MainActivity : ComponentActivity() {
     private val interceptedUrlFlow = MutableStateFlow<String?>(null)
     private val resumeTickFlow     = MutableStateFlow(0)
 
-    // ── Browser role launcher ─────────────────────────────────────────────────
-    // Must be registered here (not inside Compose) — this is the correct way
-    // to use startActivityForResult in a ComponentActivity.
     private lateinit var browserRoleLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,12 +47,9 @@ class MainActivity : ComponentActivity() {
 
         interceptedUrlFlow.value = intent?.getStringExtra("url")
 
-        // Register launcher BEFORE setContent
         browserRoleLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { _ ->
-            // Result comes back here after user picks default browser
-            // resumeTickFlow increment triggers re-check in Compose
             resumeTickFlow.value++
         }
 
@@ -65,7 +65,6 @@ class MainActivity : ComponentActivity() {
             var hasAccepted   by remember { mutableStateOf(disclaimerManager.hasAccepted()) }
             var hasBrowserSet by remember { mutableStateOf(disclaimerManager.hasBrowserSet()) }
 
-            // Re-check every time resumeTick changes (after returning from browser dialog)
             LaunchedEffect(resumeTick) {
                 if (hasAccepted && !hasBrowserSet) {
                     if (checkIsDefaultBrowser(context)) {
@@ -75,7 +74,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Update check
             var showUpdateDialog by remember { mutableStateOf(false) }
             var updateInfo by remember {
                 mutableStateOf<com.linkshield.sandbox.update.UpdateInfo?>(null)
@@ -89,49 +87,51 @@ class MainActivity : ComponentActivity() {
             }
 
             LinkShieldTheme(darkTheme = isDarkTheme) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    if (showUpdateDialog && updateInfo != null) {
+                        UpdateDialog(
+                            updateInfo = updateInfo!!,
+                            onDismiss  = { showUpdateDialog = false }
+                        )
+                    }
 
-                if (showUpdateDialog && updateInfo != null) {
-                    UpdateDialog(
-                        updateInfo = updateInfo!!,
-                        onDismiss  = { showUpdateDialog = false }
-                    )
-                }
+                    when {
+                        !hasAccepted -> DisclaimerScreen(
+                            onAccept = {
+                                disclaimerManager.accept()
+                                hasAccepted = true
+                            }
+                        )
 
-                when {
-                    !hasAccepted -> DisclaimerScreen(
-                        onAccept = {
-                            disclaimerManager.accept()
-                            hasAccepted = true
-                        }
-                    )
+                        !hasBrowserSet -> EnableShieldScreen(
+                            onBrowserSet = {
+                                disclaimerManager.markBrowserSet()
+                                hasBrowserSet = true
+                            },
+                            onRequestBrowserRole = {
+                                launchBrowserRolePicker()
+                            }
+                        )
 
-                    !hasBrowserSet -> EnableShieldScreen(
-                        onBrowserSet = {
-                            disclaimerManager.markBrowserSet()
-                            hasBrowserSet = true
-                        },
-                        onRequestBrowserRole = {
-                            // Launch browser picker using proper ActivityResultLauncher
-                            launchBrowserRolePicker()
-                        }
-                    )
-
-                    else -> UnblockShieldScreen(
-                        initialUrl    = interceptedUrl ?: "",
-                        isDarkTheme   = isDarkTheme,
-                        onThemeToggle = { newDark ->
-                            themeManager.setTheme(
-                                if (newDark) ThemeManager.THEME_DARK
-                                else         ThemeManager.THEME_LIGHT
-                            )
-                            isDarkTheme = newDark
-                        }
-                    )
+                        else -> UnblockShieldScreen(
+                            initialUrl    = interceptedUrl ?: "",
+                            isDarkTheme   = isDarkTheme,
+                            onThemeToggle = { newDark ->
+                                themeManager.setTheme(
+                                    if (newDark) ThemeManager.THEME_DARK
+                                    else         ThemeManager.THEME_LIGHT
+                                )
+                                isDarkTheme = newDark
+                            }
+                        )
+                    }
                 }
             }
         }
 
-        // Increment tick every time activity resumes
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 resumeTickFlow.value++
@@ -139,15 +139,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Launches the system browser picker using ActivityResultLauncher.
-     *
-     * On Android 10+ (Q): uses RoleManager — shows a proper dialog.
-     * On Android 9-:      opens Default Apps settings page directly.
-     *
-     * Plain context.startActivity() does NOT work for RoleManager intents —
-     * they require startActivityForResult which is what the launcher does.
-     */
     private fun launchBrowserRolePicker() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             runCatching {
@@ -161,7 +152,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        // Fallback: open Default Apps settings
         runCatching {
             browserRoleLauncher.launch(
                 Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
