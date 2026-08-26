@@ -1,33 +1,15 @@
 package com.linkshield.sandbox.ui.grabber
 
 // REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/grabber/LinkShieldGrabberScreen.kt
-// ← REPLACE existing file
-//
-// ROOT CAUSE FIX — Trial period showing even after license activation:
-//
-// OLD signature:
-//   fun LinkShieldGrabberScreen(onBackToBrowser, onUpgradeClick)
-//   → Screen was creating its own LicenseManager() instance LOCALLY
-//   → This local instance never got refreshed after Pro activation
-//   → Result: Always showed "trial" even with valid key
-//
-// NEW signature:
-//   fun LinkShieldGrabberScreen(onBackToBrowser, onUpgradeClick, isProUser, trialDaysLeft)
-//   → Live license state flows IN from UnblockShieldScreen (which refreshes on tab switch)
-//   → Screen just reads the passed-in values — no stale local instance
-//
-// UI_FREEZE_CONTRACT respected:
-//   • No new @Composable functions
-//   • No layout / color / typography changes
-//   • Only state wiring corrected
 
 import android.app.DownloadManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
@@ -38,37 +20,45 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.launch
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinkShieldGrabberScreen(
     onBackToBrowser: () -> Unit,
     onUpgradeClick: () -> Unit,
-    // ── FIX: receive live license state from parent (UnblockShieldScreen) ──
+    initialUrl: String? = null,
     isProUser: Boolean = false,
     trialDaysLeft: Int = 7
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var inputUrl by rememberSaveable { mutableStateOf("") }
+    var inputUrl by rememberSaveable { mutableStateOf(initialUrl ?: "") }
     var audioOnly by rememberSaveable { mutableStateOf(false) }
     var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
     var fetched by rememberSaveable { mutableStateOf(false) }
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var errorMsg by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // External URL auto-fill update
+    LaunchedEffect(initialUrl) {
+        if (!initialUrl.isNullOrBlank() && initialUrl != "about:blank") {
+            inputUrl = initialUrl
+            fetched = false
+            errorMsg = null
+        }
+    }
 
     // Download result state
     var mediaUrl by rememberSaveable { mutableStateOf("") }
@@ -78,14 +68,10 @@ fun LinkShieldGrabberScreen(
 
     val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
 
-    // ── FIX: use passed-in isProUser instead of creating stale local instance
     val dnsManager = remember { DnsManager(context) }
-    // DnsManager pro flag is synced by LicenseManager.activatePro()
-    // isProUser from parent is the canonical source; dnsManager is fallback
     val effectivelyPro = isProUser || dnsManager.isProUser()
     val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
 
-    // Cobalt API service (lazy-init, single instance)
     val cobaltService = remember {
         CobaltApiService(context, DnsManager(context.applicationContext))
     }
@@ -93,15 +79,22 @@ fun LinkShieldGrabberScreen(
     Column(
         Modifier
             .fillMaxSize()
+            .statusBarsPadding() // <-- FIX: Top status bar/notification bar padding added
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Title row
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // Title row with clean spacing
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             IconButton(onClick = onBackToBrowser, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to browser")
             }
+            Spacer(Modifier.width(8.dp))
             Text(
                 "Grabber",
                 style = MaterialTheme.typography.titleLarge,
@@ -110,7 +103,7 @@ fun LinkShieldGrabberScreen(
             )
         }
 
-        // ── License badge — now reflects actual Pro status ──────────────────
+        // License badge
         Card(
             Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -124,7 +117,6 @@ fun LinkShieldGrabberScreen(
             ) {
                 Column(Modifier.weight(1f)) {
                     if (effectivelyPro) {
-                        // FIX: this now correctly shows PRO after key activation
                         Text(
                             "👑 PRO Unlimited",
                             fontWeight = FontWeight.Bold,
@@ -272,7 +264,6 @@ fun LinkShieldGrabberScreen(
         Button(
             onClick = {
                 if (!fetched) {
-                    // ── FETCH phase ─────────────────────────────────────────
                     if (inputUrl.isBlank()) {
                         errorMsg = "Enter a URL first"
                         return@Button
@@ -305,7 +296,6 @@ fun LinkShieldGrabberScreen(
                         }
                     }
                 } else {
-                    // ── DOWNLOAD phase ──────────────────────────────────────
                     if (mediaUrl.isBlank()) {
                         errorMsg = "No media URL available"
                         return@Button
@@ -327,7 +317,7 @@ fun LinkShieldGrabberScreen(
                     runCatching {
                         dm.enqueue(request)
                         Toast.makeText(context, "Download started ✓", Toast.LENGTH_SHORT).show()
-                        fetched = false   // reset for next download
+                        fetched = false
                     }.onFailure {
                         Toast.makeText(
                             context,
