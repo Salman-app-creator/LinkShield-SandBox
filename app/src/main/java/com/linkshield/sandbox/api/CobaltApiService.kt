@@ -35,37 +35,23 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         val isDirectDownload: Boolean = false
     )
 
-    /**
-     * YouTube ?si= tracking params aur extra garbage strip karta hai
-     * taake Oracle server HTTP 400 na de.
-     */
+    // YouTube/Instagram/TikTok tracking params strip karo
     private fun cleanVideoUrl(rawUrl: String): String {
         return try {
             val uri = android.net.Uri.parse(rawUrl.trim())
-            val host = uri.host?.lowercase() ?: return rawUrl
-
+            val host = uri.host?.lowercase() ?: return rawUrl.trim()
             when {
-                // YouTube — sirf "v" param rakho
                 host.contains("youtube.com") -> {
                     val videoId = uri.getQueryParameter("v")
-                    if (!videoId.isNullOrBlank()) {
-                        "https://www.youtube.com/watch?v=$videoId"
-                    } else rawUrl
+                    if (!videoId.isNullOrBlank()) "https://www.youtube.com/watch?v=$videoId"
+                    else rawUrl.trim()
                 }
-                // youtu.be — path hi video ID hai
                 host.contains("youtu.be") -> {
-                    val videoId = uri.path?.trimStart('/') ?: return rawUrl
+                    val videoId = uri.path?.trimStart('/') ?: return rawUrl.trim()
                     "https://www.youtube.com/watch?v=$videoId"
                 }
-                // Instagram — query params strip karo
-                host.contains("instagram.com") -> {
-                    "${uri.scheme}://${uri.host}${uri.path}"
-                }
-                // TikTok — query params strip karo
-                host.contains("tiktok.com") -> {
-                    "${uri.scheme}://${uri.host}${uri.path}"
-                }
-                // Baaki sab as-is
+                host.contains("instagram.com") -> "${uri.scheme}://${uri.host}${uri.path}"
+                host.contains("tiktok.com")    -> "${uri.scheme}://${uri.host}${uri.path}"
                 else -> rawUrl.trim()
             }
         } catch (e: Exception) {
@@ -79,7 +65,6 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         videoQuality: String = "720"
     ): MediaResult = withContext(Dispatchers.IO) {
         try {
-            // FIX: tracking params strip karo pehle
             val cleanUrl = cleanVideoUrl(pageUrl)
             val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
             val targetUrl = "$ORACLE_API_BASE?url=$encodedUrl"
@@ -94,32 +79,22 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string()
                 if (!response.isSuccessful || body.isNullOrBlank()) {
-                    return@withContext MediaResult(
-                        false,
-                        error = "Server Error: HTTP ${response.code}"
-                    )
+                    return@withContext MediaResult(false, error = "Server Error: HTTP ${response.code}")
                 }
-
                 val json = JSONObject(body)
                 val status = json.optString("status")
-
                 if (status == "success") {
                     val mediaUrl = json.optString("url")
                     val title = json.optString("title").ifBlank { "LinkShield_Media" }
                     val ext = if (downloadMode == "audio") "mp3" else "mp4"
                     val safeTitle = title.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
                     val filename = "$safeTitle.$ext"
-
                     if (mediaUrl.isBlank()) {
                         MediaResult(false, error = "Server returned empty URL")
                     } else {
-                        MediaResult(
-                            success = true,
-                            url = mediaUrl,
-                            filename = filename,
+                        MediaResult(success = true, url = mediaUrl, filename = filename,
                             mimeType = if (downloadMode == "audio") "audio/mpeg" else "video/mp4",
-                            isDirectDownload = true
-                        )
+                            isDirectDownload = true)
                     }
                 } else {
                     val detail = json.optString("detail").ifBlank { "Media extraction failed" }
