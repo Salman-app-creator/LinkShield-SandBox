@@ -112,11 +112,13 @@ fun UnblockShieldScreen(
         )
     }
 
-    var browserUrl by rememberSaveable {
-        mutableStateOf(url)
-    }
+    // browserUrl = actual loaded URL in WebView (updated by onUrlChanged callbacks)
+    var browserUrl by rememberSaveable { mutableStateOf(url) }
 
-    // Poll Pro state every 3s — badge updates after key activation
+    // urlBarText = what user types in URL bar (local editing state)
+    var urlBarText by rememberSaveable { mutableStateOf(url) }
+
+    // Poll Pro state every 3s
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(3000)
@@ -161,7 +163,7 @@ fun UnblockShieldScreen(
         bottomBar = {
             NavigationBar(
                 tonalElevation = 0.dp,
-                modifier = Modifier.navigationBarsPadding() // System navigation buttons ke liye clean safe padding
+                modifier = Modifier.navigationBarsPadding()
             ) {
                 MainTab.values().forEach { item ->
                     NavigationBarItem(
@@ -201,8 +203,9 @@ fun UnblockShieldScreen(
                     SandboxBrowserScreen(
                         generation = webViewGeneration,
                         startUrl = browserUrl,
-                        currentUrl = url,
-                        onUrlChange = { url = it },
+                        // FIX: URL bar ko urlBarText se drive karo, browser se nahi
+                        currentUrl = urlBarText,
+                        onUrlChange = { urlBarText = it },
                         isShieldProtectionEnabled = isAdGuardActive,
                         onShieldProtectionToggle = {},
                         isWireGuardEnabled = isWireGuardConnected,
@@ -241,18 +244,20 @@ fun UnblockShieldScreen(
                         onForward = { webView?.goForward() },
                         onReload = { webView?.reload() },
                         onNavigate = {
-                            val target = normalizeUrl(url)
+                            val target = normalizeUrl(urlBarText)
                             if (target.isNotBlank()) {
-                                url = target
                                 browserUrl = target
+                                urlBarText = target
                                 webView?.loadUrl(target)
                             }
                         },
                         isLoading = isLoading,
                         onReady = { webView = it },
-                        onUrlChanged = {
-                            browserUrl = it
-                            url = it
+                        onUrlChanged = { newUrl ->
+                            // FIX: Only update urlBarText when user is NOT actively editing
+                            // (i.e. page finished loading — not while user types)
+                            browserUrl = newUrl
+                            urlBarText = newUrl
                         },
                         onLoading = { isLoading = it },
                         onNavigation = { back, forward ->
@@ -267,11 +272,13 @@ fun UnblockShieldScreen(
                 }
 
                 MainTab.GRAB -> {
+                    // FIX: browserUrl pass karo taake current page ka URL auto-fill ho
                     LinkShieldGrabberScreen(
                         onBackToBrowser = { selectedTab = MainTab.BROWSE.name },
                         onUpgradeClick  = { selectedTab = MainTab.UPGRADE.name },
                         isProUser       = isProUser,
-                        trialDaysLeft   = trialDays
+                        trialDaysLeft   = trialDays,
+                        initialUrl      = browserUrl   // ← YEH LINE MISSING THI
                     )
                 }
 
