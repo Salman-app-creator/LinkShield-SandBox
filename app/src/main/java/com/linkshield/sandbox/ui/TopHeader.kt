@@ -55,6 +55,17 @@ fun TopHeader(
     var dropdownExpanded by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    // FIX: Local editing state — browser page load se interfere na ho
+    var editingUrl by remember { mutableStateOf(currentUrl) }
+    var isEditing by remember { mutableStateOf(false) }
+
+    // Jab browser externally URL change kare (page load) aur user type nahi kar raha
+    LaunchedEffect(currentUrl) {
+        if (!isEditing) {
+            editingUrl = currentUrl
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -118,7 +129,7 @@ fun TopHeader(
                         )
 
                         DropdownMenuItem(
-                            text = { Text("Connect VPN (Psiphon)", fontSize = 12.sp) },
+                            text = { Text("Connect WireGuard", fontSize = 12.sp) },
                             leadingIcon = {
                                 Checkbox(
                                     checked = isWireGuardEnabled,
@@ -244,8 +255,12 @@ fun TopHeader(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     BasicTextField(
-                        value = currentUrl,
-                        onValueChange = onUrlChange,
+                        value = editingUrl,
+                        onValueChange = { 
+                            editingUrl = it
+                            isEditing = true
+                            onUrlChange(it)
+                        },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         textStyle = TextStyle(
@@ -257,12 +272,13 @@ fun TopHeader(
                         keyboardActions = KeyboardActions(
                             onGo = {
                                 keyboardController?.hide()
+                                isEditing = false
                                 onNavigate()
                             }
                         ),
                         decorationBox = { innerTextField ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (currentUrl.isEmpty()) {
+                                if (editingUrl.isEmpty()) {
                                     Text(
                                         text = "Search or type URL",
                                         color = if (isDarkTheme) Color.Gray else Color.DarkGray,
@@ -275,9 +291,9 @@ fun TopHeader(
                     )
 
                     // Clear (X) Button
-                    if (currentUrl.isNotEmpty()) {
+                    if (editingUrl.isNotEmpty()) {
                         IconButton(
-                            onClick = { onUrlChange("") },
+                            onClick = { editingUrl = ""; isEditing = false; onUrlChange("") },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
@@ -294,6 +310,7 @@ fun TopHeader(
                 IconButton(
                     onClick = {
                         keyboardController?.hide()
+                        isEditing = false
                         onNavigate()
                     },
                     modifier = Modifier.size(32.dp)
