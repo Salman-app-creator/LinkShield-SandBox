@@ -22,8 +22,7 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         .build()
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
-    companion object { 
-        // Aap ke Oracle Cloud OCI server ka direct FastAPI endpoint
+    companion object {
         private const val ORACLE_API_BASE = "http://141.148.223.177:8000/extract"
     }
 
@@ -36,13 +35,53 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
         val isDirectDownload: Boolean = false
     )
 
+    /**
+     * YouTube ?si= tracking params aur extra garbage strip karta hai
+     * taake Oracle server HTTP 400 na de.
+     */
+    private fun cleanVideoUrl(rawUrl: String): String {
+        return try {
+            val uri = android.net.Uri.parse(rawUrl.trim())
+            val host = uri.host?.lowercase() ?: return rawUrl
+
+            when {
+                // YouTube — sirf "v" param rakho
+                host.contains("youtube.com") -> {
+                    val videoId = uri.getQueryParameter("v")
+                    if (!videoId.isNullOrBlank()) {
+                        "https://www.youtube.com/watch?v=$videoId"
+                    } else rawUrl
+                }
+                // youtu.be — path hi video ID hai
+                host.contains("youtu.be") -> {
+                    val videoId = uri.path?.trimStart('/') ?: return rawUrl
+                    "https://www.youtube.com/watch?v=$videoId"
+                }
+                // Instagram — query params strip karo
+                host.contains("instagram.com") -> {
+                    "${uri.scheme}://${uri.host}${uri.path}"
+                }
+                // TikTok — query params strip karo
+                host.contains("tiktok.com") -> {
+                    "${uri.scheme}://${uri.host}${uri.path}"
+                }
+                // Baaki sab as-is
+                else -> rawUrl.trim()
+            }
+        } catch (e: Exception) {
+            rawUrl.trim()
+        }
+    }
+
     suspend fun fetchMediaUrl(
         pageUrl: String,
         downloadMode: String = "auto",
         videoQuality: String = "720"
     ): MediaResult = withContext(Dispatchers.IO) {
         try {
-            val encodedUrl = URLEncoder.encode(pageUrl, "UTF-8")
+            // FIX: tracking params strip karo pehle
+            val cleanUrl = cleanVideoUrl(pageUrl)
+            val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
             val targetUrl = "$ORACLE_API_BASE?url=$encodedUrl"
 
             val request = Request.Builder()
@@ -55,7 +94,10 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string()
                 if (!response.isSuccessful || body.isNullOrBlank()) {
-                    return@withContext MediaResult(false, error = "Server Error: HTTP ${response.code}")
+                    return@withContext MediaResult(
+                        false,
+                        error = "Server Error: HTTP ${response.code}"
+                    )
                 }
 
                 val json = JSONObject(body)
@@ -65,8 +107,6 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
                     val mediaUrl = json.optString("url")
                     val title = json.optString("title").ifBlank { "LinkShield_Media" }
                     val ext = if (downloadMode == "audio") "mp3" else "mp4"
-                    
-                    // Filename cleanup
                     val safeTitle = title.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
                     val filename = "$safeTitle.$ext"
 
@@ -108,6 +148,7 @@ class CobaltApiService(context: Context, dnsManager: DnsManager) {
 
     fun isDirectFileLink(url: String): Boolean {
         val clean = url.substringBefore("?").substringBefore("#").lowercase()
-        return listOf(".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".pdf", ".zip", ".jpg", ".png").any { clean.endsWith(it) }
+        return listOf(".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".pdf", ".zip", ".jpg", ".png")
+            .any { clean.endsWith(it) }
     }
 }
