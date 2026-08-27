@@ -11,7 +11,6 @@ import android.net.VpnService
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import ca.psiphon.PsiphonTunnel
 import com.linkshield.sandbox.MainActivity
 import com.linkshield.sandbox.R
 import org.json.JSONObject
