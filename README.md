@@ -80,4 +80,4 @@ Every link you click opens in an isolated WebView. Your real browser, passwords,
 
 Zero tracking. Zero ads. Open source.
 
-[Report Bug](../../issues)
+[Report Bug](../../issues) 
