@@ -113,7 +113,8 @@ class SandboxWebViewClient(
         // 2. Media Sniffer Inspection
         inspectResource(
             url,
-            request.requestHeaders["Content-Type"]
+            request.requestHeaders["Content-Type"],
+            view.url.orEmpty()
         )
 
         return super.shouldInterceptRequest(view, request)
@@ -136,7 +137,7 @@ class SandboxWebViewClient(
         }
 
         // 2. Media Sniffer Inspection
-        inspectResource(url, null)
+        inspectResource(url, null, view.url.orEmpty())
 
         return super.shouldInterceptRequest(view, url)
     }
@@ -200,7 +201,8 @@ class SandboxWebViewClient(
 
     private fun inspectResource(
         url: String,
-        contentType: String?
+        contentType: String?,
+        pageUrl: String
     ) {
         if (url.isBlank()) {
             return
@@ -228,6 +230,7 @@ class SandboxWebViewClient(
 
         MediaSnifferState.publish(
             url = url,
+            pageUrl = pageUrl,
             mimeType = contentType.orEmpty(),
             extension = detectExtension(lowerUrl)
         )

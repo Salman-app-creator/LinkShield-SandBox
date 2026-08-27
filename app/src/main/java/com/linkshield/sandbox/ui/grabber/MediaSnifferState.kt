@@ -6,35 +6,19 @@ import kotlinx.coroutines.flow.asStateFlow
 
 object MediaSnifferState {
 
-    private val _latestMedia =
-        MutableStateFlow<CapturedMediaItem?>(null)
+    private val _latestMedia = MutableStateFlow<CapturedMediaItem?>(null)
+    val latestMedia: StateFlow<CapturedMediaItem?> = _latestMedia.asStateFlow()
 
-    val latestMedia: StateFlow<CapturedMediaItem?> =
-        _latestMedia.asStateFlow()
+    private val _mediaUrls = MutableStateFlow<List<CapturedMediaItem>>(emptyList())
+    val mediaUrls: StateFlow<List<CapturedMediaItem>> = _mediaUrls.asStateFlow()
 
-    private val _mediaUrls =
-        MutableStateFlow<List<CapturedMediaItem>>(
-            emptyList()
-        )
-
-    val mediaUrls: StateFlow<List<CapturedMediaItem>> =
-        _mediaUrls.asStateFlow()
-
-    fun publish(
-        item: CapturedMediaItem
-    ) {
+    fun publish(item: CapturedMediaItem) {
         if (item.url.isBlank()) return
 
         _latestMedia.value = item
-
         val current = _mediaUrls.value
-
-        if (current.any { it.url == item.url }) {
-            return
-        }
-
-        _mediaUrls.value =
-            (listOf(item) + current).take(50)
+        if (current.any { it.url == item.url }) return
+        _mediaUrls.value = (listOf(item) + current).take(50)
     }
 
     fun publish(
@@ -45,16 +29,7 @@ object MediaSnifferState {
         extension: String = ""
     ) {
         if (url.isBlank()) return
-
-        publish(
-            CapturedMediaItem(
-                url = url,
-                title = title,
-                pageUrl = pageUrl,
-                mimeType = mimeType,
-                extension = extension
-            )
-        )
+        publish(CapturedMediaItem(url, title, pageUrl, mimeType, extension))
     }
 
     fun clear() {

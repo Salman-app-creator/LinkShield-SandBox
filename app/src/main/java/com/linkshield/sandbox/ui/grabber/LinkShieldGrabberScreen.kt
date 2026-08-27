@@ -1,9 +1,5 @@
 package com.linkshield.sandbox.ui.grabber
 
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/grabber/LinkShieldGrabberScreen.kt
-
-import android.app.DownloadManager
-import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -34,9 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,61 +46,149 @@ fun LinkShieldGrabberScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val latestCaptured by MediaSnifferState.latestMedia.collectAsState()
 
-    // FIX: remember (not rememberSaveable) — tab switch par state reset ho
     var inputUrl by remember { mutableStateOf(initialUrl ?: "") }
+    var sourceUrl by remember { mutableStateOf("") }
     var fetched by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var mediaUrl by remember { mutableStateOf("") }
     var mediaFilename by remember { mutableStateOf("") }
     var mediaMime by remember { mutableStateOf("video/mp4") }
     var thumbnailUrl by remember { mutableStateOf("") }
+    var mediaTitle by remember { mutableStateOf("") }
 
     var audioOnly by rememberSaveable { mutableStateOf(false) }
     var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
 
-    // FIX: Har baar initialUrl aaye (tab switch) — URL aur thumbnail update karo
-    LaunchedEffect(initialUrl) {
-        if (!initialUrl.isNullOrBlank() && initialUrl != "about:blank") {
-            inputUrl = initialUrl
-            fetched = false
-            errorMsg = null
-            mediaUrl = ""
-            mediaFilename = ""
-            thumbnailUrl = extractYoutubeThumbnail(initialUrl)
+    val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
+    val dnsManager = remember { DnsManager(context.applicationContext) }
+    val effectivelyPro = isProUser || dnsManager.isProUser()
+    val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
+
+    /**
+     * If WebView is on a YouTube watch page but the address bar still contains
+     * the SPA search URL, use the page URL captured alongside the media request.
+     * We never feed a raw googlevideo/blob URL into yt-dlp as the source page.
+     */
+    val automaticSource = remember(initialUrl, latestCaptured?.pageUrl) {
+        val capturedPage = latestCaptured?.pageUrl.orEmpty()
+        when {
+            isSupportedPageUrl(initialUrl.orEmpty()) -> initialUrl.orEmpty()
+            isSupportedPageUrl(capturedPage) -> capturedPage
+            else -> initialUrl.orEmpty()
         }
     }
 
-    val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
-    val dnsManager = remember { DnsManager(context) }
-    val effectivelyPro = isProUser || dnsManager.isProUser()
-    val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
-    val cobaltService = remember { CobaltApiService(context, DnsManager(context.applicationContext)) }
-
-    fun doFetch() {
-        if (inputUrl.isBlank()) { errorMsg = "Enter a URL first"; return }
-        if (!effectivelyPro && remainingDownloads <= 0) { errorMsg = "Download limit reached. Upgrade to Pro."; return }
-        isLoading = true
+    fun resetResult() {
+        fetched = false
+        mediaUrl = ""
+        mediaFilename = ""
+        mediaMime = "video/mp4"
+        thumbnailUrl = ""
+        mediaTitle = ""
         errorMsg = null
+    }
+
+    fun fetchSource(url: String) {
+        val clean = url.trim()
+        if (clean.isBlank()) {
+            errorMsg = "Enter a URL first"
+            return
+        }
+        if (!effectivelyPro && remainingDownloads <= 0) {
+            errorMsg = "Download limit reached. Upgrade to Pro."
+            return
+        }
+
+        inputUrl = clean
+        sourceUrl = clean
+        isLoading = true
+        isDownloading = false
+        errorMsg = null
+        fetched = false
         keyboardController?.hide()
+
         scope.launch {
-            thumbnailUrl = extractYoutubeThumbnail(inputUrl)
-            val result = cobaltService.fetchMediaUrl(
-                pageUrl      = inputUrl,
-                downloadMode = if (audioOnly) "audio" else "auto",
-                videoQuality = selectedResolution.replace("p", "").replace("4K", "2160")
+            val result = GrabberEngine.fetchMediaInfo(
+                context = context,
+                pageUrl = clean,
+                resolution = selectedResolution,
+                audioOnly = audioOnly
             )
+
             isLoading = false
-            if (result.success && result.url != null) {
-                mediaUrl      = result.url
-                mediaFilename = result.filename ?: "LinkShield_download"
-                mediaMime     = result.mimeType ?: "video/mp4"
-                fetched       = true
-                if (!effectivelyPro) dnsManager.consumeDownload()
+            if (result.success && !result.playableUrl.isNullOrBlank()) {
+                sourceUrl = result.sourceUrl
+                mediaUrl = result.playableUrl.orEmpty()
+                mediaTitle = result.title
+                mediaFilename = buildFilename(result.title, result.extension)
+                mediaMime = result.mimeType
+                thumbnailUrl = result.thumbnail.ifBlank { extractYoutubeThumbnail(result.sourceUrl) }
+                fetched = true
             } else {
-                errorMsg = result.error ?: "Failed to fetch media"
+                resetResult()
+                sourceUrl = clean
+                errorMsg = result.error ?: "Failed to parse media"
             }
+        }
+    }
+
+    fun downloadCurrent() {
+        if (!fetched || sourceUrl.isBlank()) {
+            errorMsg = "Fetch the media first"
+            return
+        }
+        if (!effectivelyPro && remainingDownloads <= 0) {
+            errorMsg = "Download limit reached. Upgrade to Pro."
+            return
+        }
+
+        isDownloading = true
+        downloadProgress = 0f
+        errorMsg = null
+
+        scope.launch {
+            val result = GrabberEngine.downloadMedia(
+                context = context,
+                pageUrl = sourceUrl,
+                resolution = selectedResolution,
+                audioOnly = audioOnly,
+                onProgress = { progress ->
+                    downloadProgress = progress
+                }
+            )
+
+            isDownloading = false
+            if (result.success) {
+                if (!effectivelyPro) dnsManager.consumeDownload()
+                Toast.makeText(
+                    context,
+                    "Saved to Downloads/LinkShield ✓",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                errorMsg = result.error ?: "Download failed"
+                Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Automatic fetch when the user opens Grabber while a supported video is playing.
+    LaunchedEffect(automaticSource) {
+        if (isSupportedPageUrl(automaticSource) && automaticSource != sourceUrl && !isLoading) {
+            fetchSource(automaticSource)
+        }
+    }
+
+    // If the WebView page changes while the Grabber is visible, prepare the new page.
+    LaunchedEffect(initialUrl) {
+        if (!initialUrl.isNullOrBlank() && initialUrl != "about:blank" && initialUrl != inputUrl) {
+            inputUrl = initialUrl
+            resetResult()
         }
     }
 
@@ -124,7 +208,12 @@ fun LinkShieldGrabberScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to browser")
             }
             Spacer(Modifier.width(6.dp))
-            Text("Grabber", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(
+                "Grabber",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Card(
@@ -156,7 +245,10 @@ fun LinkShieldGrabberScreen(
 
         OutlinedTextField(
             value = inputUrl,
-            onValueChange = { inputUrl = it.trim(); fetched = false; errorMsg = null },
+            onValueChange = {
+                inputUrl = it
+                if (fetched || errorMsg != null) resetResult()
+            },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             placeholder = { Text("Paste video link here...") },
@@ -164,19 +256,24 @@ fun LinkShieldGrabberScreen(
             trailingIcon = {
                 if (inputUrl.isNotEmpty()) {
                     IconButton(onClick = {
-                        inputUrl = ""; fetched = false; errorMsg = null
-                        thumbnailUrl = ""; mediaUrl = ""
+                        inputUrl = ""
+                        sourceUrl = ""
+                        resetResult()
                     }) {
                         Icon(Icons.Default.Close, "Clear", Modifier.size(18.dp))
                     }
                 }
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { if (!fetched && !isLoading) doFetch() }),
+            keyboardActions = KeyboardActions(onGo = {
+                if (!isLoading && !isDownloading) fetchSource(inputUrl)
+            }),
             shape = RoundedCornerShape(12.dp),
             isError = errorMsg != null
         )
-        errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+        errorMsg?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+        }
 
         Card(
             Modifier.fillMaxWidth().height(180.dp),
@@ -187,33 +284,53 @@ fun LinkShieldGrabberScreen(
                 if (thumbnailUrl.isNotBlank()) {
                     AsyncImage(
                         model = ImageRequest.Builder(context).data(thumbnailUrl).crossfade(true).build(),
-                        contentDescription = "Thumbnail",
+                        contentDescription = "Media preview",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                     Box(
-                        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.BottomStart
                     ) {
                         Column(Modifier.padding(10.dp)) {
                             Text(
-                                if (fetched) "✅ Ready to download" else "🎬 Tap Fetch",
-                                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                                when {
+                                    isDownloading -> "Downloading ${downloadProgress.toInt()}%"
+                                    isLoading -> "Parsing media..."
+                                    fetched -> "✅ Ready to download"
+                                    else -> "Media preview"
+                                },
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
                             )
-                            if (fetched && mediaFilename.isNotBlank())
-                                Text(mediaFilename, fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                            if (mediaTitle.isNotBlank()) {
+                                Text(
+                                    mediaTitle,
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    maxLines = 2
+                                )
+                            }
                         }
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.PlayCircle, null, Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Default.PlayCircle,
+                            null,
+                            Modifier.size(54.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            when { isLoading -> "Fetching media..."; fetched -> "Ready to download"; else -> "Paste URL and tap Fetch" },
+                            when {
+                                isDownloading -> "Downloading ${downloadProgress.toInt()}%"
+                                isLoading -> "Parsing media..."
+                                else -> "Paste URL and tap Fetch"
+                            },
                             fontWeight = FontWeight.SemiBold
                         )
-                        if (fetched && mediaFilename.isNotBlank())
-                            Text(mediaFilename, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -221,7 +338,14 @@ fun LinkShieldGrabberScreen(
 
         Text("Options:", fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = audioOnly, onCheckedChange = { audioOnly = it })
+            Checkbox(
+                checked = audioOnly,
+                onCheckedChange = {
+                    audioOnly = it
+                    resetResult()
+                },
+                enabled = !isLoading && !isDownloading
+            )
             Text("Audio Only (MP3)", fontSize = 13.sp)
         }
 
@@ -230,10 +354,14 @@ fun LinkShieldGrabberScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 resolutions.forEach { res ->
                     FilterChip(
-                        selected = (selectedResolution == res),
-                        onClick  = { selectedResolution = res },
-                        label    = { Text(res, fontSize = 12.sp) },
-                        shape    = RoundedCornerShape(8.dp)
+                        selected = selectedResolution == res,
+                        onClick = {
+                            selectedResolution = res
+                            resetResult()
+                        },
+                        enabled = !isLoading && !isDownloading,
+                        label = { Text(res, fontSize = 12.sp) },
+                        shape = RoundedCornerShape(8.dp)
                     )
                 }
             }
@@ -242,7 +370,8 @@ fun LinkShieldGrabberScreen(
         if (fetched) {
             Text(
                 "Quality: ${if (audioOnly) "MP3 Audio" else "$selectedResolution • MP4"}",
-                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
             )
         }
 
@@ -250,36 +379,22 @@ fun LinkShieldGrabberScreen(
 
         Button(
             onClick = {
-                if (!fetched) {
-                    doFetch()
-                } else {
-                    if (mediaUrl.isBlank()) { errorMsg = "No media URL available"; return@Button }
-                    val request = DownloadManager.Request(android.net.Uri.parse(mediaUrl))
-                        .setTitle(mediaFilename)
-                        .setDescription("LinkShield Sandbox download")
-                        .setMimeType(mediaMime)
-                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                        .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "LinkShield/$mediaFilename")
-                        .setAllowedOverMetered(true)
-                        .setAllowedOverRoaming(true)
-                    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                    runCatching {
-                        dm.enqueue(request)
-                        Toast.makeText(context, "Download started ✓", Toast.LENGTH_SHORT).show()
-                        fetched = false
-                    }.onFailure {
-                        Toast.makeText(context, "Download failed: ${it.message}", Toast.LENGTH_LONG).show()
-                    }
-                }
+                if (isDownloading) return@Button
+                if (fetched) downloadCurrent() else fetchSource(inputUrl)
             },
-            enabled  = inputUrl.isNotBlank() && !isLoading,
+            enabled = inputUrl.isNotBlank() && !isLoading && !isDownloading,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape    = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Icon(Icons.Default.Download, null)
             Spacer(Modifier.width(8.dp))
             Text(
-                when { isLoading -> "Fetching..."; fetched -> "Download"; else -> "Fetch Media" },
+                when {
+                    isLoading -> "Parsing..."
+                    isDownloading -> "Downloading ${downloadProgress.toInt()}%"
+                    fetched -> "Download"
+                    else -> "Fetch Media"
+                },
                 fontWeight = FontWeight.Bold
             )
         }
@@ -288,17 +403,49 @@ fun LinkShieldGrabberScreen(
     }
 }
 
+private fun isSupportedPageUrl(url: String): Boolean {
+    if (url.isBlank() || url.equals("about:blank", true)) return false
+    val lower = url.lowercase(Locale.US)
+    return lower.contains("youtube.com/watch?") ||
+        lower.contains("youtube.com/shorts/") ||
+        lower.contains("youtu.be/") ||
+        lower.contains("instagram.com/reel/") ||
+        lower.contains("instagram.com/p/") ||
+        lower.contains("tiktok.com/") ||
+        lower.contains("facebook.com/") ||
+        lower.contains("fb.watch/") ||
+        lower.contains("twitter.com/") ||
+        lower.contains("x.com/")
+}
+
+private fun buildFilename(title: String, extension: String): String {
+    val safe = title
+        .ifBlank { "LinkShield_download" }
+        .replace("[^a-zA-Z0-9_\\- ]".toRegex(), "_")
+        .trim()
+        .take(100)
+        .ifBlank { "LinkShield_download" }
+    return "$safe.$extension"
+}
+
 private fun extractYoutubeThumbnail(url: String): String {
-    val clean = url.trim().lowercase()
-    return when {
-        "youtube.com/watch" in clean || "youtu.be/" in clean -> {
-            val videoId = when {
-                "youtu.be/" in clean -> url.substringAfter("youtu.be/").substringBefore("?").substringBefore("&").take(11)
-                "v=" in clean -> url.substringAfter("v=").substringBefore("&").substringBefore("#").take(11)
-                else -> ""
-            }
-            if (videoId.isNotBlank()) "https://img.youtube.com/vi/$videoId/hqdefault.jpg" else ""
+    val clean = url.trim()
+    return try {
+        val uri = android.net.Uri.parse(clean)
+        val host = uri.host?.lowercase(Locale.US).orEmpty()
+        val videoId = when {
+            host == "youtu.be" -> uri.path?.trim('/')?.substringBefore('/')
+            host.endsWith("youtube.com") && uri.path.equals("/watch", true) -> uri.getQueryParameter("v")
+            host.endsWith("youtube.com") && uri.path?.startsWith("/shorts/") == true ->
+                uri.path?.substringAfter("/shorts/")?.substringBefore('/')
+            else -> null
         }
-        else -> ""
+        if (!videoId.isNullOrBlank()) {
+            "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+        } else {
+            ""
+        }
+    } catch (_: Exception) {
+        ""
     }
 }

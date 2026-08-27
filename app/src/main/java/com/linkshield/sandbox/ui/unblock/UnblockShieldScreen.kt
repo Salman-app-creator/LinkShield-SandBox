@@ -140,7 +140,15 @@ fun UnblockShieldScreen(
                 MainTab.values().forEach { item ->
                     NavigationBarItem(
                         selected = tab == item,
-                        onClick = { selectedTab = item.name },
+                        onClick = {
+                            if (item == MainTab.GRAB) {
+                                webView?.url?.takeIf { it.isNotBlank() }?.let { current ->
+                                    browserUrl = current
+                                    urlBarText = current
+                                }
+                            }
+                            selectedTab = item.name
+                        },
                         icon = {
                             Icon(
                                 imageVector = when (item) {

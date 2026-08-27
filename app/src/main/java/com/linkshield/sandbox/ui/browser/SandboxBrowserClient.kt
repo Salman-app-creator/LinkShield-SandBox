@@ -67,9 +67,8 @@ class SandboxBrowserClient(
 
         capture(
             request.url.toString(),
-            request.requestHeaders[
-                "Content-Type"
-            ]
+            request.requestHeaders["Content-Type"],
+            view.url.orEmpty()
         )
 
         return super.shouldInterceptRequest(
@@ -83,10 +82,7 @@ class SandboxBrowserClient(
         url: String
     ): WebResourceResponse? {
 
-        capture(
-            url,
-            null
-        )
+        capture(url, null, view.url.orEmpty())
 
         return super.shouldInterceptRequest(
             view,
@@ -96,7 +92,8 @@ class SandboxBrowserClient(
 
     private fun capture(
         url: String,
-        contentType: String?
+        contentType: String?,
+        pageUrl: String
     ) {
         if (url.isBlank()) {
             return
@@ -129,6 +126,7 @@ class SandboxBrowserClient(
 
         MediaSnifferState.publish(
             url = url,
+            pageUrl = pageUrl,
             mimeType =
                 contentType.orEmpty(),
             extension =
