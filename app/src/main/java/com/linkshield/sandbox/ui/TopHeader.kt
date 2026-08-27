@@ -118,7 +118,7 @@ fun TopHeader(
                         )
 
                         DropdownMenuItem(
-                            text = { Text("Connect WireGuard", fontSize = 12.sp) },
+                            text = { Text("Connect VPN (Psiphon)", fontSize = 12.sp) },
                             leadingIcon = {
                                 Checkbox(
                                     checked = isWireGuardEnabled,
