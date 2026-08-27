@@ -1,76 +1,32 @@
 package com.linkshield.sandbox.ui.vpn
 
+// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/vpn/VpnViewModel.kt
+
 import android.app.Application
 import android.content.Intent
 import android.net.VpnService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.linkshield.sandbox.vpn.ShadowsocksVpnService
+import com.linkshield.sandbox.vpn.PsiphonVpnManager
 import com.linkshield.sandbox.vpn.VpnConnectionState
-import com.linkshield.sandbox.vpn.VpnStateHolder
 import com.linkshield.sandbox.vpn.isActive
 import com.linkshield.sandbox.vpn.isBusy
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
-/**
- * VpnViewModel.kt
- *
- * Bridges the VPN Service and the Compose UI layer.
- *
- * Responsibilities:
- *  - Exposes [vpnState] StateFlow for the UI to observe.
- *  - Handles the VPN permission check (VpnService.prepare()) before connecting.
- *  - Delegates connect / disconnect commands to ShadowsocksVpnService.
- *
- * AndroidViewModel is used (instead of plain ViewModel) to access Application
- * context without leaking Activity context.
- */
 class VpnViewModel(application: Application) : AndroidViewModel(application) {
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    private val psiphonManager = PsiphonVpnManager(application)
 
-    /**
-     * Current VPN connection state.
-     * Collected and rendered by VpnScreen.
-     *
-     * SharingStarted.Eagerly ensures the flow stays hot as long as the
-     * ViewModel is alive — no missed emissions between screen navigations.
-     */
-    val vpnState: StateFlow<VpnConnectionState> = VpnStateHolder.state
-        .stateIn(
-            scope          = viewModelScope,
-            started        = SharingStarted.Eagerly,
-            initialValue   = VpnConnectionState.Disconnected
-        )
+    private val _vpnState = MutableStateFlow<VpnConnectionState>(VpnConnectionState.Disconnected)
+    val vpnState: StateFlow<VpnConnectionState> = _vpnState.asStateFlow()
 
-    // ── Permission Intent ─────────────────────────────────────────────────────
+    fun getVpnPermissionIntent(): Intent? = VpnService.prepare(getApplication())
 
-    /**
-     * Returns the VPN permission intent if the user has not yet granted it.
-     *
-     * The Activity/Composable should launch this intent via
-     * rememberLauncherForActivityResult. If null is returned, permission
-     * is already granted and [onPermissionGranted] can be called directly.
-     */
-    fun getVpnPermissionIntent(): Intent? =
-        VpnService.prepare(getApplication())
-
-    // ── Actions ───────────────────────────────────────────────────────────────
-
-    /**
-     * Called by the UI's 1-click button.
-     *
-     * If VPN is active → disconnect.
-     * If VPN is idle/error → check permission first, then connect.
-     * If VPN is transitioning (busy) → ignore (button should be disabled).
-     */
-    fun onToggleVpn(
-        onPermissionRequired: (Intent) -> Unit
-    ) {
-        val current = vpnState.value
-
+    fun onToggleVpn(onPermissionRequired: (Intent) -> Unit) {
+        val current = _vpnState.value
         if (current.isBusy) return
 
         if (current.isActive) {
@@ -78,34 +34,37 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // Need permission check before connecting
         val permissionIntent = getVpnPermissionIntent()
         if (permissionIntent != null) {
-            // Not yet granted — launch the system dialog
             onPermissionRequired(permissionIntent)
         } else {
-            // Already granted — connect immediately
             onPermissionGranted()
         }
     }
 
-    /**
-     * Called after the user grants VPN permission in the system dialog,
-     * OR directly when permission was already granted.
-     */
     fun onPermissionGranted() {
-        ShadowsocksVpnService.startConnect(getApplication())
+        _vpnState.value = VpnConnectionState.Connecting
+        viewModelScope.launch {
+            val result = psiphonManager.connect()
+            _vpnState.value = if (result.isSuccess) {
+                VpnConnectionState.Connected()
+            } else {
+                VpnConnectionState.Error(result.exceptionOrNull()?.message ?: "Connection failed")
+            }
+        }
     }
 
-    /** Gracefully disconnect the active tunnel. */
     fun disconnect() {
-        ShadowsocksVpnService.startDisconnect(getApplication())
+        _vpnState.value = VpnConnectionState.Disconnecting
+        viewModelScope.launch {
+            psiphonManager.disconnect()
+            _vpnState.value = VpnConnectionState.Disconnected
+        }
     }
 
-    /** Clear an error state so the user can retry. */
     fun clearError() {
-        if (vpnState.value is VpnConnectionState.Error) {
-            VpnStateHolder.setState(VpnConnectionState.Disconnected)
+        if (_vpnState.value is VpnConnectionState.Error) {
+            _vpnState.value = VpnConnectionState.Disconnected
         }
     }
 }
