@@ -1,5 +1,7 @@
 package com.linkshield.sandbox.ui.vpn
 
+// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/vpn/VpnScreen.kt
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -31,26 +33,20 @@ import com.linkshield.sandbox.vpn.label
 import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
 
-// ── Screen entry point ────────────────────────────────────────────────────────
-
 @Composable
 fun VpnScreen(
     viewModel: VpnViewModel = viewModel()
 ) {
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
 
-    // ── VPN permission launcher ────────────────────────────────────────────────
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        // android.app.Activity.RESULT_OK == -1
         if (result.resultCode == -1) {
             viewModel.onPermissionGranted()
         }
-        // If user denied: do nothing — state stays Disconnected
     }
 
-    // ── Root container ────────────────────────────────────────────────────────
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -62,11 +58,8 @@ fun VpnScreen(
             verticalArrangement = Arrangement.spacedBy(32.dp),
             modifier = Modifier.padding(horizontal = 24.dp)
         ) {
-
-            // ── App header ────────────────────────────────────────────────────
             VpnHeader()
 
-            // ── Animated shield / connect button ──────────────────────────────
             ShieldButton(
                 state = vpnState,
                 onClick = {
@@ -78,10 +71,8 @@ fun VpnScreen(
                 }
             )
 
-            // ── Connection status card ────────────────────────────────────────
             StatusCard(state = vpnState)
 
-            // ── Error message ─────────────────────────────────────────────────
             if (vpnState is VpnConnectionState.Error) {
                 ErrorBanner(
                     message = (vpnState as VpnConnectionState.Error).message,
@@ -89,13 +80,10 @@ fun VpnScreen(
                 )
             }
 
-            // ── Server info row ───────────────────────────────────────────────
             ServerInfoRow()
         }
     }
 }
-
-// ── Header ────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun VpnHeader() {
@@ -107,26 +95,23 @@ private fun VpnHeader() {
             color      = VpnTheme.textPrimary
         )
         Text(
-            text     = "Secure Proxy",
+            text     = "Secure VPN",
             fontSize = 14.sp,
             color    = VpnTheme.textSecondary
         )
     }
 }
 
-// ── Animated Shield Button ────────────────────────────────────────────────────
-
 @Composable
 private fun ShieldButton(
     state: VpnConnectionState,
     onClick: () -> Unit
 ) {
-    // Pulsing animation when connected
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue   = 1f,
-        targetValue    = 1.08f,
-        animationSpec  = infiniteRepeatable(
+        initialValue  = 1f,
+        targetValue   = 1.08f,
+        animationSpec = infiniteRepeatable(
             animation  = tween(1200, easing = EaseInOutSine),
             repeatMode = RepeatMode.Reverse
         ),
@@ -134,43 +119,33 @@ private fun ShieldButton(
     )
 
     val ringColors = when (state) {
-        is VpnConnectionState.Connected     -> VpnTheme.ringConnected
-        is VpnConnectionState.Error         -> VpnTheme.ringError
-        else                                -> VpnTheme.ringDisconnected
+        is VpnConnectionState.Connected -> VpnTheme.ringConnected
+        is VpnConnectionState.Error     -> VpnTheme.ringError
+        else                            -> VpnTheme.ringDisconnected
     }
 
     val buttonBgColor by animateColorAsState(
         targetValue = when (state) {
-            is VpnConnectionState.Connected  -> Color(0xFF0A2040)
-            is VpnConnectionState.Error      -> Color(0xFF2D0A0A)
-            else                             -> Color(0xFF111827)
+            is VpnConnectionState.Connected -> Color(0xFF0A2040)
+            is VpnConnectionState.Error     -> Color(0xFF2D0A0A)
+            else                            -> Color(0xFF111827)
         },
         label = "buttonBg"
     )
 
-    val scaleModifier = if (state.isActive) {
-        Modifier.scale(pulseScale)
-    } else {
-        Modifier
-    }
+    val scaleModifier = if (state.isActive) Modifier.scale(pulseScale) else Modifier
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(220.dp)
-            .then(scaleModifier)
+        modifier = Modifier.size(220.dp).then(scaleModifier)
     ) {
-        // Outer gradient ring
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(CircleShape)
-                .background(
-                    Brush.sweepGradient(ringColors)
-                )
+                .background(Brush.sweepGradient(ringColors))
         )
 
-        // Inner button surface
         Button(
             onClick    = onClick,
             enabled    = !state.isBusy,
@@ -180,31 +155,24 @@ private fun ShieldButton(
                 disabledContainerColor = VpnTheme.buttonBusy
             ),
             contentPadding = PaddingValues(0.dp),
-            modifier = Modifier
-                .size(200.dp)
+            modifier = Modifier.size(200.dp)
         ) {
             Column(
-                horizontalAlignment    = Alignment.CenterHorizontally,
-                verticalArrangement   = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                // Shield / power icon text
                 Text(
-                    text       = when (state) {
-                        is VpnConnectionState.Connected  -> "🔒"
-                        is VpnConnectionState.Error      -> "⚠️"
-                        else                             -> "🛡️"
+                    text     = when (state) {
+                        is VpnConnectionState.Connected -> "🔒"
+                        is VpnConnectionState.Error     -> "⚠️"
+                        else                            -> "🛡️"
                     },
-                    fontSize   = 48.sp
+                    fontSize = 48.sp
                 )
-
                 Spacer(modifier = Modifier.height(8.dp))
-
-                AnimatedContent(
-                    targetState = state.label,
-                    label       = "buttonLabel"
-                ) { label ->
+                AnimatedContent(targetState = state.label, label = "buttonLabel") { lbl ->
                     Text(
-                        text       = label,
+                        text       = lbl,
                         fontSize   = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color      = when (state) {
@@ -212,7 +180,7 @@ private fun ShieldButton(
                             is VpnConnectionState.Error     -> VpnTheme.accentRed
                             else                            -> VpnTheme.textSecondary
                         },
-                        textAlign  = TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -220,12 +188,8 @@ private fun ShieldButton(
     }
 }
 
-// ── Status Card ───────────────────────────────────────────────────────────────
-
 @Composable
 private fun StatusCard(state: VpnConnectionState) {
-
-    // Session duration ticker
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
     LaunchedEffect(state) {
         if (state is VpnConnectionState.Connected) {
@@ -240,11 +204,11 @@ private fun StatusCard(state: VpnConnectionState) {
 
     val dotColor by animateColorAsState(
         targetValue = when (state) {
-            is VpnConnectionState.Connected  -> VpnTheme.accentGreen
-            is VpnConnectionState.Error      -> VpnTheme.accentRed
+            is VpnConnectionState.Connected                  -> VpnTheme.accentGreen
+            is VpnConnectionState.Error                      -> VpnTheme.accentRed
             is VpnConnectionState.Connecting,
-            is VpnConnectionState.Disconnecting -> VpnTheme.accentOrange
-            else                             -> VpnTheme.textMuted
+            is VpnConnectionState.Disconnecting              -> VpnTheme.accentOrange
+            else                                             -> VpnTheme.textMuted
         },
         label = "dotColor"
     )
@@ -258,32 +222,21 @@ private fun StatusCard(state: VpnConnectionState) {
     }
 
     Surface(
-        shape  = RoundedCornerShape(16.dp),
-        color  = VpnTheme.surfaceCard,
+        shape    = RoundedCornerShape(16.dp),
+        color    = VpnTheme.surfaceCard,
         modifier = Modifier
             .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                color = VpnTheme.surfaceElevated,
-                shape = RoundedCornerShape(16.dp)
-            )
+            .border(1.dp, VpnTheme.surfaceElevated, RoundedCornerShape(16.dp))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Status row
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Pulsing indicator dot
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
+                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(dotColor))
                 Text(
                     text       = statusLabel,
                     fontSize   = 14.sp,
@@ -293,7 +246,6 @@ private fun StatusCard(state: VpnConnectionState) {
                 )
             }
 
-            // Session duration (only when connected)
             if (state is VpnConnectionState.Connected) {
                 HorizontalDivider(color = VpnTheme.surfaceElevated)
                 Row(
@@ -301,8 +253,8 @@ private fun StatusCard(state: VpnConnectionState) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     StatusMetric(label = "Session", value = formatDuration(elapsedSeconds))
-                    StatusMetric(label = "Protocol", value = "Shadowsocks")
-                    StatusMetric(label = "Encrypt", value = "ChaCha20")
+                    StatusMetric(label = "Protocol", value = "Psiphon")
+                    StatusMetric(label = "Encrypt",  value = "TLS")
                 }
             }
         }
@@ -317,59 +269,42 @@ private fun StatusMetric(label: String, value: String) {
     }
 }
 
-// ── Error Banner ──────────────────────────────────────────────────────────────
-
 @Composable
 private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF2D1111),
+        shape    = RoundedCornerShape(12.dp),
+        color    = Color(0xFF2D1111),
         modifier = Modifier
             .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                color = VpnTheme.accentRed.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(12.dp)
-            )
+            .border(1.dp, VpnTheme.accentRed.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier              = Modifier.padding(14.dp),
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(text = "⚠", fontSize = 18.sp)
-            Text(
-                text     = message,
-                fontSize = 13.sp,
-                color    = Color(0xFFFCA5A5),
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onDismiss) {
-                Text("✕", color = VpnTheme.textMuted)
-            }
+            Text(text = message, fontSize = 13.sp, color = Color(0xFFFCA5A5), modifier = Modifier.weight(1f))
+            TextButton(onClick = onDismiss) { Text("✕", color = VpnTheme.textMuted) }
         }
     }
 }
-
-// ── Server Info Row ───────────────────────────────────────────────────────────
 
 @Composable
 private fun ServerInfoRow() {
     Row(
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
+        verticalAlignment     = Alignment.CenterVertically,
+        modifier              = Modifier.fillMaxWidth()
     ) {
         Text(
-            text     = "🌐  Oracle Cloud VPS  ·  ${com.linkshield.sandbox.vpn.ShadowsocksConfig.HOST}",
-            fontSize = 12.sp,
-            color    = VpnTheme.textMuted,
+            text      = "🌐  Psiphon Network  ·  Auto Server",
+            fontSize  = 12.sp,
+            color     = VpnTheme.textMuted,
             textAlign = TextAlign.Center
         )
     }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 private fun formatDuration(totalSeconds: Long): String {
     val h = TimeUnit.SECONDS.toHours(totalSeconds)
