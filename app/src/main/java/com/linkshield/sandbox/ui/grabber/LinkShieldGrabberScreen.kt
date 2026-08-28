@@ -1,5 +1,9 @@
 package com.linkshield.sandbox.ui.grabber
 
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -66,14 +70,11 @@ fun LinkShieldGrabberScreen(
 
     val resolutions = listOf("360p", "480p", "720p", "1080p", "4K")
     val dnsManager = remember { DnsManager(context.applicationContext) }
+    val repository = remember { MediaExtractorRepository() }
+
     val effectivelyPro = isProUser || dnsManager.isProUser()
     val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
 
-    /**
-     * If WebView is on a YouTube watch page but the address bar still contains
-     * the SPA search URL, use the page URL captured alongside the media request.
-     * We never feed a raw googlevideo/blob URL into yt-dlp as the source page.
-     */
     val automaticSource = remember(initialUrl, latestCaptured?.pageUrl) {
         val capturedPage = latestCaptured?.pageUrl.orEmpty()
         when {
@@ -113,32 +114,35 @@ fun LinkShieldGrabberScreen(
         keyboardController?.hide()
 
         scope.launch {
-            val result = GrabberEngine.fetchMediaInfo(
-                context = context,
-                pageUrl = clean,
-                resolution = selectedResolution,
-                audioOnly = audioOnly
-            )
-
-            isLoading = false
-            if (result.success && !result.playableUrl.isNullOrBlank()) {
-                sourceUrl = result.sourceUrl
-                mediaUrl = result.playableUrl.orEmpty()
-                mediaTitle = result.title
-                mediaFilename = buildFilename(result.title, result.extension)
-                mediaMime = result.mimeType
-                thumbnailUrl = result.thumbnail.ifBlank { extractYoutubeThumbnail(result.sourceUrl) }
-                fetched = true
-            } else {
+            try {
+                val results = repository.extract(mediaUrl = clean, title = "")
+                isLoading = false
+                if (results.isNotEmpty()) {
+                    val media = results.first()
+                    sourceUrl = clean
+                    mediaUrl = media.url
+                    mediaTitle = media.title
+                    mediaMime = media.mimeType
+                    val ext = if (audioOnly || media.isAudio) "mp3" else "mp4"
+                    mediaFilename = buildFilename(media.title, ext)
+                    thumbnailUrl = extractYoutubeThumbnail(clean)
+                    fetched = true
+                } else {
+                    resetResult()
+                    sourceUrl = clean
+                    errorMsg = "Failed to parse media"
+                }
+            } catch (e: Exception) {
+                isLoading = false
                 resetResult()
                 sourceUrl = clean
-                errorMsg = result.error ?: "Failed to parse media"
+                errorMsg = e.localizedMessage ?: "Failed to extract media"
             }
         }
     }
 
     fun downloadCurrent() {
-        if (!fetched || sourceUrl.isBlank()) {
+        if (!fetched || mediaUrl.isBlank()) {
             errorMsg = "Fetch the media first"
             return
         }
@@ -147,44 +151,32 @@ fun LinkShieldGrabberScreen(
             return
         }
 
-        isDownloading = true
-        downloadProgress = 0f
-        errorMsg = null
+        try {
+            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val request = DownloadManager.Request(Uri.parse(mediaUrl))
+                .setTitle(mediaTitle.ifBlank { "LinkShield Media" })
+                .setDescription("Downloading file...")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$mediaFilename")
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(true)
 
-        scope.launch {
-            val result = GrabberEngine.downloadMedia(
-                context = context,
-                pageUrl = sourceUrl,
-                resolution = selectedResolution,
-                audioOnly = audioOnly,
-                onProgress = { progress ->
-                    downloadProgress = progress
-                }
-            )
+            downloadManager.enqueue(request)
+            if (!effectivelyPro) dnsManager.consumeDownload()
 
-            isDownloading = false
-            if (result.success) {
-                if (!effectivelyPro) dnsManager.consumeDownload()
-                Toast.makeText(
-                    context,
-                    "Saved to Downloads/LinkShield ✓",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                errorMsg = result.error ?: "Download failed"
-                Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(context, "Download started! Check notifications ✓", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            errorMsg = "Download failed: ${e.localizedMessage}"
+            Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Automatic fetch when the user opens Grabber while a supported video is playing.
     LaunchedEffect(automaticSource) {
         if (isSupportedPageUrl(automaticSource) && automaticSource != sourceUrl && !isLoading) {
             fetchSource(automaticSource)
         }
     }
 
-    // If the WebView page changes while the Grabber is visible, prepare the new page.
     LaunchedEffect(initialUrl) {
         if (!initialUrl.isNullOrBlank() && initialUrl != "about:blank" && initialUrl != inputUrl) {
             inputUrl = initialUrl
