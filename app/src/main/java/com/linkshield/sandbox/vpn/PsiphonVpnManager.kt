@@ -1,52 +1,52 @@
+// app/src/main/java/com/linkshield/sandbox/vpn/PsiphonVpnManager.kt
 package com.linkshield.sandbox.vpn
-
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/vpn/PsiphonVpnManager.kt
 
 import android.content.Context
 import android.content.Intent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import android.net.VpnService
+import android.os.Build
 
-/**
- * PsiphonVpnManager
- *
- * WireGuardVpnManager ki jagah yeh class use hogi.
- * Same interface rakha hai taake UnblockShieldScreen mein
- * sirf class name change karna pade.
- *
- * Psiphon automatically best available server choose karta hai —
- * koi config, koi account needed nahi.
- */
 class PsiphonVpnManager(private val context: Context) {
 
-    private var connected = false
+    @Volatile
+    private var isVpnConnected = false
 
-    suspend fun connect(): Result<Unit> = withContext(Dispatchers.IO) {
-        return@withContext try {
-            val intent = Intent(context, PsiphonVpnService::class.java).apply {
-                action = PsiphonVpnService.ACTION_START
+    fun connect(): Result<Unit> {
+        return try {
+            val prepareIntent = VpnService.prepare(context)
+            if (prepareIntent != null) {
+                // Return error if VPN permission is not granted by user yet
+                Result.failure(SecurityException("VPN permission required"))
+            } else {
+                val intent = Intent(context, PsiphonVpnService::class.java).apply {
+                    action = PsiphonVpnService.ACTION_START
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                isVpnConnected = true
+                Result.success(Unit)
             }
-            context.startService(intent)
-            connected = true
-            Result.success(Unit)
         } catch (e: Exception) {
-            connected = false
+            isVpnConnected = false
             Result.failure(e)
         }
     }
 
-    suspend fun disconnect(): Result<Unit> = withContext(Dispatchers.IO) {
-        return@withContext try {
+    fun disconnect(): Result<Unit> {
+        return try {
             val intent = Intent(context, PsiphonVpnService::class.java).apply {
                 action = PsiphonVpnService.ACTION_STOP
             }
             context.startService(intent)
-            connected = false
+            isVpnConnected = false
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    fun isConnected(): Boolean = connected
+    fun isConnected(): Boolean = isVpnConnected
 }
