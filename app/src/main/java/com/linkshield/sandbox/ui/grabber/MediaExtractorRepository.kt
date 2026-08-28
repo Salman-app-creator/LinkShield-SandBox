@@ -18,14 +18,14 @@ class MediaExtractorRepository {
             return@withContext emptyList()
         }
 
-        // 1. Direct Cobalt API Execution (No yt-dlp fallback)
+        // 1. Direct Cobalt API Execution
         try {
             val appClass = Class.forName("android.app.ActivityThread")
             val currentApp = appClass.getMethod("currentApplication").invoke(null) as android.content.Context
-            val dnsManager = DnsManager(currentApp)
-            val cobaltApi = CobaltApiService(currentApp, dnsManager)
+            val cobaltApi = CobaltApiService(currentApp)
 
-            val result = cobaltApi.fetchMediaUrl(pageUrl = mediaUrl)
+            // Fix: Changed parameter name from pageUrl to rawUrl
+            val result = cobaltApi.fetchMediaUrl(rawUrl = mediaUrl)
             
             if (result.success && !result.url.isNullOrBlank()) {
                 val extractedUrl = result.url
