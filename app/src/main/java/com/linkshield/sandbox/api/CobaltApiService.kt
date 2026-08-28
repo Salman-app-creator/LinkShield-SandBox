@@ -1,147 +1,110 @@
+// app/src/main/java/com/linkshield/sandbox/api/CobaltApiService.kt
 package com.linkshield.sandbox.api
 
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/api/CobaltApiService.kt
-
 import android.content.Context
+import android.net.Uri
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.io.IOException
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-class CobaltApiService(context: Context, dnsManager: DnsManager) {
+data class MediaResult(
+    val success: Boolean,
+    val url: String? = null,
+    val filename: String? = null,
+    val mimeType: String? = null,
+    val error: String? = null
+)
 
-    private val client = dnsManager.getClient().newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)
-        .build()
+class CobaltApiService(context: Context) {
 
-    companion object {
-        // Cobalt API — Oracle server port 9001
-        private const val COBALT_API = "http://141.148.223.177:9001/"
-        private val JSON_TYPE = "application/json".toMediaType()
+    private val dnsManager = DnsManager(context)
+    private val client: OkHttpClient by lazy {
+        dnsManager.getClient().newBuilder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .build()
     }
 
-    data class MediaResult(
-        val success: Boolean,
-        val url: String? = null,
-        val filename: String? = null,
-        val mimeType: String? = null,
-        val error: String? = null
-    )
+    fun cleanVideoUrl(rawUrl: String): String {
+        val trimmed = rawUrl.trim()
+        val uri = Uri.parse(trimmed)
+        val host = uri.host?.lowercase() ?: ""
 
-    // YouTube ?si= aur baaki tracking params strip karo
-    private fun cleanVideoUrl(rawUrl: String): String {
-        return try {
-            val uri = android.net.Uri.parse(rawUrl.trim())
-            val host = uri.host?.lowercase() ?: return rawUrl.trim()
-            when {
-                host.contains("youtube.com") -> {
-                    val videoId = uri.getQueryParameter("v")
-                    if (!videoId.isNullOrBlank()) "https://www.youtube.com/watch?v=$videoId"
-                    else rawUrl.trim()
-                }
-                host.contains("youtu.be") -> {
-                    val videoId = uri.path?.trimStart('/') ?: return rawUrl.trim()
-                    "https://www.youtube.com/watch?v=$videoId"
-                }
-                host.contains("instagram.com") -> "${uri.scheme}://${uri.host}${uri.path}"
-                host.contains("tiktok.com")    -> "${uri.scheme}://${uri.host}${uri.path}"
-                else -> rawUrl.trim()
+        return when {
+            host.contains("youtube.com") -> {
+                val videoId = uri.getQueryParameter("v")
+                if (!videoId.isNull_or_empty()) "https://www.youtube.com/watch?v=$videoId" else trimmed
             }
-        } catch (e: Exception) {
-            rawUrl.trim()
+            host.contains("youtu.be") -> {
+                val videoId = uri.lastPathSegment
+                if (!videoId.isNull_or_empty()) "https://www.youtube.com/watch?v=$videoId" else trimmed
+            }
+            host.contains("instagram.com") || host.contains("tiktok.com") -> {
+                val scheme = uri.scheme ?: "https"
+                val path = uri.path ?: ""
+                "$scheme://$host$path"
+            }
+            else -> trimmed
         }
     }
 
-    suspend fun fetchMediaUrl(
-        pageUrl: String,
-        downloadMode: String = "auto",
-        videoQuality: String = "1080"
-    ): MediaResult = withContext(Dispatchers.IO) {
+    suspend fun fetchMediaUrl(rawUrl: String, audioOnly: Boolean = false): MediaResult = withContext(Dispatchers.IO) {
         try {
-            val cleanUrl = cleanVideoUrl(pageUrl)
-
-            // Cobalt API POST body
-            val bodyJson = JSONObject().apply {
-                put("url", cleanUrl)
-                put("downloadMode", downloadMode)   // "auto", "audio", "mute"
-                put("videoQuality", videoQuality)   // "144","360","720","1080","2160"
-                put("filenameStyle", "pretty")
-            }.toString()
-
-            val requestBody = bodyJson.toRequestBody(JSON_TYPE)
+            val cleanedUrl = cleanVideoUrl(rawUrl)
+            val encodedUrl = URLEncoder.encode(cleanedUrl, "UTF-8")
+            val endpoint = "http://141.148.223.177:8000/extract?url=$encodedUrl"
 
             val request = Request.Builder()
-                .url(COBALT_API)
-                .post(requestBody)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "LinkShieldSandbox/2.2")
+                .url(endpoint)
+                .header("Accept", "application/json")
+                .header("User-Agent", "LinkShieldSandbox/2.1")
+                .get()
                 .build()
 
             client.newCall(request).execute().use { response ->
-                val body = response.body?.string()
-
-                if (!response.isSuccessful || body.isNullOrBlank()) {
+                val bodyString = response.body?.string() ?: ""
+                if (!response.isSuccessful || bodyString.isEmpty()) {
                     return@withContext MediaResult(
-                        false,
-                        error = "Server Error: HTTP ${response.code}"
+                        success = false,
+                        error = "Server error HTTP ${response.code}"
                     )
                 }
 
-                val json = JSONObject(body)
+                val json = JSONObject(bodyString)
                 val status = json.optString("status")
 
-                when (status) {
-                    "stream", "redirect", "tunnel" -> {
-                        val mediaUrl = json.optString("url")
-                        val filename = json.optString("filename").ifBlank {
-                            val ext = if (downloadMode == "audio") "mp3" else "mp4"
-                            "LinkShield_${System.currentTimeMillis()}.$ext"
-                        }
-                        val mime = if (downloadMode == "audio") "audio/mpeg" else "video/mp4"
+                if (status == "success") {
+                    val mediaUrl = json.optString("url")
+                    val rawTitle = json.optString("title", "downloaded_media")
+                    val safeTitle = rawTitle.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val ext = if (audioOnly) "mp3" else "mp4"
+                    val mime = if (audioOnly) "audio/mpeg" else "video/mp4"
 
-                        if (mediaUrl.isBlank()) {
-                            MediaResult(false, error = "No download URL received")
-                        } else {
-                            MediaResult(
-                                success  = true,
-                                url      = mediaUrl,
-                                filename = filename,
-                                mimeType = mime
-                            )
-                        }
-                    }
-                    "picker" -> {
-                        // Multiple streams — pehla le lo
-                        val picker = json.optJSONArray("picker")
-                        val first = picker?.optJSONObject(0)
-                        val mediaUrl = first?.optString("url") ?: ""
-                        val filename = "LinkShield_${System.currentTimeMillis()}.mp4"
-                        if (mediaUrl.isBlank()) {
-                            MediaResult(false, error = "No stream found")
-                        } else {
-                            MediaResult(success = true, url = mediaUrl, filename = filename, mimeType = "video/mp4")
-                        }
-                    }
-                    "error" -> {
-                        val errorCode = json.optJSONObject("error")?.optString("code") ?: "unknown"
-                        MediaResult(false, error = "Cobalt error: $errorCode")
-                    }
-                    else -> {
-                        MediaResult(false, error = "Unexpected response: $status")
-                    }
+                    MediaResult(
+                        success = true,
+                        url = mediaUrl,
+                        filename = "$safeTitle.$ext",
+                        mimeType = mime
+                    )
+                } else {
+                    MediaResult(
+                        success = false,
+                        error = json.optString("detail", "Extraction failed")
+                    )
                 }
             }
-        } catch (e: IOException) {
-            MediaResult(false, error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            MediaResult(false, error = "Error: ${e.message}")
+            MediaResult(
+                success = false,
+                error = e.localizedMessage ?: "Network request failed"
+            )
         }
     }
+
+    private fun String?.isNull_or_empty(): Boolean = this == null || this.isEmpty()
 }
