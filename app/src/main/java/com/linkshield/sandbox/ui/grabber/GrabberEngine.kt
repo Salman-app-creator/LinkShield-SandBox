@@ -1,24 +1,71 @@
 package com.linkshield.sandbox.ui.grabber
 
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/grabber/GrabberEngine.kt
-//
-// NOTE: YoutubeDL-android library hata di gayi hai.
-// Ab Cobalt API (Oracle port 9001) use ho raha hai — CobaltApiService.kt mein.
-// Yeh file sirf backward-compat ke liye rahi hai taake LinkShieldApp.kt crash na kare.
-
 import android.content.Context
-import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+data class GrabberInfoResult(
+    val success: Boolean,
+    val sourceUrl: String,
+    val playableUrl: String?,
+    val title: String,
+    val extension: String,
+    val mimeType: String,
+    val thumbnail: String,
+    val error: String? = null
+)
+
+data class GrabberDownloadResult(
+    val success: Boolean,
+    val error: String? = null
+)
 
 object GrabberEngine {
-    private const val TAG = "GrabberEngine"
 
-    fun init(context: Context) {
-        Log.d(TAG, "GrabberEngine: using Cobalt API, no local engine needed")
+    suspend fun fetchMediaInfo(
+        context: Context,
+        pageUrl: String,
+        resolution: String = "1080p",
+        audioOnly: Boolean = false
+    ): GrabberInfoResult = withContext(Dispatchers.IO) {
+        val repo = MediaExtractorRepository(context)
+        val list = repo.extract(mediaUrl = pageUrl, title = "")
+        
+        if (list.isNotEmpty()) {
+            val item = list.first()
+            val ext = if (audioOnly || item.isAudio) "mp3" else "mp4"
+            GrabberInfoResult(
+                success = true,
+                sourceUrl = pageUrl,
+                playableUrl = item.url,
+                title = item.title,
+                extension = ext,
+                mimeType = item.mimeType,
+                thumbnail = "",
+                error = null
+            )
+        } else {
+            GrabberInfoResult(
+                success = false,
+                sourceUrl = pageUrl,
+                playableUrl = null,
+                title = "",
+                extension = "mp4",
+                mimeType = "video/mp4",
+                thumbnail = "",
+                error = "Unable to fetch video from Cobalt server."
+            )
+        }
     }
 
-    fun updateExtractor(context: Context) {
-        Log.d(TAG, "GrabberEngine: no update needed, Cobalt API is server-side")
+    suspend fun downloadMedia(
+        context: Context,
+        pageUrl: String,
+        resolution: String = "1080p",
+        audioOnly: Boolean = false,
+        onProgress: (Float) -> Unit
+    ): GrabberDownloadResult = withContext(Dispatchers.IO) {
+        // Direct handling shifted to Android DownloadManager
+        GrabberDownloadResult(success = true)
     }
-
-    fun isReady(): Boolean = true
 }
