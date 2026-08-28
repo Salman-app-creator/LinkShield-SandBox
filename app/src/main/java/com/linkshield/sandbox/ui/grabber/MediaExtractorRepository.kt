@@ -1,98 +1,91 @@
 package com.linkshield.sandbox.ui.grabber
 
+import android.content.Context
+import com.linkshield.sandbox.api.CobaltApiService
+import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-class MediaExtractorRepository {
+class MediaExtractorRepository(
+    private val context: Context? = null,
+    private val dnsManager: DnsManager? = null
+) {
+
+    private val cobaltApi: CobaltApiService? by lazy {
+        if (context != null && dnsManager != null) {
+            CobaltApiService(context, dnsManager)
+        } else null
+    }
 
     suspend fun extract(
         mediaUrl: String,
         title: String = ""
-    ): List<MediaQualityOption> =
-        withContext(Dispatchers.IO) {
+    ): List<MediaQualityOption> = withContext(Dispatchers.IO) {
 
-            if (mediaUrl.isBlank()) {
-                return@withContext emptyList()
+        if (mediaUrl.isBlank() || mediaUrl.startsWith("blob:", ignoreCase = true)) {
+            return@withContext emptyList()
+        }
+
+        // 1. Pehle Cobalt API se URL extract karne ki koshish karo
+        cobaltApi?.let { api ->
+            val result = api.fetchMediaUrl(pageUrl = mediaUrl)
+            if (result.success && !result.url.isNullOrBlank()) {
+                val extractedUrl = result.url
+                val mimeType = result.mimeType ?: detectMimeType(extractedUrl)
+                val quality = detectQuality(extractedUrl)
+
+                return@withContext listOf(
+                    MediaQualityOption(
+                        url = extractedUrl,
+                        quality = if (quality.isNotBlank()) quality else "1080p",
+                        label = if (quality.isNotBlank()) quality else "High Quality",
+                        mimeType = mimeType,
+                        title = if (title.isNotBlank()) title else (result.filename ?: "Video"),
+                        isAudio = mimeType.startsWith("audio/")
+                    )
+                )
             }
+        }
 
-            if (
-                mediaUrl.startsWith("blob:",
-                    ignoreCase = true)
-            ) {
-                return@withContext emptyList()
-            }
+        // 2. Direct Media URL Fallback Logic (Agar URL pehle se direct mp4/mp3 ho)
+        val mimeType = detectMimeType(mediaUrl)
+        val quality = detectQuality(mediaUrl)
 
-            val mimeType =
-                detectMimeType(mediaUrl)
-
-            val quality =
-                detectQuality(mediaUrl)
-
+        if (mimeType.isNotBlank()) {
             listOf(
                 MediaQualityOption(
                     url = mediaUrl,
                     quality = quality,
-                    label =
-                        quality.ifBlank {
-                            "High Quality"
-                        },
+                    label = quality.ifBlank { "High Quality" },
                     mimeType = mimeType,
                     title = title,
-                    isAudio =
-                        mimeType.startsWith(
-                            "audio/"
-                        )
+                    isAudio = mimeType.startsWith("audio/")
                 )
             )
+        } else {
+            emptyList()
         }
+    }
 
-    private fun detectMimeType(
-        mediaUrl: String
-    ): String {
-
-        val clean =
-            mediaUrl
-                .substringBefore("?")
-                .substringBefore("#")
-                .lowercase()
-
+    private fun detectMimeType(mediaUrl: String): String {
+        val clean = mediaUrl.substringBefore("?").substringBefore("#").lowercase()
         return when {
-            clean.endsWith(".mp3") ->
-                "audio/mpeg"
-
-            clean.endsWith(".m4a") ->
-                "audio/mp4"
-
-            clean.endsWith(".aac") ->
-                "audio/aac"
-
-            clean.endsWith(".ogg") ->
-                "audio/ogg"
-
-            clean.endsWith(".webm") ->
-                "video/webm"
-
-            clean.endsWith(".mp4") ->
-                "video/mp4"
-
-            clean.endsWith(".m3u8") ->
-                "application/vnd.apple.mpegurl"
-
-            clean.endsWith(".mpd") ->
-                "application/dash+xml"
-
+            clean.endsWith(".mp3") -> "audio/mpeg"
+            clean.endsWith(".m4a") -> "audio/mp4"
+            clean.endsWith(".aac") -> "audio/aac"
+            clean.endsWith(".ogg") -> "audio/ogg"
+            clean.endsWith(".webm") -> "video/webm"
+            clean.endsWith(".mp4") -> "video/mp4"
+            clean.endsWith(".m3u8") -> "application/vnd.apple.mpegurl"
+            clean.endsWith(".mpd") -> "application/dash+xml"
             else -> ""
         }
     }
 
-    private fun detectQuality(
-        mediaUrl: String
-    ): String {
-        val url =
-            mediaUrl.lowercase()
-
+    private fun detectQuality(mediaUrl: String): String {
+        val url = mediaUrl.lowercase()
         return when {
             "1080" in url -> "1080p"
             "720" in url -> "720p"
@@ -101,30 +94,19 @@ class MediaExtractorRepository {
             else -> ""
         }
     }
-        suspend fun checkUrl(
-        mediaUrl: String
-    ): Boolean =
-        withContext(Dispatchers.IO) {
 
-            try {
-                val connection =
-                    URL(mediaUrl)
-                        .openConnection()
-                        as HttpURLConnection
-
-                connection.requestMethod = "HEAD"
-                connection.connectTimeout = 8000
-                connection.readTimeout = 8000
-                connection.instanceFollowRedirects = true
-
-                val code =
-                    connection.responseCode
-
-                connection.disconnect()
-
-                code in 200..399
-            } catch (_: Exception) {
-                false
-            }
+    suspend fun checkUrl(mediaUrl: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(mediaUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "HEAD"
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            connection.instanceFollowRedirects = true
+            val code = connection.responseCode
+            connection.disconnect()
+            code in 200..399
+        } catch (_: Exception) {
+            false
         }
+    }
 }
