@@ -28,7 +28,8 @@ object GrabberEngine {
         resolution: String = "1080p",
         audioOnly: Boolean = false
     ): GrabberInfoResult = withContext(Dispatchers.IO) {
-        val repo = MediaExtractorRepository(context)
+        // Fix: Removed 'context' parameter from MediaExtractorRepository constructor
+        val repo = MediaExtractorRepository()
         val list = repo.extract(mediaUrl = pageUrl, title = "")
         
         if (list.isNotEmpty()) {
