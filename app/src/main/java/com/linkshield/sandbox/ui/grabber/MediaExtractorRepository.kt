@@ -1,6 +1,5 @@
 package com.linkshield.sandbox.ui.grabber
 
-import android.content.Context
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
@@ -8,23 +7,7 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-class MediaExtractorRepository(
-    private val context: Context? = null,
-    private val dnsManager: DnsManager? = null
-) {
-
-    // Context / DnsManager pass na bhi ho toh Application Context fallback logic
-    private val cobaltApi: CobaltApiService by lazy {
-        val appContext = context ?: try {
-            val appClass = Class.forName("android.app.ActivityThread")
-            val currentApplication = appClass.getMethod("currentApplication")
-            currentApplication.invoke(null) as Context
-        } catch (e: Exception) {
-            throw IllegalStateException("Context not available for CobaltApiService")
-        }
-        val dns = dnsManager ?: DnsManager(appContext)
-        CobaltApiService(appContext, dns)
-    }
+class MediaExtractorRepository {
 
     suspend fun extract(
         mediaUrl: String,
@@ -35,9 +18,15 @@ class MediaExtractorRepository(
             return@withContext emptyList()
         }
 
-        // 1. Forceful Cobalt API Call
+        // 1. Direct Cobalt API Execution (No yt-dlp fallback)
         try {
+            val appClass = Class.forName("android.app.ActivityThread")
+            val currentApp = appClass.getMethod("currentApplication").invoke(null) as android.content.Context
+            val dnsManager = DnsManager(currentApp)
+            val cobaltApi = CobaltApiService(currentApp, dnsManager)
+
             val result = cobaltApi.fetchMediaUrl(pageUrl = mediaUrl)
+            
             if (result.success && !result.url.isNullOrBlank()) {
                 val extractedUrl = result.url
                 val mimeType = result.mimeType ?: detectMimeType(extractedUrl)
@@ -49,7 +38,7 @@ class MediaExtractorRepository(
                         quality = if (quality.isNotBlank()) quality else "1080p",
                         label = if (quality.isNotBlank()) quality else "High Quality",
                         mimeType = mimeType,
-                        title = if (title.isNotBlank()) title else (result.filename ?: "Video"),
+                        title = if (title.isNotBlank()) title else (result.filename ?: "Media File"),
                         isAudio = mimeType.startsWith("audio/")
                     )
                 )
@@ -58,7 +47,7 @@ class MediaExtractorRepository(
             e.printStackTrace()
         }
 
-        // 2. Direct Link Fallback (Agar URL mein direct mp4/mp3 ho)
+        // 2. Local Direct Extension Check (Only for raw .mp4 / .mp3 links)
         val mimeType = detectMimeType(mediaUrl)
         val quality = detectQuality(mediaUrl)
 
