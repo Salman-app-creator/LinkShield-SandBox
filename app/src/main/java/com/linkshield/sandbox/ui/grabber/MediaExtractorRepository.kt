@@ -1,6 +1,5 @@
 package com.linkshield.sandbox.ui.grabber
 
-import android.content.Context
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
@@ -8,16 +7,10 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-class MediaExtractorRepository(
-    private val context: Context? = null,
-    private val dnsManager: DnsManager? = null
-) {
+class MediaExtractorRepository {
 
-    private val cobaltApi: CobaltApiService? by lazy {
-        if (context != null && dnsManager != null) {
-            CobaltApiService(context, dnsManager)
-        } else null
-    }
+    // Direct initialization via Application Context or default handling
+    private var cobaltApi: CobaltApiService? = null
 
     suspend fun extract(
         mediaUrl: String,
@@ -28,7 +21,7 @@ class MediaExtractorRepository(
             return@withContext emptyList()
         }
 
-        // 1. Pehle Cobalt API se URL extract karne ki koshish karo
+        // Cobalt API se extract karne ki koshish
         cobaltApi?.let { api ->
             val result = api.fetchMediaUrl(pageUrl = mediaUrl)
             if (result.success && !result.url.isNullOrBlank()) {
@@ -49,7 +42,7 @@ class MediaExtractorRepository(
             }
         }
 
-        // 2. Direct Media URL Fallback Logic (Agar URL pehle se direct mp4/mp3 ho)
+        // Direct extension match fallback
         val mimeType = detectMimeType(mediaUrl)
         val quality = detectQuality(mediaUrl)
 
