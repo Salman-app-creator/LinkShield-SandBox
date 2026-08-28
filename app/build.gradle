@@ -11,7 +11,7 @@ android {
         applicationId "com.linkshield.sandbox"
         minSdk 26
         targetSdk 34
-        versionCode 5
+        versionCode 6
         versionName "2.3.0"
 
         buildConfigField "String", "SAFE_BROWSING_API_KEY", '"YOUR_GOOGLE_SAFE_BROWSING_KEY"'
