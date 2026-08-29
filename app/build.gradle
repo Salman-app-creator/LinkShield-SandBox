@@ -52,6 +52,10 @@ android {
             excludes += ['META-INF/INDEX.LIST', 'META-INF/io.netty.versions.properties']
         }
     }
+
+    repositories {
+        flatDir { dirs 'libs' }
+    }
 }
 
 dependencies {
@@ -74,6 +78,7 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0'
     implementation 'io.coil-kt:coil-compose:2.5.0'
     implementation 'io.coil-kt:coil:2.5.0'
+    implementation(name: 'psiphontunnel', ext: 'aar')
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
 }
