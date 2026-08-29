@@ -45,10 +45,13 @@ class CobaltApiService(context: Context) {
                     val videoId = uri.lastPathSegment
                     if (!videoId.isNullOrEmpty()) "https://www.youtube.com/watch?v=$videoId" else trimmed
                 }
-                host.contains("instagram.com") || host.contains("tiktok.com") -> {
-                    val scheme = uri.scheme ?: "https"
+                host.contains("instagram.com") -> {
                     val path = uri.path ?: ""
-                    "$scheme://$host$path"
+                    "https://www.instagram.com$path"
+                }
+                host.contains("tiktok.com") -> {
+                    val path = uri.path ?: ""
+                    "https://www.tiktok.com$path"
                 }
                 else -> trimmed
             }
