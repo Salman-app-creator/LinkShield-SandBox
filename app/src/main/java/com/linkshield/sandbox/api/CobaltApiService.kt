@@ -39,11 +39,13 @@ class CobaltApiService(context: Context) {
             when {
                 host.contains("youtube.com") -> {
                     val videoId = uri.getQueryParameter("v")
-                    if (!videoId.isNullOrEmpty()) "https://www.youtube.com/watch?v=$videoId" else trimmed
+                    if (!videoId.isNullOrEmpty()) "https://www.youtube.com/watch?v=$videoId"
+                    else trimmed
                 }
                 host.contains("youtu.be") -> {
                     val videoId = uri.lastPathSegment
-                    if (!videoId.isNullOrEmpty()) "https://www.youtube.com/watch?v=$videoId" else trimmed
+                    if (!videoId.isNullOrEmpty()) "https://www.youtube.com/watch?v=$videoId"
+                    else trimmed
                 }
                 host.contains("instagram.com") -> {
                     val path = uri.path ?: ""
@@ -52,6 +54,10 @@ class CobaltApiService(context: Context) {
                 host.contains("tiktok.com") -> {
                     val path = uri.path ?: ""
                     "https://www.tiktok.com$path"
+                }
+                host.contains("facebook.com") || host.contains("fb.com") || host.contains("fb.watch") -> {
+                    val path = uri.path ?: ""
+                    "https://www.facebook.com$path"
                 }
                 else -> trimmed
             }
@@ -102,8 +108,11 @@ class CobaltApiService(context: Context) {
                             val first = json.optJSONArray("picker")?.optJSONObject(0)
                             val mediaUrl = first?.optString("url") ?: ""
                             if (mediaUrl.isBlank()) MediaResult(false, error = "No stream found")
-                            else MediaResult(success = true, url = mediaUrl,
-                                filename = "LinkShield_${System.currentTimeMillis()}.mp4", mimeType = "video/mp4")
+                            else MediaResult(
+                                success = true, url = mediaUrl,
+                                filename = "LinkShield_${System.currentTimeMillis()}.mp4",
+                                mimeType = "video/mp4"
+                            )
                         }
                         "error" -> {
                             val code = json.optJSONObject("error")?.optString("code") ?: "unknown"
