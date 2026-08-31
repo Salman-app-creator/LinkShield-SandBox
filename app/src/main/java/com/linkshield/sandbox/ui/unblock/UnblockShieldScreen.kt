@@ -52,6 +52,8 @@ private enum class MainTab(val label: String) {
 @Composable
 fun UnblockShieldScreen(
     initialUrl: String = "",
+    sharedGrabUrl: String? = null,
+    onSharedUrlConsumed: () -> Unit = {},
     isDarkTheme: Boolean = true,
     onThemeToggle: (Boolean) -> Unit = {}
 ) {
@@ -69,7 +71,6 @@ fun UnblockShieldScreen(
     var isProUser by remember { mutableStateOf(licenseManager.isProUser()) }
     var trialDays by remember { mutableIntStateOf(licenseManager.getTrialDaysRemaining()) }
 
-    // Psiphon — WireGuard ki jagah
     val psiphonManager = remember { PsiphonVpnManager(context.applicationContext) }
     var isPsiphonConnected by remember { mutableStateOf(psiphonManager.isConnected()) }
 
@@ -81,11 +82,7 @@ fun UnblockShieldScreen(
                 val connectResult = psiphonManager.connect()
                 isPsiphonConnected = connectResult.isSuccess
                 if (connectResult.isFailure) {
-                    Toast.makeText(
-                        context,
-                        "Psiphon connection failed",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(context, "Psiphon connection failed", Toast.LENGTH_SHORT).show()
                 }
             }
         } else {
@@ -96,13 +93,19 @@ fun UnblockShieldScreen(
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.BROWSE.name) }
 
     var browserUrl by rememberSaveable {
-        mutableStateOf(
-            normalizeUrl(initialUrl).ifBlank { "https://www.google.com" }
-        )
+        mutableStateOf(normalizeUrl(initialUrl).ifBlank { "https://www.google.com" })
     }
     var urlBarText by rememberSaveable { mutableStateOf(browserUrl) }
 
-    // Poll Pro state every 3s
+    // Share Intent se URL aaye to Grabber tab pe switch karo
+    LaunchedEffect(sharedGrabUrl) {
+        if (!sharedGrabUrl.isNullOrBlank()) {
+            browserUrl = sharedGrabUrl
+            selectedTab = MainTab.GRAB.name
+            onSharedUrlConsumed()
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(3000)
@@ -188,7 +191,6 @@ fun UnblockShieldScreen(
                                     val result = psiphonManager.disconnect()
                                     if (result.isSuccess) isPsiphonConnected = false
                                 } else {
-                                    // VPN permission check
                                     val prepareIntent = VpnService.prepare(context)
                                     if (prepareIntent != null) {
                                         vpnPermissionLauncher.launch(prepareIntent)
