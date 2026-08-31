@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val interceptedUrlFlow = MutableStateFlow<String?>(null)
+    private val sharedUrlFlow      = MutableStateFlow<String?>(null)
     private val resumeTickFlow     = MutableStateFlow(0)
 
     private lateinit var browserRoleLauncher: ActivityResultLauncher<Intent>
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         interceptedUrlFlow.value = intent?.getStringExtra("url")
+        handleShareIntent(intent)
 
         browserRoleLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -58,6 +60,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val interceptedUrl by interceptedUrlFlow.collectAsState()
+            val sharedUrl      by sharedUrlFlow.collectAsState()
             val resumeTick     by resumeTickFlow.collectAsState()
             val context        = LocalContext.current
 
@@ -118,6 +121,8 @@ class MainActivity : ComponentActivity() {
 
                         else -> UnblockShieldScreen(
                             initialUrl    = interceptedUrl ?: "",
+                            sharedGrabUrl = sharedUrl,
+                            onSharedUrlConsumed = { sharedUrlFlow.value = null },
                             isDarkTheme   = isDarkTheme,
                             onThemeToggle = { newDark ->
                                 themeManager.setTheme(
@@ -137,6 +142,25 @@ class MainActivity : ComponentActivity() {
                 resumeTickFlow.value++
             }
         }
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND &&
+            intent.type?.startsWith("text") == true) {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+            // URL extract karo shared text se
+            val urlRegex = Regex("https?://[^\\s]+")
+            val url = urlRegex.find(sharedText)?.value ?: sharedText.trim()
+            if (url.isNotBlank()) {
+                sharedUrlFlow.value = url
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        intent?.getStringExtra("url")?.let { interceptedUrlFlow.value = it }
+        handleShareIntent(intent)
     }
 
     private fun launchBrowserRolePicker() {
@@ -161,10 +185,5 @@ class MainActivity : ComponentActivity() {
                 browserRoleLauncher.launch(Intent(Settings.ACTION_SETTINGS))
             }
         }
-    }
-
-    override fun onNewIntent(intent: android.content.Intent?) {
-        super.onNewIntent(intent)
-        intent?.getStringExtra("url")?.let { interceptedUrlFlow.value = it }
     }
 }
