@@ -199,10 +199,10 @@ fun UnblockShieldScreen(
                                         isPsiphonConnected = result.isSuccess
                                         if (result.isFailure) {
                                             Toast.makeText(
-                                                context,
-                                                "Psiphon connection failed",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+    context,
+    "VPN connection failed",
+    Toast.LENGTH_SHORT
+).show()
                                         }
                                     }
                                 }
