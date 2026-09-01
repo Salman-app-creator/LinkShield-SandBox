@@ -75,7 +75,6 @@ class CobaltApiService(context: Context) {
                 val cleanedUrl = cleanVideoUrl(rawUrl)
                 val host = Uri.parse(cleanedUrl).host?.lowercase() ?: ""
 
-                // YouTube ke liye alag server
                 val apiUrl = if (isYouTubeUrl(host)) {
                     "http://141.148.223.177:9002/"
                 } else {
@@ -121,7 +120,7 @@ class CobaltApiService(context: Context) {
                             if (mediaUrl.isBlank()) MediaResult(false, error = "No stream found")
                             else MediaResult(
                                 success = true, url = mediaUrl,
-                                filename = "LinkShield_${System.currentTimeMillity()}.mp4",
+                                filename = "LinkShield_${System.currentTimeMillis()}.mp4",
                                 mimeType = "video/mp4"
                             )
                         }
