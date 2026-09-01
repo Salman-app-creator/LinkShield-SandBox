@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
@@ -70,6 +71,8 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
 
     // ── PsiphonTunnel.HostService callbacks ──────────────────────────────
 
+    override fun getContext(): Context = this
+
     override fun getPsiphonConfig(): String {
         return JSONObject().apply {
             put("PropagationChannelId", "FFFFFFFFFFFFFFFF")
@@ -96,7 +99,6 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
     override fun onConnecting() { updateNotification("🔄 VPN Connecting...") }
     override fun onConnected() { updateNotification("🔒 VPN Connected") }
     override fun onHomepage(url: String) {}
-    override fun onSessionId(sessionId: String) {}
     override fun onClientRegion(region: String) {}
     override fun onClientAddress(address: String) {}
     override fun onUntunneledAddress(address: String) {}
@@ -107,8 +109,6 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
     override fun onApplicationParameters(parameters: Any) {}
     override fun onServerAlert(reason: String, subject: String, actionUrls: List<String>) {}
     override fun onExiting() {}
-
-    override fun newVpnServiceBuilder(): VpnService.Builder = Builder()
 
     // ── Notification helpers ──────────────────────────────────────────────
 
