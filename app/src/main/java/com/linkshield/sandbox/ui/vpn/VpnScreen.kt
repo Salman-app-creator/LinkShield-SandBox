@@ -1,6 +1,5 @@
+// app/src/main/java/com/linkshield/sandbox/ui/vpn/VpnScreen.kt
 package com.linkshield.sandbox.ui.vpn
-
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/vpn/VpnScreen.kt
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -253,7 +252,7 @@ private fun StatusCard(state: VpnConnectionState) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     StatusMetric(label = "Session", value = formatDuration(elapsedSeconds))
-                    StatusMetric(label = "Protocol", value = "Psiphon")
+                    StatusMetric(label = "Protocol", value = "Tor")
                     StatusMetric(label = "Encrypt",  value = "TLS")
                 }
             }
@@ -298,7 +297,7 @@ private fun ServerInfoRow() {
         modifier              = Modifier.fillMaxWidth()
     ) {
         Text(
-            text      = "🌐  Psiphon Network  ·  Auto Server",
+            text      = "🌐  Tor Network  ·  Auto Server",
             fontSize  = 12.sp,
             color     = VpnTheme.textMuted,
             textAlign = TextAlign.Center
