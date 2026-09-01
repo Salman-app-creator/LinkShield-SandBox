@@ -8,14 +8,17 @@ import android.os.Build
 
 class PsiphonVpnManager(private val context: Context) {
 
-    @Volatile
-    private var isVpnConnected = false
+    companion object {
+        @Volatile
+        private var _isConnected = false
+
+        fun setConnected(value: Boolean) { _isConnected = value }
+    }
 
     fun connect(): Result<Unit> {
         return try {
             val prepareIntent = VpnService.prepare(context)
             if (prepareIntent != null) {
-                // Return error if VPN permission is not granted by user yet
                 Result.failure(SecurityException("VPN permission required"))
             } else {
                 val intent = Intent(context, PsiphonVpnService::class.java).apply {
@@ -26,11 +29,9 @@ class PsiphonVpnManager(private val context: Context) {
                 } else {
                     context.startService(intent)
                 }
-                isVpnConnected = true
                 Result.success(Unit)
             }
         } catch (e: Exception) {
-            isVpnConnected = false
             Result.failure(e)
         }
     }
@@ -41,12 +42,12 @@ class PsiphonVpnManager(private val context: Context) {
                 action = PsiphonVpnService.ACTION_STOP
             }
             context.startService(intent)
-            isVpnConnected = false
+            _isConnected = false
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    fun isConnected(): Boolean = isVpnConnected
+    fun isConnected(): Boolean = _isConnected
 }
