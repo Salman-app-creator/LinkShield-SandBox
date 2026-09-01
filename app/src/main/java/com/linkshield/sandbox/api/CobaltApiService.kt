@@ -31,6 +31,9 @@ class CobaltApiService(context: Context) {
             .build()
     }
 
+    private fun isYouTubeUrl(host: String) =
+        host.contains("youtube.com") || host.contains("youtu.be")
+
     fun cleanVideoUrl(rawUrl: String): String {
         val trimmed = rawUrl.trim()
         return try {
@@ -70,6 +73,14 @@ class CobaltApiService(context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 val cleanedUrl = cleanVideoUrl(rawUrl)
+                val host = Uri.parse(cleanedUrl).host?.lowercase() ?: ""
+
+                // YouTube ke liye alag server
+                val apiUrl = if (isYouTubeUrl(host)) {
+                    "http://141.148.223.177:9002/"
+                } else {
+                    "http://141.148.223.177:9001/"
+                }
 
                 val bodyJson = JSONObject().apply {
                     put("url", cleanedUrl)
@@ -79,7 +90,7 @@ class CobaltApiService(context: Context) {
                 }.toString()
 
                 val request = Request.Builder()
-                    .url("http://141.148.223.177:9001/")
+                    .url(apiUrl)
                     .post(bodyJson.toRequestBody("application/json".toMediaType()))
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
@@ -110,7 +121,7 @@ class CobaltApiService(context: Context) {
                             if (mediaUrl.isBlank()) MediaResult(false, error = "No stream found")
                             else MediaResult(
                                 success = true, url = mediaUrl,
-                                filename = "LinkShield_${System.currentTimeMillis()}.mp4",
+                                filename = "LinkShield_${System.currentTimeMillity()}.mp4",
                                 mimeType = "video/mp4"
                             )
                         }
