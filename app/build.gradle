@@ -14,7 +14,7 @@ android {
         versionCode 8
         versionName "2.3.2"
 
-        buildConfigField "String", "SAFE_BROWSING_API_KEY", '"YOUR_GOOGLE_SAFE_BROWSING_KEY"'
+        buildConfigField "String", "SAFE_BROWSING_API_KEY", '"AIzaSyCV71sWSuHkjqjsFa0CPOnomgF5LWGW394"'
         buildConfigField "String", "VIRUSTOTAL_API_KEY",    '"YOUR_VIRUSTOTAL_API_KEY"'
         buildConfigField "String", "PHISHTANK_APP_KEY",     '""'
     }
