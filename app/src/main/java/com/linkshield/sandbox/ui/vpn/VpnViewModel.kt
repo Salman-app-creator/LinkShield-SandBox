@@ -1,13 +1,12 @@
+// app/src/main/java/com/linkshield/sandbox/ui/vpn/VpnViewModel.kt
 package com.linkshield.sandbox.ui.vpn
-
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/vpn/VpnViewModel.kt
 
 import android.app.Application
 import android.content.Intent
 import android.net.VpnService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.linkshield.sandbox.vpn.PsiphonVpnManager
+import com.linkshield.sandbox.vpn.TorVpnManager
 import com.linkshield.sandbox.vpn.VpnConnectionState
 import com.linkshield.sandbox.vpn.isActive
 import com.linkshield.sandbox.vpn.isBusy
@@ -18,7 +17,7 @@ import kotlinx.coroutines.launch
 
 class VpnViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val psiphonManager = PsiphonVpnManager(application)
+    private val torManager = TorVpnManager(application)
 
     private val _vpnState = MutableStateFlow<VpnConnectionState>(VpnConnectionState.Disconnected)
     val vpnState: StateFlow<VpnConnectionState> = _vpnState.asStateFlow()
@@ -45,7 +44,7 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     fun onPermissionGranted() {
         _vpnState.value = VpnConnectionState.Connecting
         viewModelScope.launch {
-            val result = psiphonManager.connect()
+            val result = torManager.connect()
             _vpnState.value = if (result.isSuccess) {
                 VpnConnectionState.Connected()
             } else {
@@ -57,7 +56,7 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     fun disconnect() {
         _vpnState.value = VpnConnectionState.Disconnecting
         viewModelScope.launch {
-            psiphonManager.disconnect()
+            torManager.disconnect()
             _vpnState.value = VpnConnectionState.Disconnected
         }
     }
