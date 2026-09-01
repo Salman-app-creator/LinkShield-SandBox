@@ -1,9 +1,7 @@
-// app/src/main/java/com/linkshield/sandbox/api/CobaltApiService.kt
 package com.linkshield.sandbox.api
 
 import android.content.Context
 import android.net.Uri
-import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -11,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 
 data class MediaResult(
@@ -23,11 +22,15 @@ data class MediaResult(
 
 class CobaltApiService(context: Context) {
 
-    private val dnsManager = DnsManager(context)
+    // FIX: Clean client WITHOUT DnsManager's SNI fragmentation / DoH
     private val client: OkHttpClient by lazy {
-        dnsManager.getClient().newBuilder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(90, TimeUnit.SECONDS)
+        OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .retryOnConnectionFailure(false) // fail fast
             .build()
     }
 
@@ -75,10 +78,11 @@ class CobaltApiService(context: Context) {
                 val cleanedUrl = cleanVideoUrl(rawUrl)
                 val host = Uri.parse(cleanedUrl).host?.lowercase() ?: ""
 
+                // FIX: Added /api/json path — Cobalt API standard endpoint
                 val apiUrl = if (isYouTubeUrl(host)) {
-                    "http://141.148.223.177:9002/"
+                    "http://141.148.223.177:9002/api/json"
                 } else {
-                    "http://141.148.223.177:9001/"
+                    "http://141.148.223.177:9001/api/json"
                 }
 
                 val bodyJson = JSONObject().apply {
@@ -86,6 +90,7 @@ class CobaltApiService(context: Context) {
                     put("downloadMode", if (audioOnly) "audio" else "auto")
                     put("videoQuality", "1080")
                     put("filenameStyle", "pretty")
+                    if (audioOnly) put("aFormat", "mp3")
                 }.toString()
 
                 val request = Request.Builder()
@@ -98,12 +103,22 @@ class CobaltApiService(context: Context) {
 
                 client.newCall(request).execute().use { response ->
                     val body = response.body?.string() ?: ""
-                    if (!response.isSuccessful || body.isEmpty()) {
-                        return@withContext MediaResult(false, error = "Server error HTTP ${response.code}")
+
+                    if (!response.isSuccessful) {
+                        return@withContext MediaResult(
+                            success = false,
+                            error = "Server error HTTP ${response.code}. Cobalt instance may be down or API path changed."
+                        )
+                    }
+                    if (body.isBlank()) {
+                        return@withContext MediaResult(
+                            success = false,
+                            error = "Empty response from Cobalt server."
+                        )
                     }
 
                     val json = JSONObject(body)
-                    val status = json.optString("status")
+                    val status = json.optString("status", "unknown")
 
                     when (status) {
                         "stream", "redirect", "tunnel" -> {
@@ -112,27 +127,60 @@ class CobaltApiService(context: Context) {
                                 "LinkShield_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}"
                             }
                             val mime = if (audioOnly) "audio/mpeg" else "video/mp4"
-                            MediaResult(success = true, url = mediaUrl, filename = filename, mimeType = mime)
+                            if (mediaUrl.isBlank()) {
+                                MediaResult(success = false, error = "Server returned empty media URL")
+                            } else {
+                                MediaResult(
+                                    success = true,
+                                    url = mediaUrl,
+                                    filename = filename,
+                                    mimeType = mime
+                                )
+                            }
                         }
                         "picker" -> {
-                            val first = json.optJSONArray("picker")?.optJSONObject(0)
-                            val mediaUrl = first?.optString("url") ?: ""
-                            if (mediaUrl.isBlank()) MediaResult(false, error = "No stream found")
-                            else MediaResult(
-                                success = true, url = mediaUrl,
-                                filename = "LinkShield_${System.currentTimeMillis()}.mp4",
-                                mimeType = "video/mp4"
-                            )
+                            val arr = json.optJSONArray("picker")
+                            if (arr == null || arr.length() == 0) {
+                                MediaResult(success = false, error = "Picker response contained no streams")
+                            } else {
+                                val first = arr.optJSONObject(0)
+                                val mediaUrl = first?.optString("url") ?: ""
+                                if (mediaUrl.isBlank()) {
+                                    MediaResult(success = false, error = "Picker stream URL was empty")
+                                } else {
+                                    MediaResult(
+                                        success = true,
+                                        url = mediaUrl,
+                                        filename = "LinkShield_${System.currentTimeMillis()}.mp4",
+                                        mimeType = "video/mp4"
+                                    )
+                                }
+                            }
                         }
                         "error" -> {
-                            val code = json.optJSONObject("error")?.optString("code") ?: "unknown"
-                            MediaResult(false, error = "Error: $code")
+                            val errCode = json.optJSONObject("error")?.optString("code") ?: "unknown"
+                            val errCtx  = json.optJSONObject("error")?.optString("context") ?: ""
+                            MediaResult(
+                                success = false,
+                                error = "Cobalt API error [$errCode] $errCtx"
+                            )
                         }
-                        else -> MediaResult(false, error = "Unexpected response: $status")
+                        else -> MediaResult(
+                            success = false,
+                            error = "Unexpected Cobalt status: '$status'"
+                        )
                     }
                 }
+            } catch (e: SocketTimeoutException) {
+                MediaResult(
+                    success = false,
+                    error = "Connection timed out. Cobalt server unreachable or blocked."
+                )
             } catch (e: Exception) {
-                MediaResult(false, error = e.localizedMessage ?: "Network request failed")
+                MediaResult(
+                    success = false,
+                    error = e.localizedMessage ?: "Network request failed"
+                )
             }
         }
 }
