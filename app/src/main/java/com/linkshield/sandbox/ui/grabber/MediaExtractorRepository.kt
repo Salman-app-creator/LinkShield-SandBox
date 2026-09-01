@@ -1,13 +1,13 @@
 package com.linkshield.sandbox.ui.grabber
 
+import android.content.Context
 import com.linkshield.sandbox.api.CobaltApiService
-import com.linkshield.sandbox.dns.DnsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-class MediaExtractorRepository {
+class MediaExtractorRepository(private val fallbackContext: Context? = null) {
 
     suspend fun extract(
         mediaUrl: String,
@@ -18,15 +18,19 @@ class MediaExtractorRepository {
             return@withContext emptyList()
         }
 
-        // 1. Direct Cobalt API Execution
+        // 1. Cobalt API via proper context
         try {
-            val appClass = Class.forName("android.app.ActivityThread")
-            val currentApp = appClass.getMethod("currentApplication").invoke(null) as android.content.Context
-            val cobaltApi = CobaltApiService(currentApp)
+            val ctx = fallbackContext ?: try {
+                val appClass = Class.forName("android.app.ActivityThread")
+                appClass.getMethod("currentApplication").invoke(null) as android.content.Context
+            } catch (e: Exception) {
+                null
+            }
+            if (ctx == null) return@withContext emptyList()
 
-            // Fix: Changed parameter name from pageUrl to rawUrl
+            val cobaltApi = CobaltApiService(ctx)
             val result = cobaltApi.fetchMediaUrl(rawUrl = mediaUrl)
-            
+
             if (result.success && !result.url.isNullOrBlank()) {
                 val extractedUrl = result.url
                 val mimeType = result.mimeType ?: detectMimeType(extractedUrl)
@@ -47,11 +51,11 @@ class MediaExtractorRepository {
             e.printStackTrace()
         }
 
-        // 2. Local Direct Extension Check (Only for raw .mp4 / .mp3 links)
+        // 2. Raw direct link fallback
         val mimeType = detectMimeType(mediaUrl)
         val quality = detectQuality(mediaUrl)
 
-        if (mimeType.isNotBlank()) {
+        return@withContext if (mimeType.isNotBlank()) {
             listOf(
                 MediaQualityOption(
                     url = mediaUrl,
