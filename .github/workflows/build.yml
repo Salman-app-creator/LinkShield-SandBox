@@ -20,21 +20,6 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Download Psiphon AAR Dependency
-        run: |
-          mkdir -p app/libs
-          ASSET_ID=$(curl -sL \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/Salman-app-creator/LinkShield-SandBox/releases/tags/v1.0-deps" \
-            | python3 -c "import sys,json; assets=json.load(sys.stdin)['assets']; print(next(a['id'] for a in assets if a['name']=='psiphontunnel.aar'))")
-          curl -L \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/octet-stream" \
-            -o app/libs/psiphontunnel.aar \
-            "https://api.github.com/repos/Salman-app-creator/LinkShield-SandBox/releases/assets/$ASSET_ID"
-          echo "AAR size: $(du -sh app/libs/psiphontunnel.aar)"
-
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
