@@ -87,27 +87,38 @@ fun LinkShieldGrabberScreen(
         }
     }
 
+    // FIX: try/catch/finally wrapped so isLoading ALWAYS resets — no infinite hang
     fun doFetch() {
         val clean = inputUrl.trim()
         if (clean.isBlank()) { errorMsg = "Enter a URL first"; return }
         if (!effectivelyPro && remainingDownloads <= 0) { errorMsg = "Download limit reached."; return }
-        isLoading = true; errorMsg = null
+
+        isLoading = true
+        errorMsg = null
         keyboardController?.hide()
+
         scope.launch {
-            thumbnailUrl = extractYoutubeThumbnail(clean)
-            val result = cobaltService.fetchMediaUrl(rawUrl = clean, audioOnly = audioOnly)
-            isLoading = false
-            if (result.success && result.url != null) {
-                mediaUrl = result.url
-                mediaFilename = result.filename ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
-                mediaTitle = result.filename?.substringBeforeLast(".") ?: "LinkShield Media"
-                mediaMime = result.mimeType ?: "video/mp4"
-                fetched = true
-                if (!effectivelyPro) dnsManager.consumeDownload()
-            } else {
-                resetResult()
+            try {
                 thumbnailUrl = extractYoutubeThumbnail(clean)
-                errorMsg = result.error ?: "Failed to fetch media"
+                val result = cobaltService.fetchMediaUrl(rawUrl = clean, audioOnly = audioOnly)
+
+                if (result.success && result.url != null) {
+                    mediaUrl = result.url
+                    mediaFilename = result.filename ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
+                    mediaTitle = result.filename?.substringBeforeLast(".") ?: "LinkShield Media"
+                    mediaMime = result.mimeType ?: "video/mp4"
+                    fetched = true
+                    if (!effectivelyPro) dnsManager.consumeDownload()
+                } else {
+                    resetResult()
+                    thumbnailUrl = extractYoutubeThumbnail(clean)
+                    errorMsg = result.error ?: "Failed to fetch media"
+                }
+            } catch (e: Exception) {
+                resetResult()
+                errorMsg = "Fetch failed: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                isLoading = false
             }
         }
     }
