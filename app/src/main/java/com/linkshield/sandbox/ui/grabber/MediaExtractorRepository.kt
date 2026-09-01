@@ -7,59 +7,51 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-class MediaExtractorRepository(private val fallbackContext: Context? = null) {
+class MediaExtractorRepository(private val context: Context? = null) {
 
     suspend fun extract(
         mediaUrl: String,
-        title: String = ""
+        title: String = "",
+        audioOnly: Boolean = false,
+        resolution: String = "1080p"
     ): List<MediaQualityOption> = withContext(Dispatchers.IO) {
-
         if (mediaUrl.isBlank() || mediaUrl.startsWith("blob:", ignoreCase = true)) {
             return@withContext emptyList()
         }
 
-        // 1. Cobalt API via proper context
-        try {
-            val ctx = fallbackContext ?: try {
-                val appClass = Class.forName("android.app.ActivityThread")
-                appClass.getMethod("currentApplication").invoke(null) as android.content.Context
-            } catch (e: Exception) {
-                null
-            }
-            if (ctx == null) return@withContext emptyList()
-
-            val cobaltApi = CobaltApiService(ctx)
-            val result = cobaltApi.fetchMediaUrl(rawUrl = mediaUrl)
-
-            if (result.success && !result.url.isNullOrBlank()) {
-                val extractedUrl = result.url
-                val mimeType = result.mimeType ?: detectMimeType(extractedUrl)
-                val quality = detectQuality(extractedUrl)
-
-                return@withContext listOf(
-                    MediaQualityOption(
-                        url = extractedUrl,
-                        quality = if (quality.isNotBlank()) quality else "1080p",
-                        label = if (quality.isNotBlank()) quality else "High Quality",
-                        mimeType = mimeType,
-                        title = if (title.isNotBlank()) title else (result.filename ?: "Media File"),
-                        isAudio = mimeType.startsWith("audio/")
+        val ctx = context?.applicationContext
+        if (ctx != null) {
+            try {
+                val cobalt = CobaltApiService(ctx)
+                val result = cobalt.fetchMediaUrl(rawUrl = mediaUrl, audioOnly = audioOnly)
+                if (result.success && !result.url.isNullOrBlank()) {
+                    val extractedUrl = result.url
+                    val mime = result.mimeType ?: detectMimeType(extractedUrl)
+                    val detectedQuality = detectQuality(extractedUrl)
+                    return@withContext listOf(
+                        MediaQualityOption(
+                            url = extractedUrl,
+                            quality = detectedQuality.ifBlank { resolution },
+                            label = detectedQuality.ifBlank { resolution },
+                            mimeType = mime.ifBlank { if (audioOnly) "audio/mpeg" else "video/mp4" },
+                            title = title.ifBlank { result.filename ?: "Media File" },
+                            isAudio = audioOnly || mime.startsWith("audio/")
+                        )
                     )
-                )
+                }
+            } catch (_: Exception) {
+                // Fall through to direct URL detection below.
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
 
-        // 2. Raw direct link fallback
+        // Direct-media fallback remains useful for already-resolved links.
         val mimeType = detectMimeType(mediaUrl)
         val quality = detectQuality(mediaUrl)
-
         return@withContext if (mimeType.isNotBlank()) {
             listOf(
                 MediaQualityOption(
                     url = mediaUrl,
-                    quality = quality,
+                    quality = quality.ifBlank { resolution },
                     label = quality.ifBlank { "High Quality" },
                     mimeType = mimeType,
                     title = title,
@@ -78,6 +70,7 @@ class MediaExtractorRepository(private val fallbackContext: Context? = null) {
             clean.endsWith(".m4a") -> "audio/mp4"
             clean.endsWith(".aac") -> "audio/aac"
             clean.endsWith(".ogg") -> "audio/ogg"
+            clean.endsWith(".wav") -> "audio/wav"
             clean.endsWith(".webm") -> "video/webm"
             clean.endsWith(".mp4") -> "video/mp4"
             clean.endsWith(".m3u8") -> "application/vnd.apple.mpegurl"
@@ -89,6 +82,9 @@ class MediaExtractorRepository(private val fallbackContext: Context? = null) {
     private fun detectQuality(mediaUrl: String): String {
         val url = mediaUrl.lowercase()
         return when {
+            "4320" in url || "4k" in url -> "4K"
+            "2160" in url -> "4K"
+            "1440" in url -> "1440p"
             "1080" in url -> "1080p"
             "720" in url -> "720p"
             "480" in url -> "480p"

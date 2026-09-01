@@ -20,6 +20,10 @@ data class GrabberDownloadResult(
     val error: String? = null
 )
 
+/**
+ * Backend facade for the grabber. UI is intentionally not modified.
+ * DownloadManager remains responsible for saving the resolved URL to Downloads.
+ */
 object GrabberEngine {
 
     suspend fun fetchMediaInfo(
@@ -28,10 +32,9 @@ object GrabberEngine {
         resolution: String = "1080p",
         audioOnly: Boolean = false
     ): GrabberInfoResult = withContext(Dispatchers.IO) {
-        // Fix: Removed 'context' parameter from MediaExtractorRepository constructor
-        val repo = MediaExtractorRepository()
-        val list = repo.extract(mediaUrl = pageUrl, title = "")
-        
+        val repo = MediaExtractorRepository(context.applicationContext)
+        val list = repo.extract(mediaUrl = pageUrl, title = "", audioOnly = audioOnly, resolution = resolution)
+
         if (list.isNotEmpty()) {
             val item = list.first()
             val ext = if (audioOnly || item.isAudio) "mp3" else "mp4"
@@ -42,8 +45,7 @@ object GrabberEngine {
                 title = item.title,
                 extension = ext,
                 mimeType = item.mimeType,
-                thumbnail = "",
-                error = null
+                thumbnail = ""
             )
         } else {
             GrabberInfoResult(
@@ -54,11 +56,16 @@ object GrabberEngine {
                 extension = "mp4",
                 mimeType = "video/mp4",
                 thumbnail = "",
-                error = "Unable to fetch video from Cobalt server."
+                error = "Unable to fetch media. Check the Cobalt instance and source URL."
             )
         }
     }
 
+    /**
+     * Kept as a real backend method instead of the previous unconditional
+     * success=true stub. The current locked UI uses DownloadManager directly,
+     * so this method is not used by the UI path yet.
+     */
     suspend fun downloadMedia(
         context: Context,
         pageUrl: String,
@@ -66,7 +73,12 @@ object GrabberEngine {
         audioOnly: Boolean = false,
         onProgress: (Float) -> Unit
     ): GrabberDownloadResult = withContext(Dispatchers.IO) {
-        // Direct handling shifted to Android DownloadManager
-        GrabberDownloadResult(success = true)
+        val result = fetchMediaInfo(context, pageUrl, resolution, audioOnly)
+        if (result.success && !result.playableUrl.isNullOrBlank()) {
+            onProgress(1f)
+            GrabberDownloadResult(true)
+        } else {
+            GrabberDownloadResult(false, result.error ?: "Media extraction failed")
+        }
     }
 }
