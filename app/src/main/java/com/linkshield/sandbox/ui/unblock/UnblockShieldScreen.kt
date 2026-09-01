@@ -39,7 +39,7 @@ import com.linkshield.sandbox.license.LicenseManager
 import com.linkshield.sandbox.ui.browser.SandboxBrowserScreen
 import com.linkshield.sandbox.ui.grabber.LinkShieldGrabberScreen
 import com.linkshield.sandbox.ui.upgrade.UpgradeScreen
-import com.linkshield.sandbox.vpn.PsiphonVpnManager
+import com.linkshield.sandbox.vpn.TorVpnManager
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 
@@ -71,7 +71,7 @@ fun UnblockShieldScreen(
     var isProUser by remember { mutableStateOf(licenseManager.isProUser()) }
     var trialDays by remember { mutableIntStateOf(licenseManager.getTrialDaysRemaining()) }
 
-    val psiphonManager = remember { PsiphonVpnManager(context.applicationContext) }
+    val psiphonManager = remember { TorVpnManager(context.applicationContext) }
     var isPsiphonConnected by remember { mutableStateOf(psiphonManager.isConnected()) }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
@@ -82,7 +82,7 @@ fun UnblockShieldScreen(
                 val connectResult = psiphonManager.connect()
                 isPsiphonConnected = connectResult.isSuccess
                 if (connectResult.isFailure) {
-                    Toast.makeText(context, "Psiphon connection failed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "VPN connection failed", Toast.LENGTH_SHORT).show()
                 }
             }
         } else {
