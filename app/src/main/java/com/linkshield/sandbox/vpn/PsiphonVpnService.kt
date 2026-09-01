@@ -50,6 +50,7 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
 
     override fun onDestroy() {
         stopTunnel()
+        PsiphonVpnManager.setConnected(false)
         super.onDestroy()
     }
 
@@ -59,6 +60,7 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
                 psiphonTunnel?.startTunneling("")
             } catch (e: Exception) {
                 updateNotification("❌ VPN Error: ${e.message}")
+                PsiphonVpnManager.setConnected(false)
             }
         }.also { it.start() }
     }
@@ -68,8 +70,6 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
         tunnelThread?.interrupt()
         tunnelThread = null
     }
-
-    // ── PsiphonTunnel.HostService callbacks ──────────────────────────────
 
     override fun getContext(): Context = this
 
@@ -96,21 +96,34 @@ class PsiphonVpnService : VpnService(), PsiphonTunnel.HostService {
     override fun onListeningSocksProxyPort(port: Int) {}
     override fun onListeningHttpProxyPort(port: Int) {}
     override fun onUpstreamProxyError(message: String) {}
-    override fun onConnecting() { updateNotification("🔄 VPN Connecting...") }
-    override fun onConnected() { updateNotification("🔒 VPN Connected") }
+
+    override fun onConnecting() {
+        updateNotification("🔄 VPN Connecting...")
+    }
+
+    override fun onConnected() {
+        PsiphonVpnManager.setConnected(true)
+        updateNotification("🔒 VPN Connected")
+    }
+
     override fun onHomepage(url: String) {}
     override fun onClientRegion(region: String) {}
     override fun onClientAddress(address: String) {}
     override fun onUntunneledAddress(address: String) {}
     override fun onBytesTransferred(sent: Long, received: Long) {}
-    override fun onStartedWaitingForNetworkConnectivity() { updateNotification("⏳ Waiting for network...") }
+
+    override fun onStartedWaitingForNetworkConnectivity() {
+        updateNotification("⏳ Waiting for network...")
+    }
+
     override fun onActiveAuthorizationIDs(authorizationIds: List<String>) {}
     override fun onTrafficRateLimits(upstreamBytesPerSecond: Long, downstreamBytesPerSecond: Long) {}
     override fun onApplicationParameters(parameters: Any) {}
     override fun onServerAlert(reason: String, subject: String, actionUrls: List<String>) {}
-    override fun onExiting() {}
 
-    // ── Notification helpers ──────────────────────────────────────────────
+    override fun onExiting() {
+        PsiphonVpnManager.setConnected(false)
+    }
 
     private fun updateNotification(text: String) {
         getSystemService(NotificationManager::class.java)
