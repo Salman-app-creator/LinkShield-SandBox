@@ -1,25 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- NETWORK -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
-
-    <!-- STORAGE — Android 9 and below -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
-
-    <!-- FOREGROUND SERVICE -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-
-    <!-- NOTIFICATIONS — Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- APPLICATION -->
     <application
         android:name=".LinkShieldApp"
         android:allowBackup="true"
@@ -32,7 +22,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LinkShieldSandbox">
 
-        <!-- MAIN ACTIVITY -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -64,7 +53,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
-            <!-- SHARE INTENT — video URL share karne ke liye -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -73,7 +61,6 @@
 
         </activity>
 
-        <!-- LINK INTERCEPTOR -->
         <activity
             android:name=".LinkInterceptorActivity"
             android:exported="true"
@@ -90,9 +77,9 @@
 
         </activity>
 
-        <!-- PSIPHON VPN SERVICE -->
+        <!-- TOR VPN SERVICE -->
         <service
-            android:name=".vpn.PsiphonVpnService"
+            android:name=".vpn.TorVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:exported="false"
             android:foregroundServiceType="specialUse">
@@ -103,9 +90,14 @@
 
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Establishes a secure Psiphon VPN tunnel for privacy and censorship bypass" />
+                android:value="Establishes a secure Tor VPN tunnel for privacy and censorship bypass" />
 
         </service>
+
+        <!-- TOR SERVICE -->
+        <service
+            android:name="org.torproject.jni.TorService"
+            android:exported="false" />
 
     </application>
 
