@@ -23,7 +23,7 @@ class MediaExtractorRepository(private val context: Context? = null) {
         if (ctx != null) {
             try {
                 val cobalt = CobaltApiService(ctx)
-                val result = cobalt.fetchMediaUrl(rawUrl = mediaUrl, audioOnly = audioOnly)
+                val result = cobalt.fetchMediaUrl(rawUrl = mediaUrl, audioOnly = audioOnly, resolution = resolution)
                 if (result.success && !result.url.isNullOrBlank()) {
                     val extractedUrl = result.url
                     val mime = result.mimeType ?: detectMimeType(extractedUrl)

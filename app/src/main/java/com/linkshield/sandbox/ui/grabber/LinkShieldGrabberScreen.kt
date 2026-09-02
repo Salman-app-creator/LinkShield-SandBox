@@ -2,10 +2,6 @@ package com.linkshield.sandbox.ui.grabber
 
 // REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/grabber/LinkShieldGrabberScreen.kt
 
-import android.app.DownloadManager
-import android.content.Context
-import android.net.Uri
-import android.os.Environment
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -59,6 +55,8 @@ fun LinkShieldGrabberScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var mediaUrl by remember { mutableStateOf("") }
+    var mediaAudioUrl by remember { mutableStateOf("") }
+    var downloadCounted by remember { mutableStateOf(false) }
     var mediaFilename by remember { mutableStateOf("") }
     var mediaMime by remember { mutableStateOf("video/mp4") }
     var thumbnailUrl by remember { mutableStateOf("") }
@@ -75,7 +73,7 @@ fun LinkShieldGrabberScreen(
     val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
 
     fun resetResult() {
-        fetched = false; mediaUrl = ""; mediaFilename = ""
+        fetched = false; mediaUrl = ""; mediaAudioUrl = ""; mediaFilename = ""; downloadCounted = false
         mediaMime = "video/mp4"; mediaTitle = ""; errorMsg = null
     }
 
@@ -100,15 +98,16 @@ fun LinkShieldGrabberScreen(
         scope.launch {
             try {
                 thumbnailUrl = extractYoutubeThumbnail(clean)
-                val result = cobaltService.fetchMediaUrl(rawUrl = clean, audioOnly = audioOnly)
+                val result = cobaltService.fetchMediaUrl(rawUrl = clean, audioOnly = audioOnly, resolution = selectedResolution)
 
                 if (result.success && result.url != null) {
                     mediaUrl = result.url
+                    mediaAudioUrl = result.secondaryUrl.orEmpty()
                     mediaFilename = result.filename ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
                     mediaTitle = result.filename?.substringBeforeLast(".") ?: "LinkShield Media"
                     mediaMime = result.mimeType ?: "video/mp4"
                     fetched = true
-                    if (!effectivelyPro) dnsManager.consumeDownload()
+                    downloadCounted = false
                 } else {
                     resetResult()
                     thumbnailUrl = extractYoutubeThumbnail(clean)
@@ -125,21 +124,50 @@ fun LinkShieldGrabberScreen(
 
     fun downloadCurrent() {
         if (!fetched || mediaUrl.isBlank()) { errorMsg = "Fetch the media first"; return }
-        try {
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            dm.enqueue(
-                DownloadManager.Request(Uri.parse(mediaUrl))
-                    .setTitle(mediaTitle.ifBlank { "LinkShield Media" })
-                    .setDescription("Downloading via LinkShield Sandbox")
-                    .setMimeType(mediaMime)
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$mediaFilename")
-                    .setAllowedOverMetered(true)
-                    .setAllowedOverRoaming(true)
-            )
-            Toast.makeText(context, "Download started ✓", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            errorMsg = "Download failed: ${e.localizedMessage}"
+        if (isLoading) return
+        isLoading = true
+        errorMsg = null
+        scope.launch {
+            try {
+                val result = when {
+                    !audioOnly && mediaAudioUrl.isNotBlank() -> {
+                        MediaDownloadEngine.downloadAndMerge(
+                            context = context,
+                            videoUrl = mediaUrl,
+                            audioUrl = mediaAudioUrl,
+                            filename = mediaFilename.ifBlank { "LinkShield_Media.mp4" }
+                        )
+                    }
+                    audioOnly && !mediaMime.equals("audio/mpeg", ignoreCase = true) -> {
+                        MediaDownloadEngine.downloadAndConvertToMp3(
+                            context = context,
+                            mediaUrl = mediaUrl,
+                            filename = mediaFilename.ifBlank { "LinkShield_Media.mp3" }
+                        )
+                    }
+                    else -> {
+                        MediaDownloadEngine.download(
+                            context = context,
+                            mediaUrl = mediaUrl,
+                            filename = mediaFilename.ifBlank { "LinkShield_Media.mp4" },
+                            mimeType = mediaMime
+                        )
+                    }
+                }
+                if (result.success) {
+                    if (!effectivelyPro && !downloadCounted) {
+                        dnsManager.consumeDownload()
+                        downloadCounted = true
+                    }
+                    Toast.makeText(context, "Download completed ✓", Toast.LENGTH_LONG).show()
+                } else {
+                    errorMsg = result.error ?: "Download failed"
+                }
+            } catch (e: Exception) {
+                errorMsg = "Download failed: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                isLoading = false
+            }
         }
     }
 

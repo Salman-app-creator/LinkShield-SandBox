@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
 data class MediaResult(
     val success: Boolean,
     val url: String? = null,
+    val secondaryUrl: String? = null,
     val filename: String? = null,
     val mimeType: String? = null,
     val error: String? = null
@@ -89,7 +90,8 @@ class CobaltApiService(context: Context) {
 
     suspend fun fetchMediaUrl(
         rawUrl: String,
-        audioOnly: Boolean = false
+        audioOnly: Boolean = false,
+        resolution: String = "1080p"
     ): MediaResult = withContext(Dispatchers.IO) {
         try {
             val cleanedUrl = cleanVideoUrl(rawUrl)
@@ -102,16 +104,17 @@ class CobaltApiService(context: Context) {
             // YouTube is intentionally handled locally by yt-dlp. This keeps
             // YouTube extraction independent from the self-hosted Cobalt
             // instance and avoids the old Cobalt endpoint problem.
-            if (YtDlpEngine.isYouTubeUrl(cleanedUrl) && !audioOnly) {
+            if (YtDlpEngine.isYouTubeUrl(cleanedUrl)) {
                 val yt = YtDlpEngine.resolveDirectUrl(
                     appContext,
                     cleanedUrl,
-                    resolution = "1080p"
+                    resolution = resolution
                 )
                 if (yt.success && !yt.url.isNullOrBlank()) {
                     return@withContext MediaResult(
                         success = true,
                         url = yt.url,
+                        secondaryUrl = yt.secondaryUrl,
                         filename = yt.filename,
                         mimeType = yt.mimeType ?: "video/mp4"
                     )
@@ -126,7 +129,7 @@ class CobaltApiService(context: Context) {
             val bodyJson = JSONObject().apply {
                 put("url", cleanedUrl)
                 put("downloadMode", if (audioOnly) "audio" else "auto")
-                put("videoQuality", "1080")
+                put("videoQuality", resolution.removeSuffix("p").removeSuffix("K").let { if (resolution.equals("4K", true)) "2160" else it })
                 put("filenameStyle", "pretty")
                 put("audioFormat", "mp3")
                 put("audioBitrate", "128")
