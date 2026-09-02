@@ -3,6 +3,7 @@ package com.linkshield.sandbox.api
 import android.content.Context
 import android.net.Uri
 import com.linkshield.sandbox.BuildConfig
+import com.linkshield.sandbox.ui.grabber.YtDlpEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -70,14 +71,14 @@ class CobaltApiService(context: Context) {
                     if (!videoId.isNullOrBlank()) "https://www.youtube.com/watch?v=$videoId" else trimmed
                 }
                 host == "instagram.com" || host.endsWith(".instagram.com") -> {
-                    "https://www.instagram.com${uri.path.orEmpty()}"
+                    trimmed
                 }
                 host == "tiktok.com" || host.endsWith(".tiktok.com") -> {
-                    "https://www.tiktok.com${uri.path.orEmpty()}"
+                    trimmed
                 }
                 host == "facebook.com" || host.endsWith(".facebook.com") ||
                     host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> {
-                    "https://www.facebook.com${uri.path.orEmpty()}"
+                    trimmed
                 }
                 else -> trimmed
             }
@@ -96,6 +97,27 @@ class CobaltApiService(context: Context) {
 
             if (cleanedUrl.isBlank() || !cleanedUrl.startsWith("http", ignoreCase = true)) {
                 return@withContext MediaResult(false, error = "Invalid media URL")
+            }
+
+            // YouTube is intentionally handled locally by yt-dlp. This keeps
+            // YouTube extraction independent from the self-hosted Cobalt
+            // instance and avoids the old Cobalt endpoint problem.
+            if (YtDlpEngine.isYouTubeUrl(cleanedUrl) && !audioOnly) {
+                val yt = YtDlpEngine.resolveDirectUrl(
+                    appContext,
+                    cleanedUrl,
+                    resolution = "1080p"
+                )
+                if (yt.success && !yt.url.isNullOrBlank()) {
+                    return@withContext MediaResult(
+                        success = true,
+                        url = yt.url,
+                        filename = yt.filename,
+                        mimeType = yt.mimeType ?: "video/mp4"
+                    )
+                }
+                // Fall through to Cobalt only when local yt-dlp cannot
+                // resolve the video. This gives the app a second backend.
             }
 
             // Current Cobalt API endpoint is POST /.
@@ -206,9 +228,17 @@ class CobaltApiService(context: Context) {
                     "error" -> {
                         val errorObject = json.optJSONObject("error")
                         val code = errorObject?.optString("code").orEmpty()
-                        val context = errorObject?.optString("context").orEmpty()
-                        val detail = listOf(code, context).filter { it.isNotBlank() }.joinToString(" ")
-                        MediaResult(false, error = "Cobalt error${if (detail.isNotBlank()) " [$detail]" else ""}.")
+                        val contextObject = errorObject?.optJSONObject("context")
+                        val service = contextObject?.optString("service").orEmpty()
+                        val limit = contextObject?.optInt("limit", -1)?.takeIf { it >= 0 }
+                        val details = buildList {
+                            if (service.isNotBlank()) add("service=$service")
+                            if (limit != null) add("limit=$limit")
+                        }.joinToString(", ")
+                        MediaResult(
+                            false,
+                            error = "Cobalt error${if (code.isNotBlank()) " [$code]" else ""}${if (details.isNotBlank()) " ($details)" else ""}."
+                        )
                     }
 
                     else -> MediaResult(false, error = "Unexpected Cobalt status: '${json.optString("status", "unknown")}'.")
