@@ -31,3 +31,5 @@ jobs:
         with:
           name: LinkShield-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 1
+          overwrite: true
