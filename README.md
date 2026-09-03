@@ -1,5 +1,5 @@
 # LinkShield Sandbox
-
+ 
 <p align="center">
   <b>🔒 Open every link in a secure, isolated sandbox</b>
 </p>
