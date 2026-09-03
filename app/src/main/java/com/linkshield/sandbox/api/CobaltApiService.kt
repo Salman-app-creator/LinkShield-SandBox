@@ -3,7 +3,6 @@ package com.linkshield.sandbox.api
 import android.content.Context
 import android.net.Uri
 import com.linkshield.sandbox.BuildConfig
-import com.linkshield.sandbox.ui.grabber.YtDlpEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -23,7 +22,6 @@ import java.util.concurrent.TimeUnit
 data class MediaResult(
     val success: Boolean,
     val url: String? = null,
-    val secondaryUrl: String? = null,
     val filename: String? = null,
     val mimeType: String? = null,
     val error: String? = null
@@ -72,14 +70,14 @@ class CobaltApiService(context: Context) {
                     if (!videoId.isNullOrBlank()) "https://www.youtube.com/watch?v=$videoId" else trimmed
                 }
                 host == "instagram.com" || host.endsWith(".instagram.com") -> {
-                    trimmed
+                    "https://www.instagram.com${uri.path.orEmpty()}"
                 }
                 host == "tiktok.com" || host.endsWith(".tiktok.com") -> {
-                    trimmed
+                    "https://www.tiktok.com${uri.path.orEmpty()}"
                 }
                 host == "facebook.com" || host.endsWith(".facebook.com") ||
                     host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> {
-                    trimmed
+                    "https://www.facebook.com${uri.path.orEmpty()}"
                 }
                 else -> trimmed
             }
@@ -90,8 +88,7 @@ class CobaltApiService(context: Context) {
 
     suspend fun fetchMediaUrl(
         rawUrl: String,
-        audioOnly: Boolean = false,
-        resolution: String = "1080p"
+        audioOnly: Boolean = false
     ): MediaResult = withContext(Dispatchers.IO) {
         try {
             val cleanedUrl = cleanVideoUrl(rawUrl)
@@ -101,35 +98,13 @@ class CobaltApiService(context: Context) {
                 return@withContext MediaResult(false, error = "Invalid media URL")
             }
 
-            // YouTube is intentionally handled locally by yt-dlp. This keeps
-            // YouTube extraction independent from the self-hosted Cobalt
-            // instance and avoids the old Cobalt endpoint problem.
-            if (YtDlpEngine.isYouTubeUrl(cleanedUrl)) {
-                val yt = YtDlpEngine.resolveDirectUrl(
-                    appContext,
-                    cleanedUrl,
-                    resolution = resolution
-                )
-                if (yt.success && !yt.url.isNullOrBlank()) {
-                    return@withContext MediaResult(
-                        success = true,
-                        url = yt.url,
-                        secondaryUrl = yt.secondaryUrl,
-                        filename = yt.filename,
-                        mimeType = yt.mimeType ?: "video/mp4"
-                    )
-                }
-                // Fall through to Cobalt only when local yt-dlp cannot
-                // resolve the video. This gives the app a second backend.
-            }
-
             // Current Cobalt API endpoint is POST /.
             val apiUrl = baseUrl()
 
             val bodyJson = JSONObject().apply {
                 put("url", cleanedUrl)
                 put("downloadMode", if (audioOnly) "audio" else "auto")
-                put("videoQuality", resolution.removeSuffix("p").removeSuffix("K").let { if (resolution.equals("4K", true)) "2160" else it })
+                put("videoQuality", "1080")
                 put("filenameStyle", "pretty")
                 put("audioFormat", "mp3")
                 put("audioBitrate", "128")
@@ -231,17 +206,9 @@ class CobaltApiService(context: Context) {
                     "error" -> {
                         val errorObject = json.optJSONObject("error")
                         val code = errorObject?.optString("code").orEmpty()
-                        val contextObject = errorObject?.optJSONObject("context")
-                        val service = contextObject?.optString("service").orEmpty()
-                        val limit = contextObject?.optInt("limit", -1)?.takeIf { it >= 0 }
-                        val details = buildList {
-                            if (service.isNotBlank()) add("service=$service")
-                            if (limit != null) add("limit=$limit")
-                        }.joinToString(", ")
-                        MediaResult(
-                            false,
-                            error = "Cobalt error${if (code.isNotBlank()) " [$code]" else ""}${if (details.isNotBlank()) " ($details)" else ""}."
-                        )
+                        val context = errorObject?.optString("context").orEmpty()
+                        val detail = listOf(code, context).filter { it.isNotBlank() }.joinToString(" ")
+                        MediaResult(false, error = "Cobalt error${if (detail.isNotBlank()) " [$detail]" else ""}.")
                     }
 
                     else -> MediaResult(false, error = "Unexpected Cobalt status: '${json.optString("status", "unknown")}'.")

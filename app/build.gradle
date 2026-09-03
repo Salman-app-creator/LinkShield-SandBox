@@ -14,10 +14,10 @@ android {
         versionCode 8
         versionName "2.3.2"
 
-        buildConfigField "String", "SAFE_BROWSING_API_KEY", "\"${project.findProperty('SAFE_BROWSING_API_KEY') ?: ''}\""
+        buildConfigField "String", "SAFE_BROWSING_API_KEY", '"AIzaSyCV71sWSuHkjqjsFa0CPOnomgF5LWGW394"'
         buildConfigField "String", "VIRUSTOTAL_API_KEY",    '"YOUR_VIRUSTOTAL_API_KEY"'
         buildConfigField "String", "PHISHTANK_APP_KEY",     '""'
-        buildConfigField "String", "COBALT_BASE_URL", '"http://141.148.223.177:9001/"'
+        buildConfigField "String", "COBALT_BASE_URL",        '"http://141.148.223.177:9000/"'
         buildConfigField "String", "COBALT_API_KEY",         '""'
     }
 
@@ -74,9 +74,6 @@ dependencies {
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0'
-    // Free, maintained yt-dlp Android runtime (MIT).
-    implementation 'dev.ffmpegkit-maintained:yt-dlp-android:2.0.2'
-    implementation 'dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.7'
     implementation 'io.coil-kt:coil-compose:2.5.0'
     implementation 'io.coil-kt:coil:2.5.0'
     implementation 'info.guardianproject:tor-android:0.4.8.12'

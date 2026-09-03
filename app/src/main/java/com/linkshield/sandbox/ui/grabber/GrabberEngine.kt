@@ -73,15 +73,12 @@ object GrabberEngine {
         audioOnly: Boolean = false,
         onProgress: (Float) -> Unit
     ): GrabberDownloadResult = withContext(Dispatchers.IO) {
-        val repo = MediaExtractorRepository(context.applicationContext)
-        val options = repo.extract(pageUrl, audioOnly = audioOnly, resolution = resolution)
-        val item = options.firstOrNull() ?: return@withContext GrabberDownloadResult(false, "Unable to resolve media.")
-        MediaDownloadEngine.download(
-            context = context.applicationContext,
-            mediaUrl = item.url,
-            filename = item.title.ifBlank { "LinkShield_Media.${if (audioOnly) "mp3" else "mp4"} " }.trim(),
-            mimeType = item.mimeType.ifBlank { if (audioOnly) "audio/mpeg" else "video/mp4" },
-            onProgress = onProgress
-        )
+        val result = fetchMediaInfo(context, pageUrl, resolution, audioOnly)
+        if (result.success && !result.playableUrl.isNullOrBlank()) {
+            onProgress(1f)
+            GrabberDownloadResult(true)
+        } else {
+            GrabberDownloadResult(false, result.error ?: "Media extraction failed")
+        }
     }
 }
