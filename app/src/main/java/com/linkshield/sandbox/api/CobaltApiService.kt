@@ -86,9 +86,10 @@ host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> trimmed
     }
 
     suspend fun fetchMediaUrl(
-        rawUrl: String,
-        audioOnly: Boolean = false
-    ): MediaResult = withContext(Dispatchers.IO) {
+    rawUrl: String,
+    audioOnly: Boolean = false,
+    resolution: String = "1080p"
+): MediaResult = withContext(Dispatchers.IO) {
         try {
             val cleanedUrl = cleanVideoUrl(rawUrl)
             val host = Uri.parse(cleanedUrl).host?.lowercase().orEmpty()
@@ -103,7 +104,16 @@ host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> trimmed
             val bodyJson = JSONObject().apply {
                 put("url", cleanedUrl)
                 put("downloadMode", if (audioOnly) "audio" else "auto")
-                put("videoQuality", "1080")
+                val qualityNum = when (resolution.uppercase().trim()) {
+    "4K", "2160P" -> "2160"
+    "1440P"       -> "1440"
+    "1080P"       -> "1080"
+    "720P"        -> "720"
+    "480P"        -> "480"
+    "360P"        -> "360"
+    else          -> "1080"
+}
+put("videoQuality", qualityNum)
                 put("filenameStyle", "pretty")
                 put("audioFormat", "mp3")
                 put("audioBitrate", "128")
