@@ -76,8 +76,7 @@ class CobaltApiService(context: Context) {
                     "https://www.tiktok.com${uri.path.orEmpty()}"
                 }
                 host == "facebook.com" || host.endsWith(".facebook.com") ||
-                    host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> {
-                    "https://www.facebook.com${uri.path.orEmpty()}"
+host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> trimmed
                 }
                 else -> trimmed
             }
