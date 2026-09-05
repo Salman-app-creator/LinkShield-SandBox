@@ -4,13 +4,12 @@ on:
   push:
     paths:
       - 'incoming/*.zip'
-
   workflow_dispatch:
     inputs:
       zip_path:
         description: "ZIP file path inside the repository"
-        required: true
-        default: "incoming/LinkShield-Sandbox-fixed-v2.zip"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -26,285 +25,109 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine ZIP path
-        id: zip
+      - name: Find ZIP file
         shell: bash
         run: |
           set -e
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ -n "${{ inputs.zip_path }}" ]; then
             ZIP="${{ inputs.zip_path }}"
           else
-            ZIP=$(find incoming -maxdepth 1 -type f -name '*.zip' | head -1)
+            ZIP=$(find incoming -maxdepth 1 -type f -name '*.zip' | sort | head -1)
           fi
 
           if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
-            echo "ERROR: ZIP file not found."
+            echo "ERROR: No ZIP file found in incoming/"
             exit 1
           fi
 
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
-
-          echo "======================================"
-          echo "Using ZIP:"
-          echo "$ZIP"
-          echo "======================================"
-
-      - name: Prepare import directories
-        shell: bash
-        run: |
-          set -e
-
-          rm -rf _zip_import
-          rm -rf _replacement
-          rm -rf _protected
-
-          mkdir -p _zip_import
-          mkdir -p _replacement
-          mkdir -p _protected
+          echo "Found ZIP: $ZIP"
 
       - name: Extract ZIP
         shell: bash
         run: |
           set -e
+          rm -rf _zip_extract
+          mkdir -p _zip_extract
+          unzip -q "$ZIP" -d _zip_extract
+          echo "Extracted contents:"
+          find _zip_extract -type f | sort
 
-          unzip -q "$ZIP" -d _zip_import
-
-          echo "ZIP extracted successfully."
-
-      - name: Show ZIP contents
-        shell: bash
-        run: |
-          echo "ZIP contents:"
-          find _zip_import -maxdepth 5 -type f | head -200
-
-      - name: Detect ZIP mode and apply files
+      - name: Detect and strip wrapper folder
         shell: bash
         run: |
           set -e
 
-          # Check if this is a full project zip (has settings.gradle)
-          FULL_PROJECT_ROOT=""
+          # Agar zip mein ek wrapper folder hai (jaise LinkShield-SandBox-main/)
+          # to uske andar ki files use karo
+          ITEMS=$(find _zip_extract -mindepth 1 -maxdepth 1 | wc -l)
+          FIRST=$(find _zip_extract -mindepth 1 -maxdepth 1 | head -1)
 
-          if [ -f "_zip_import/settings.gradle" ] || \
-             [ -f "_zip_import/settings.gradle.kts" ]; then
-            FULL_PROJECT_ROOT="_zip_import"
+          if [ "$ITEMS" -eq 1 ] && [ -d "$FIRST" ]; then
+            echo "Wrapper folder detected: $FIRST"
+            echo "MERGE_ROOT=$FIRST" >> "$GITHUB_ENV"
           else
-            ROOT=$(find _zip_import \
-              -type f \
-              \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
-              -print -quit)
-            if [ -n "$ROOT" ]; then
-              FULL_PROJECT_ROOT=$(dirname "$ROOT")
-            fi
+            echo "No wrapper folder — using zip root directly"
+            echo "MERGE_ROOT=_zip_extract" >> "$GITHUB_ENV"
           fi
 
-          if [ -n "$FULL_PROJECT_ROOT" ]; then
-            # -------------------------------------------------------
-            # FULL PROJECT MODE — poora repo replace karo
-            # -------------------------------------------------------
-            echo "MODE=full" >> "$GITHUB_ENV"
-            echo "PROJECT_ROOT=$FULL_PROJECT_ROOT" >> "$GITHUB_ENV"
-            echo "======================================"
-            echo "FULL PROJECT MODE detected"
-            echo "Project root: $FULL_PROJECT_ROOT"
-            echo "======================================"
-          else
-            # -------------------------------------------------------
-            # PARTIAL FILES MODE — sirf changed files merge karo
-            # settings.gradle nahi mila = sirf kuch files hain
-            # -------------------------------------------------------
-            echo "MODE=partial" >> "$GITHUB_ENV"
-            echo "PROJECT_ROOT=." >> "$GITHUB_ENV"
-            echo "======================================"
-            echo "PARTIAL FILES MODE detected"
-            echo "Merging changed files into existing repo"
-            echo "======================================"
-
-            # Zip ki files seedha repo mein copy karo
-            rsync -av \
-              --exclude '.git/' \
-              --exclude '.github/' \
-              --exclude 'incoming/' \
-              "_zip_import/" ./
-
-            echo "Partial files merged successfully."
-          fi
-
-      - name: Prepare full replacement (full mode only)
+      - name: Merge files into repo
         shell: bash
         run: |
           set -e
 
-          if [ "$MODE" != "full" ]; then
-            echo "Partial mode — skipping full replacement prep."
-            exit 0
-          fi
+          echo "Merging from: $MERGE_ROOT"
 
-          rsync -a \
+          # Sirf zip ki files copy karo repo mein — baaki repo untouched rahe
+          # .git, .github, incoming folders ko skip karo
+          rsync -av \
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude 'incoming/' \
-            --exclude '_zip_import/' \
-            --exclude '_replacement/' \
-            --exclude '_protected/' \
-            --exclude '.gradle/' \
-            --exclude 'build/' \
-            --exclude '**/build/' \
-            "$PROJECT_ROOT/" _replacement/
+            --exclude '_zip_extract/' \
+            --exclude '*.zip' \
+            "$MERGE_ROOT/" ./
 
-          chmod +x _replacement/gradlew
+          echo "Merge complete"
+          echo "Changed files:"
+          git diff --name-only || true
 
-      - name: Preserve working Media Extractor files (full mode only)
+      - name: Make gradlew executable
+        shell: bash
+        run: |
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
+          fi
+
+      - name: Build APK
         shell: bash
         run: |
           set -e
-
-          if [ "$MODE" != "full" ]; then
-            echo "Partial mode — skipping preserve step."
-            exit 0
-          fi
-
-          echo "Preserving current repository versions..."
-
-          if git ls-files --error-unmatch \
-            "app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaExtractorViewModel.kt" \
-            >/dev/null 2>&1; then
-
-            mkdir -p "_protected/app/src/main/java/com/linkshield/sandbox/ui/grabber"
-
-            git show HEAD:app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaExtractorViewModel.kt \
-              > "_protected/app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaExtractorViewModel.kt"
-
-            echo "Preserved MediaExtractorViewModel.kt"
-          fi
-
-          if git ls-files --error-unmatch \
-            "app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaGrabberScreen.kt" \
-            >/dev/null 2>&1; then
-
-            mkdir -p "_protected/app/src/main/java/com/linkshield/sandbox/ui/grabber"
-
-            git show HEAD:app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaGrabberScreen.kt \
-              > "_protected/app/src/main/java/com/linkshield/sandbox/ui/grabber/MediaGrabberScreen.kt"
-
-            echo "Preserved MediaGrabberScreen.kt"
-          fi
-
-      - name: Apply protected working files (full mode only)
-        shell: bash
-        run: |
-          set -e
-
-          if [ "$MODE" != "full" ]; then
-            echo "Partial mode — skipping apply protected step."
-            exit 0
-          fi
-
-          rsync -a "_protected/" "_replacement/"
-
-          echo "Protected working files applied."
-
-      - name: Validate Gradle build
-        shell: bash
-        run: |
-          set -e
-
-          echo "======================================"
-          echo "Starting Gradle build..."
-          echo "======================================"
-
-          if [ "$MODE" = "full" ]; then
-            cd _replacement
-          fi
-
-          chmod +x gradlew
-
-          ./gradlew \
-            assembleDebug \
-            --stacktrace \
-            --no-daemon
-
-          echo "======================================"
-          echo "Gradle build successful."
-          echo "======================================"
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LinkShield-debug-apk
-          path: |
-            _replacement/app/build/outputs/apk/debug/*.apk
-            _replacement/**/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 3
           overwrite: true
 
-      - name: Verify APK
+      - name: Cleanup
         shell: bash
         run: |
-          set -e
-
-          APK=$(find . \
-            -path '*/build/outputs/apk/debug/*.apk' \
-            -type f \
-            -print -quit)
-
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK was not found after successful Gradle build."
-            exit 1
-          fi
-
-          echo "======================================"
-          echo "APK found:"
-          echo "$APK"
-          echo "======================================"
-
-      - name: Replace project files (full mode only)
-        shell: bash
-        run: |
-          set -e
-
-          if [ "$MODE" != "full" ]; then
-            echo "Partial mode — no full replacement needed."
-            exit 0
-          fi
-
-          echo "Replacing repository project..."
-
-          find . -mindepth 1 -maxdepth 1 \
-            ! -name '.git' \
-            ! -name '.github' \
-            ! -name 'incoming' \
-            ! -name '_zip_import' \
-            ! -name '_replacement' \
-            ! -name '_protected' \
-            -exec rm -rf {} +
-
-          rsync -a \
-            --exclude '.gradle/' \
-            --exclude 'build/' \
-            --exclude '**/build/' \
-            _replacement/ ./
-
-          echo "Repository project replaced successfully."
-
-      - name: Remove temporary directories
-        shell: bash
-        run: |
-          rm -rf _zip_import
-          rm -rf _replacement
-          rm -rf _protected
+          rm -rf _zip_extract
 
       - name: Delete processed ZIP from incoming
         shell: bash
         run: |
           set -e
           rm -f "$ZIP"
-          echo "Processed ZIP removed from incoming/: $ZIP"
+          echo "Deleted: $ZIP"
 
-      - name: Commit imported project
+      - name: Commit changes
         shell: bash
         run: |
           set -e
@@ -315,10 +138,11 @@ jobs:
           git add -A
 
           if git diff --cached --quiet; then
-            echo "No changes detected."
+            echo "No changes to commit"
             exit 0
           fi
 
-          git commit -m "chore: import updated LinkShield project"
-
+          git commit -m "chore: merge files from ZIP import"
           git push origin HEAD:main
+
+          echo "Changes committed and pushed"
