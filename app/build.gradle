@@ -17,7 +17,7 @@ android {
         buildConfigField "String", "SAFE_BROWSING_API_KEY", '"AIzaSyCV71sWSuHkjqjsFa0CPOnomgF5LWGW394"'
         buildConfigField "String", "VIRUSTOTAL_API_KEY",    '"YOUR_VIRUSTOTAL_API_KEY"'
         buildConfigField "String", "PHISHTANK_APP_KEY",     '""'
-        buildConfigField "String", "COBALT_BASE_URL",        '"http://141.148.223.177:9000/"'
+        buildConfigField "String", "COBALT_BASE_URL",        '"http://141.148.223.177:9001/"'
         buildConfigField "String", "COBALT_API_KEY",         '""'
     }
 
