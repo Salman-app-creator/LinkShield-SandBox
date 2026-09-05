@@ -78,66 +78,68 @@ jobs:
           echo "ZIP contents:"
           find _zip_import -maxdepth 5 -type f | head -200
 
-      - name: Detect Android project root
+      - name: Detect ZIP mode and apply files
         shell: bash
         run: |
           set -e
 
+          # Check if this is a full project zip (has settings.gradle)
+          FULL_PROJECT_ROOT=""
+
           if [ -f "_zip_import/settings.gradle" ] || \
              [ -f "_zip_import/settings.gradle.kts" ]; then
-
-            PROJECT_ROOT="_zip_import"
-
+            FULL_PROJECT_ROOT="_zip_import"
           else
-
             ROOT=$(find _zip_import \
               -type f \
               \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
               -print -quit)
-
-            if [ -z "$ROOT" ]; then
-              echo "ERROR: Could not find settings.gradle or settings.gradle.kts"
-              exit 1
+            if [ -n "$ROOT" ]; then
+              FULL_PROJECT_ROOT=$(dirname "$ROOT")
             fi
-
-            PROJECT_ROOT=$(dirname "$ROOT")
-
           fi
 
-          echo "PROJECT_ROOT=$PROJECT_ROOT" >> "$GITHUB_ENV"
+          if [ -n "$FULL_PROJECT_ROOT" ]; then
+            # -------------------------------------------------------
+            # FULL PROJECT MODE — poora repo replace karo
+            # -------------------------------------------------------
+            echo "MODE=full" >> "$GITHUB_ENV"
+            echo "PROJECT_ROOT=$FULL_PROJECT_ROOT" >> "$GITHUB_ENV"
+            echo "======================================"
+            echo "FULL PROJECT MODE detected"
+            echo "Project root: $FULL_PROJECT_ROOT"
+            echo "======================================"
+          else
+            # -------------------------------------------------------
+            # PARTIAL FILES MODE — sirf changed files merge karo
+            # settings.gradle nahi mila = sirf kuch files hain
+            # -------------------------------------------------------
+            echo "MODE=partial" >> "$GITHUB_ENV"
+            echo "PROJECT_ROOT=." >> "$GITHUB_ENV"
+            echo "======================================"
+            echo "PARTIAL FILES MODE detected"
+            echo "Merging changed files into existing repo"
+            echo "======================================"
 
-          echo "======================================"
-          echo "Detected project root:"
-          echo "$PROJECT_ROOT"
-          echo "======================================"
+            # Zip ki files seedha repo mein copy karo
+            rsync -av \
+              --exclude '.git/' \
+              --exclude '.github/' \
+              --exclude 'incoming/' \
+              "_zip_import/" ./
 
-      - name: Validate Android project
+            echo "Partial files merged successfully."
+          fi
+
+      - name: Prepare full replacement (full mode only)
         shell: bash
         run: |
           set -e
 
-          if [ ! -f "$PROJECT_ROOT/settings.gradle" ] && \
-             [ ! -f "$PROJECT_ROOT/settings.gradle.kts" ]; then
-            echo "ERROR: Gradle settings file missing."
-            exit 1
+          if [ "$MODE" != "full" ]; then
+            echo "Partial mode — skipping full replacement prep."
+            exit 0
           fi
-
-          if [ ! -d "$PROJECT_ROOT/app" ]; then
-            echo "ERROR: app directory missing."
-            exit 1
-          fi
-
-          if [ ! -f "$PROJECT_ROOT/gradlew" ]; then
-            echo "ERROR: gradlew not found."
-            exit 1
-          fi
-
-          echo "Android project validation passed."
-
-      - name: Prepare replacement
-        shell: bash
-        run: |
-          set -e
 
           rsync -a \
             --exclude '.git/' \
@@ -153,10 +155,15 @@ jobs:
 
           chmod +x _replacement/gradlew
 
-      - name: Preserve working Media Extractor files
+      - name: Preserve working Media Extractor files (full mode only)
         shell: bash
         run: |
           set -e
+
+          if [ "$MODE" != "full" ]; then
+            echo "Partial mode — skipping preserve step."
+            exit 0
+          fi
 
           echo "Preserving current repository versions..."
 
@@ -184,17 +191,21 @@ jobs:
             echo "Preserved MediaGrabberScreen.kt"
           fi
 
-      - name: Apply protected working files
+      - name: Apply protected working files (full mode only)
         shell: bash
         run: |
           set -e
+
+          if [ "$MODE" != "full" ]; then
+            echo "Partial mode — skipping apply protected step."
+            exit 0
+          fi
 
           rsync -a "_protected/" "_replacement/"
 
           echo "Protected working files applied."
 
       - name: Validate Gradle build
-        working-directory: _replacement
         shell: bash
         run: |
           set -e
@@ -202,6 +213,12 @@ jobs:
           echo "======================================"
           echo "Starting Gradle build..."
           echo "======================================"
+
+          if [ "$MODE" = "full" ]; then
+            cd _replacement
+          fi
+
+          chmod +x gradlew
 
           ./gradlew \
             assembleDebug \
@@ -212,7 +229,6 @@ jobs:
           echo "Gradle build successful."
           echo "======================================"
 
-      # APK ko yahin upload karo — cleanup/replacement se pehle
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -220,14 +236,17 @@ jobs:
           path: |
             _replacement/app/build/outputs/apk/debug/*.apk
             _replacement/**/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 1
+          overwrite: true
 
       - name: Verify APK
         shell: bash
         run: |
           set -e
 
-          APK=$(find _replacement \
+          APK=$(find . \
             -path '*/build/outputs/apk/debug/*.apk' \
             -type f \
             -print -quit)
@@ -242,10 +261,15 @@ jobs:
           echo "$APK"
           echo "======================================"
 
-      - name: Replace project files
+      - name: Replace project files (full mode only)
         shell: bash
         run: |
           set -e
+
+          if [ "$MODE" != "full" ]; then
+            echo "Partial mode — no full replacement needed."
+            exit 0
+          fi
 
           echo "Replacing repository project..."
 
@@ -272,6 +296,13 @@ jobs:
           rm -rf _zip_import
           rm -rf _replacement
           rm -rf _protected
+
+      - name: Delete processed ZIP from incoming
+        shell: bash
+        run: |
+          set -e
+          rm -f "$ZIP"
+          echo "Processed ZIP removed from incoming/: $ZIP"
 
       - name: Commit imported project
         shell: bash
