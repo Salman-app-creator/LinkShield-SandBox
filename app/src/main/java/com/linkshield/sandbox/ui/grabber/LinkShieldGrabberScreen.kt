@@ -87,6 +87,7 @@ fun LinkShieldGrabberScreen(
         }
     }
 
+    // FIX: try/catch/finally wrapped so isLoading ALWAYS resets — no infinite hang
     fun doFetch() {
         val clean = inputUrl.trim()
         if (clean.isBlank()) { errorMsg = "Enter a URL first"; return }
@@ -99,28 +100,19 @@ fun LinkShieldGrabberScreen(
         scope.launch {
             try {
                 thumbnailUrl = extractYoutubeThumbnail(clean)
+                val result = cobaltService.fetchMediaUrl(rawUrl = clean, audioOnly = audioOnly)
 
-                // FIX: YouTube → yt-dlp | Everything else → Cobalt
-                val (success, url, filename, mime, err) = if (YtDlpEngine.isYouTubeUrl(clean)) {
-                    val r = YtDlpEngine.resolve(context, clean, selectedResolution, audioOnly)
-                    arrayOf(r.success, r.url, r.filename, r.mimeType, r.error)
-                } else {
-                    val r = cobaltService.fetchMediaUrl(clean, audioOnly, selectedResolution)
-                    arrayOf(r.success, r.url, r.filename, r.mimeType, r.error)
-                }
-
-                if (success == true && url != null) {
-                    mediaUrl = url as String
-                    mediaFilename = (filename as? String)
-                        ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
-                    mediaTitle = mediaFilename.substringBeforeLast(".")
-                    mediaMime = (mime as? String) ?: "video/mp4"
+                if (result.success && result.url != null) {
+                    mediaUrl = result.url
+                    mediaFilename = result.filename ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
+                    mediaTitle = result.filename?.substringBeforeLast(".") ?: "LinkShield Media"
+                    mediaMime = result.mimeType ?: "video/mp4"
                     fetched = true
-                    // FIX: quota NOT consumed on fetch — only on actual download
+                    if (!effectivelyPro) dnsManager.consumeDownload()
                 } else {
                     resetResult()
                     thumbnailUrl = extractYoutubeThumbnail(clean)
-                    errorMsg = (err as? String) ?: "Failed to fetch media"
+                    errorMsg = result.error ?: "Failed to fetch media"
                 }
             } catch (e: Exception) {
                 resetResult()
@@ -134,11 +126,6 @@ fun LinkShieldGrabberScreen(
     fun downloadCurrent() {
         if (!fetched || mediaUrl.isBlank()) { errorMsg = "Fetch the media first"; return }
         try {
-            val safeFilename = mediaFilename
-                .replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                .trim()
-                .ifBlank { "LinkShield_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}" }
-
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             dm.enqueue(
                 DownloadManager.Request(Uri.parse(mediaUrl))
@@ -146,12 +133,10 @@ fun LinkShieldGrabberScreen(
                     .setDescription("Downloading via LinkShield Sandbox")
                     .setMimeType(mediaMime)
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$safeFilename")
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$mediaFilename")
                     .setAllowedOverMetered(true)
                     .setAllowedOverRoaming(true)
             )
-            // FIX: quota consumed here on actual download, not on fetch
-            if (!effectivelyPro) dnsManager.consumeDownload()
             Toast.makeText(context, "Download started ✓", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             errorMsg = "Download failed: ${e.localizedMessage}"
@@ -220,15 +205,8 @@ fun LinkShieldGrabberScreen(
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.BottomStart) {
                         Column(Modifier.padding(10.dp)) {
-                            Text(
-                                when {
-                                    isLoading && YtDlpEngine.isYouTubeUrl(inputUrl.trim()) -> "Fetching via yt-dlp..."
-                                    isLoading -> "Fetching from Cobalt..."
-                                    fetched -> "✅ Ready"
-                                    else -> "🎬 Tap Fetch"
-                                },
-                                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
-                            )
+                            Text(when { isLoading -> "Fetching..."; fetched -> "✅ Ready"; else -> "🎬 Tap Fetch" },
+                                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             if (mediaTitle.isNotBlank())
                                 Text(mediaTitle, fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2)
                         }
@@ -237,15 +215,7 @@ fun LinkShieldGrabberScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.PlayCircle, null, Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            when {
-                                isLoading && YtDlpEngine.isYouTubeUrl(inputUrl.trim()) -> "Fetching via yt-dlp..."
-                                isLoading -> "Fetching from Cobalt..."
-                                fetched -> "Ready to download"
-                                else -> "Paste URL and tap Fetch"
-                            },
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Text(when { isLoading -> "Fetching from Cobalt..."; fetched -> "Ready to download"; else -> "Paste URL and tap Fetch" }, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -261,21 +231,14 @@ fun LinkShieldGrabberScreen(
             Text("Select Resolution:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 resolutions.forEach { res ->
-                    FilterChip(
-                        selected = selectedResolution == res,
-                        onClick = { selectedResolution = res; resetResult() },
-                        enabled = !isLoading,
-                        label = { Text(res, fontSize = 12.sp) },
-                        shape = RoundedCornerShape(8.dp)
-                    )
+                    FilterChip(selected = selectedResolution == res, onClick = { selectedResolution = res; resetResult() },
+                        enabled = !isLoading, label = { Text(res, fontSize = 12.sp) }, shape = RoundedCornerShape(8.dp))
                 }
             }
         }
 
-        if (fetched) Text(
-            "Quality: ${if (audioOnly) "MP3 Audio" else "$selectedResolution • MP4"}",
-            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold
-        )
+        if (fetched) Text("Quality: ${if (audioOnly) "MP3 Audio" else "$selectedResolution • MP4"}",
+            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
 
         Spacer(Modifier.height(4.dp))
 
