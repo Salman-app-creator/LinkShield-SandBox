@@ -88,7 +88,8 @@ class CobaltApiService(context: Context) {
 
     suspend fun fetchMediaUrl(
         rawUrl: String,
-        audioOnly: Boolean = false
+        audioOnly: Boolean = false,
+        resolution: String = "1080p"
     ): MediaResult = withContext(Dispatchers.IO) {
         try {
             val cleanedUrl = cleanVideoUrl(rawUrl)
@@ -104,7 +105,15 @@ class CobaltApiService(context: Context) {
             val bodyJson = JSONObject().apply {
                 put("url", cleanedUrl)
                 put("downloadMode", if (audioOnly) "audio" else "auto")
-                put("videoQuality", "1080")
+                put("videoQuality", when (resolution.lowercase()) {
+                    "4k", "2160p" -> "2160"
+                    "1440p" -> "1440"
+                    "1080p" -> "1080"
+                    "720p" -> "720"
+                    "480p" -> "480"
+                    "360p" -> "360"
+                    else -> "1080"
+                })
                 put("filenameStyle", "pretty")
                 put("audioFormat", "mp3")
                 put("audioBitrate", "128")
@@ -150,7 +159,7 @@ class CobaltApiService(context: Context) {
                 val json = JSONObject(body)
                 when (json.optString("status")) {
                     "tunnel", "redirect" -> {
-                        val mediaUrl = json.optString("url")
+                        val mediaUrl = normalizeCobaltMediaUrl(json.optString("url"), apiUrl)
                         if (mediaUrl.isBlank()) {
                             MediaResult(false, error = "Cobalt returned no media URL.")
                         } else {
@@ -182,7 +191,7 @@ class CobaltApiService(context: Context) {
                                     break
                                 }
                             }
-                            val mediaUrl = chosen?.optString("url").orEmpty()
+                            val mediaUrl = normalizeCobaltMediaUrl(chosen?.optString("url").orEmpty(), apiUrl)
                             if (mediaUrl.isBlank()) {
                                 MediaResult(false, error = "Cobalt picker item contained no media URL.")
                             } else {
@@ -218,6 +227,23 @@ class CobaltApiService(context: Context) {
             MediaResult(false, error = "Cobalt request timed out. Check that the self-hosted instance is running.")
         } catch (e: Exception) {
             MediaResult(false, error = e.localizedMessage ?: "Cobalt network request failed.")
+        }
+    }
+
+    private fun normalizeCobaltMediaUrl(raw: String, apiUrl: String): String {
+        if (raw.isBlank()) return raw
+        return try {
+            val media = Uri.parse(raw)
+            val api = Uri.parse(apiUrl)
+            if (media.host.equals(api.host, ignoreCase = true) &&
+                media.port == 9000 && api.port == 9001
+            ) {
+                raw.replaceFirst(Regex("^([a-zA-Z][a-zA-Z0-9+.-]*://[^/:]+):9000(?=/|$)"), "$1:9001")
+            } else {
+                raw
+            }
+        } catch (_: Exception) {
+            raw
         }
     }
 

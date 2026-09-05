@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.linkshield.sandbox.app-mergeDebugResources-63:/values-hdpi-v4/values-hdpi-v4.xml",
+            "map": [
+                {
+                    "source": "/home/runner/.gradle/caches/9.7.1/transforms/c4f1cd2ce9d59174b950c4399ea12af3/transformed/appcompat-1.6.1/res/values-hdpi-v4/values-hdpi-v4.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "6",
+                        "endColumns": "13",
+                        "endOffsets": "327"
+                    }
+                }
+            ]
+        }
+    ]
+}

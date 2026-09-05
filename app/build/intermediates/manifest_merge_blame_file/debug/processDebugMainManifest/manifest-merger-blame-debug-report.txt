@@ -1,0 +1,289 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.linkshield.sandbox"
+4    android:versionCode="8"
+5    android:versionName="2.3.2" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:4:5-67
+11-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:5:5-79
+12-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:5:22-76
+13    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+13-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:6:5-76
+13-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:6:22-73
+14    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+14-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:7:5-79
+14-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:7:22-76
+15    <uses-permission
+15-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:8:5-108
+16        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+16-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:8:22-78
+17        android:maxSdkVersion="28" />
+17-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:8:79-105
+18    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+18-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:9:5-77
+18-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:9:22-74
+19    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+19-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:10:5-89
+19-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:10:22-86
+20    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+20-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:11:5-77
+20-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:11:22-74
+21
+22    <permission
+22-->[androidx.core:core:1.12.0] /home/runner/.gradle/caches/9.7.1/transforms/f9190fb00f394335bfe42cf6b3cc3ff9/transformed/core-1.12.0/AndroidManifest.xml:22:5-24:47
+23        android:name="com.linkshield.sandbox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+23-->[androidx.core:core:1.12.0] /home/runner/.gradle/caches/9.7.1/transforms/f9190fb00f394335bfe42cf6b3cc3ff9/transformed/core-1.12.0/AndroidManifest.xml:23:9-81
+24        android:protectionLevel="signature" />
+24-->[androidx.core:core:1.12.0] /home/runner/.gradle/caches/9.7.1/transforms/f9190fb00f394335bfe42cf6b3cc3ff9/transformed/core-1.12.0/AndroidManifest.xml:24:9-44
+25
+26    <uses-permission android:name="com.linkshield.sandbox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+26-->[androidx.core:core:1.12.0] /home/runner/.gradle/caches/9.7.1/transforms/f9190fb00f394335bfe42cf6b3cc3ff9/transformed/core-1.12.0/AndroidManifest.xml:26:5-97
+26-->[androidx.core:core:1.12.0] /home/runner/.gradle/caches/9.7.1/transforms/f9190fb00f394335bfe42cf6b3cc3ff9/transformed/core-1.12.0/AndroidManifest.xml:26:22-94
+27
+28    <application
+28-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:13:5-102:19
+29        android:name="com.linkshield.sandbox.LinkShieldApp"
+29-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:14:9-38
+30        android:allowBackup="true"
+30-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:15:9-35
+31        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+31-->[androidx.core:core:1.12.0] /home/runner/.gradle/caches/9.7.1/transforms/f9190fb00f394335bfe42cf6b3cc3ff9/transformed/core-1.12.0/AndroidManifest.xml:28:18-86
+32        android:debuggable="true"
+33        android:extractNativeLibs="true"
+33-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:16:9-41
+34        android:icon="@drawable/ic_app_logo"
+34-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:19:9-45
+35        android:label="LinkShield Sandbox"
+35-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:21:9-43
+36        android:networkSecurityConfig="@xml/network_security_config"
+36-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:18:9-69
+37        android:roundIcon="@drawable/ic_app_logo"
+37-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:20:9-50
+38        android:supportsRtl="true"
+38-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:22:9-35
+39        android:theme="@style/Theme.LinkShieldSandbox"
+39-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:23:9-55
+40        android:usesCleartextTraffic="true" >
+40-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:17:9-44
+41        <activity
+41-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:25:9-62:20
+42            android:name="com.linkshield.sandbox.MainActivity"
+42-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:26:13-41
+43            android:configChanges="orientation|screenSize|keyboardHidden"
+43-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:28:13-74
+44            android:exported="true"
+44-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:27:13-36
+45            android:launchMode="singleTask"
+45-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:30:13-44
+46            android:windowSoftInputMode="adjustResize" >
+46-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:29:13-55
+47            <intent-filter>
+47-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:32:13-35:29
+48                <action android:name="android.intent.action.MAIN" />
+48-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:33:17-69
+48-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:33:25-66
+49
+50                <category android:name="android.intent.category.LAUNCHER" />
+50-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:34:17-77
+50-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:34:27-74
+51            </intent-filter>
+52            <intent-filter>
+52-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:37:13-42:29
+53                <action android:name="android.intent.action.VIEW" />
+53-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:38:17-69
+53-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:38:25-66
+54
+55                <category android:name="android.intent.category.DEFAULT" />
+55-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:17-76
+55-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:27-73
+56                <category android:name="android.intent.category.BROWSABLE" />
+56-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:40:17-78
+56-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:40:27-75
+57
+58                <data android:scheme="http" />
+58-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:17-47
+58-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:23-44
+59            </intent-filter>
+60            <intent-filter>
+60-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:44:13-49:29
+61                <action android:name="android.intent.action.VIEW" />
+61-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:38:17-69
+61-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:38:25-66
+62
+63                <category android:name="android.intent.category.DEFAULT" />
+63-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:17-76
+63-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:27-73
+64                <category android:name="android.intent.category.BROWSABLE" />
+64-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:40:17-78
+64-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:40:27-75
+65
+66                <data android:scheme="https" />
+66-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:17-47
+66-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:23-44
+67            </intent-filter>
+68            <intent-filter>
+68-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:51:13-54:29
+69                <action android:name="android.intent.action.WEB_SEARCH" />
+69-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:52:17-75
+69-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:52:25-72
+70
+71                <category android:name="android.intent.category.DEFAULT" />
+71-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:17-76
+71-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:27-73
+72            </intent-filter>
+73            <intent-filter>
+73-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:56:13-60:29
+74                <action android:name="android.intent.action.SEND" />
+74-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:57:17-69
+74-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:57:25-66
+75
+76                <category android:name="android.intent.category.DEFAULT" />
+76-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:17-76
+76-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:27-73
+77
+78                <data android:mimeType="text/plain" />
+78-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:17-47
+78-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:59:23-52
+79            </intent-filter>
+80        </activity>
+81        <activity
+81-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:64:9-78:20
+82            android:name="com.linkshield.sandbox.LinkInterceptorActivity"
+82-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:65:13-52
+83            android:exported="true"
+83-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:66:13-36
+84            android:launchMode="singleTask"
+84-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:68:13-44
+85            android:theme="@style/Theme.LinkShieldSandbox" >
+85-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:67:13-59
+86            <intent-filter>
+86-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:70:13-76:29
+87                <action android:name="android.intent.action.VIEW" />
+87-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:38:17-69
+87-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:38:25-66
+88
+89                <category android:name="android.intent.category.DEFAULT" />
+89-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:17-76
+89-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:39:27-73
+90                <category android:name="android.intent.category.BROWSABLE" />
+90-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:40:17-78
+90-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:40:27-75
+91
+92                <data android:scheme="http" />
+92-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:17-47
+92-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:23-44
+93                <data android:scheme="https" />
+93-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:17-47
+93-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:41:23-44
+94            </intent-filter>
+95        </activity>
+96
+97        <!-- TOR VPN SERVICE -->
+98        <service
+98-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:81:9-95:19
+99            android:name="com.linkshield.sandbox.vpn.TorVpnService"
+99-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:82:13-46
+100            android:exported="false"
+100-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:84:13-37
+101            android:foregroundServiceType="specialUse"
+101-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:85:13-55
+102            android:permission="android.permission.BIND_VPN_SERVICE" >
+102-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:83:13-69
+103            <intent-filter>
+103-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:87:13-89:29
+104                <action android:name="android.net.VpnService" />
+104-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:88:17-65
+104-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:88:25-62
+105            </intent-filter>
+106
+107            <property
+107-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:91:13-93:105
+108                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+108-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:92:17-76
+109                android:value="Establishes a secure Tor VPN tunnel for privacy and censorship bypass" />
+109-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:93:17-102
+110        </service>
+111
+112        <!-- TOR SERVICE -->
+113        <service
+113-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:98:9-100:40
+114            android:name="org.torproject.jni.TorService"
+114-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:99:13-57
+115            android:exported="false" />
+115-->/home/runner/work/LinkShield-SandBox/LinkShield-SandBox/app/src/main/AndroidManifest.xml:100:13-37
+116
+117        <provider
+117-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+118            android:name="androidx.startup.InitializationProvider"
+118-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:25:13-67
+119            android:authorities="com.linkshield.sandbox.androidx-startup"
+119-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:26:13-68
+120            android:exported="false" >
+120-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:27:13-37
+121            <meta-data
+121-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+122                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+122-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
+123                android:value="androidx.startup" />
+123-->[androidx.emoji2:emoji2:1.3.0] /home/runner/.gradle/caches/9.7.1/transforms/f146550a953cfaa916b451d7ef46eacd/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
+124            <meta-data
+124-->[androidx.lifecycle:lifecycle-process:2.7.0] /home/runner/.gradle/caches/9.7.1/transforms/299525828d4921991f1091755733cdf4/transformed/jetified-lifecycle-process-2.7.0/AndroidManifest.xml:29:13-31:52
+125                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+125-->[androidx.lifecycle:lifecycle-process:2.7.0] /home/runner/.gradle/caches/9.7.1/transforms/299525828d4921991f1091755733cdf4/transformed/jetified-lifecycle-process-2.7.0/AndroidManifest.xml:30:17-78
+126                android:value="androidx.startup" />
+126-->[androidx.lifecycle:lifecycle-process:2.7.0] /home/runner/.gradle/caches/9.7.1/transforms/299525828d4921991f1091755733cdf4/transformed/jetified-lifecycle-process-2.7.0/AndroidManifest.xml:31:17-49
+127            <meta-data
+127-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+128                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+128-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+129                android:value="androidx.startup" />
+129-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+130        </provider>
+131
+132        <receiver
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+133            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+133-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+134            android:directBootAware="false"
+134-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+135            android:enabled="true"
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+136            android:exported="true"
+136-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+137            android:permission="android.permission.DUMP" >
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+138            <intent-filter>
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+139                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+140            </intent-filter>
+141            <intent-filter>
+141-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+142                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+143            </intent-filter>
+144            <intent-filter>
+144-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+145                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+146            </intent-filter>
+147            <intent-filter>
+147-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+148                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+148-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+148-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/runner/.gradle/caches/9.7.1/transforms/b166c67302524d9c67ab6c29e8339cf7/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+149            </intent-filter>
+150        </receiver>
+151    </application>
+152
+153</manifest>
