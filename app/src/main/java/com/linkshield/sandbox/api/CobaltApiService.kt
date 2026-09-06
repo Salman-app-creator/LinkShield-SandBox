@@ -13,12 +13,6 @@ import org.json.JSONObject
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 
-/**
- * LinkShield's self-hosted Cobalt client.
- *
- * IMPORTANT: This file deliberately does not touch any Compose/UI code.
- * The current Cobalt API uses POST / (not the legacy /api/json endpoint).
- */
 data class MediaResult(
     val success: Boolean,
     val url: String? = null,
@@ -30,6 +24,13 @@ data class MediaResult(
 class CobaltApiService(context: Context) {
 
     private val appContext = context.applicationContext
+
+    // Invidious instances for YouTube (phone calls these directly, not Oracle)
+    private val invidiousInstances = listOf(
+        "https://invidious.privacyredirect.com",
+        "https://iv.datura.network",
+        "https://invidious.nerdvpn.de"
+    )
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -51,6 +52,14 @@ class CobaltApiService(context: Context) {
         host == "youtube.com" || host.endsWith(".youtube.com") ||
             host == "youtu.be" || host.endsWith(".youtu.be")
 
+    private fun extractYouTubeId(cleanedUrl: String): String? {
+        return try {
+            val uri = Uri.parse(cleanedUrl)
+            uri.getQueryParameter("v")
+                ?: uri.pathSegments.lastOrNull()?.takeIf { it.length == 11 }
+        } catch (_: Exception) { null }
+    }
+
     fun cleanVideoUrl(rawUrl: String): String {
         val trimmed = rawUrl.trim()
         return try {
@@ -69,23 +78,137 @@ class CobaltApiService(context: Context) {
                     val videoId = uri.lastPathSegment
                     if (!videoId.isNullOrBlank()) "https://www.youtube.com/watch?v=$videoId" else trimmed
                 }
-                host == "instagram.com" || host.endsWith(".instagram.com") -> {
+                host == "instagram.com" || host.endsWith(".instagram.com") ->
                     "https://www.instagram.com${uri.path.orEmpty()}"
-                }
-                host == "tiktok.com" || host.endsWith(".tiktok.com") -> {
+                host == "tiktok.com" || host.endsWith(".tiktok.com") ->
                     "https://www.tiktok.com${uri.path.orEmpty()}"
-                }
                 host == "facebook.com" || host.endsWith(".facebook.com") ||
-                    host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" -> {
+                    host == "fb.com" || host.endsWith(".fb.com") || host == "fb.watch" ->
                     "https://www.facebook.com${uri.path.orEmpty()}"
-                }
                 else -> trimmed
             }
-        } catch (_: Exception) {
-            trimmed
-        }
+        } catch (_: Exception) { trimmed }
     }
 
+    // ── YouTube via Invidious (runs on phone, not Oracle) ───────────────────
+    private suspend fun fetchYouTubeViaInvidious(
+        videoId: String,
+        audioOnly: Boolean,
+        resolution: String
+    ): MediaResult = withContext(Dispatchers.IO) {
+        val targetHeight = when (resolution.lowercase()) {
+            "4k", "2160p" -> 2160
+            "1440p" -> 1440
+            "1080p" -> 1080
+            "720p"  -> 720
+            "480p"  -> 480
+            "360p"  -> 360
+            else    -> 1080
+        }
+
+        for (instance in invidiousInstances) {
+            try {
+                val apiUrl = "$instance/api/v1/videos/$videoId"
+                val request = Request.Builder()
+                    .url(apiUrl)
+                    .get()
+                    .header("User-Agent", "LinkShieldSandbox/2.3")
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+
+                    val body = response.body?.string().orEmpty()
+                    if (body.isBlank()) return@use
+
+                    val json = JSONObject(body)
+                    val title = json.optString("title", "video")
+
+                    if (audioOnly) {
+                        // Pick best audio stream
+                        val audioFormats = json.optJSONArray("adaptiveFormats") ?: return@use
+                        var bestAudio: JSONObject? = null
+                        var bestBitrate = 0
+                        for (i in 0 until audioFormats.length()) {
+                            val fmt = audioFormats.optJSONObject(i) ?: continue
+                            val mime = fmt.optString("type", "")
+                            if (!mime.startsWith("audio/")) continue
+                            val bitrate = fmt.optInt("bitrate", 0)
+                            if (bitrate > bestBitrate) {
+                                bestBitrate = bitrate
+                                bestAudio = fmt
+                            }
+                        }
+                        val audioUrl = bestAudio?.optString("url") ?: return@use
+                        if (audioUrl.isBlank()) return@use
+                        return@withContext MediaResult(
+                            success = true,
+                            url = audioUrl,
+                            filename = "${title}.mp3",
+                            mimeType = "audio/mpeg"
+                        )
+                    } else {
+                        // Pick best video stream at or below target height
+                        val adaptiveFormats = json.optJSONArray("adaptiveFormats")
+                        val formatStreams = json.optJSONArray("formatStreams")
+
+                        // Try adaptive (video-only) streams first
+                        if (adaptiveFormats != null) {
+                            var bestVideo: JSONObject? = null
+                            var bestHeight = 0
+                            for (i in 0 until adaptiveFormats.length()) {
+                                val fmt = adaptiveFormats.optJSONObject(i) ?: continue
+                                val mime = fmt.optString("type", "")
+                                if (!mime.startsWith("video/")) continue
+                                val h = fmt.optInt("height", 0)
+                                if (h <= targetHeight && h > bestHeight) {
+                                    bestHeight = h
+                                    bestVideo = fmt
+                                }
+                            }
+                            val videoUrl = bestVideo?.optString("url") ?: ""
+                            if (videoUrl.isNotBlank()) {
+                                return@withContext MediaResult(
+                                    success = true,
+                                    url = videoUrl,
+                                    filename = "${title}_${bestHeight}p.mp4",
+                                    mimeType = "video/mp4"
+                                )
+                            }
+                        }
+
+                        // Fallback: muxed formatStreams
+                        if (formatStreams != null) {
+                            var bestMuxed: JSONObject? = null
+                            var bestHeight = 0
+                            for (i in 0 until formatStreams.length()) {
+                                val fmt = formatStreams.optJSONObject(i) ?: continue
+                                val h = fmt.optInt("height", 0)
+                                if (h <= targetHeight && h > bestHeight) {
+                                    bestHeight = h
+                                    bestMuxed = fmt
+                                }
+                            }
+                            val muxedUrl = bestMuxed?.optString("url") ?: ""
+                            if (muxedUrl.isNotBlank()) {
+                                return@withContext MediaResult(
+                                    success = true,
+                                    url = muxedUrl,
+                                    filename = "${title}_${bestHeight}p.mp4",
+                                    mimeType = "video/mp4"
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                continue // Try next instance
+            }
+        }
+        MediaResult(false, error = "YouTube extraction failed. All Invidious instances unavailable.")
+    }
+
+    // ── Main entry point ─────────────────────────────────────────────────────
     suspend fun fetchMediaUrl(
         rawUrl: String,
         audioOnly: Boolean = false,
@@ -99,9 +222,15 @@ class CobaltApiService(context: Context) {
                 return@withContext MediaResult(false, error = "Invalid media URL")
             }
 
-            // Current Cobalt API endpoint is POST /.
-            val apiUrl = baseUrl()
+            // YouTube → Invidious (phone-side, bypasses Oracle block)
+            if (isYouTubeUrl(host)) {
+                val videoId = extractYouTubeId(cleanedUrl)
+                    ?: return@withContext MediaResult(false, error = "Could not extract YouTube video ID.")
+                return@withContext fetchYouTubeViaInvidious(videoId, audioOnly, resolution)
+            }
 
+            // All other platforms → Oracle Cobalt server
+            val apiUrl = baseUrl()
             val bodyJson = JSONObject().apply {
                 put("url", cleanedUrl)
                 put("downloadMode", if (audioOnly) "audio" else "auto")
@@ -109,21 +238,15 @@ class CobaltApiService(context: Context) {
                     "4k", "2160p" -> "2160"
                     "1440p" -> "1440"
                     "1080p" -> "1080"
-                    "720p" -> "720"
-                    "480p" -> "480"
-                    "360p" -> "360"
-                    else -> "1080"
+                    "720p"  -> "720"
+                    "480p"  -> "480"
+                    "360p"  -> "360"
+                    else    -> "1080"
                 })
                 put("filenameStyle", "pretty")
                 put("audioFormat", "mp3")
                 put("audioBitrate", "128")
-                // Prefer a server-generated downloadable result. This avoids
-                // requiring local remuxing for the normal path.
                 put("localProcessing", "disabled")
-                if (isYouTubeUrl(host)) {
-                    put("youtubeVideoCodec", "h264")
-                    put("youtubeVideoContainer", "mp4")
-                }
             }.toString()
 
             val builder = Request.Builder()
@@ -133,8 +256,6 @@ class CobaltApiService(context: Context) {
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "LinkShieldSandbox/2.3")
 
-            // Private Cobalt instances can require authentication. We do not
-            // hard-code a secret; the value is intentionally empty by default.
             if (BuildConfig.COBALT_API_KEY.isNotBlank()) {
                 builder.header("Authorization", "Api-Key ${BuildConfig.COBALT_API_KEY}")
             }
@@ -175,21 +296,15 @@ class CobaltApiService(context: Context) {
                             )
                         }
                     }
-
                     "picker" -> {
                         val picker = json.optJSONArray("picker")
                         if (picker == null || picker.length() == 0) {
                             MediaResult(false, error = "Cobalt returned an empty media picker.")
                         } else {
-                            // Preserve the current UI's single-result behaviour;
-                            // choose the first video item, otherwise the first item.
                             var chosen = picker.optJSONObject(0)
                             for (i in 0 until picker.length()) {
                                 val item = picker.optJSONObject(i)
-                                if (item?.optString("type") == "video") {
-                                    chosen = item
-                                    break
-                                }
+                                if (item?.optString("type") == "video") { chosen = item; break }
                             }
                             val mediaUrl = normalizeCobaltMediaUrl(chosen?.optString("url").orEmpty(), apiUrl)
                             if (mediaUrl.isBlank()) {
@@ -204,14 +319,10 @@ class CobaltApiService(context: Context) {
                             }
                         }
                     }
-
-                    "local-processing" -> {
-                        MediaResult(
-                            success = false,
-                            error = "This Cobalt request requires local media processing. The server should be configured to return a tunnel/redirect result."
-                        )
-                    }
-
+                    "local-processing" -> MediaResult(
+                        success = false,
+                        error = "Cobalt requires local processing. Configure server to return tunnel/redirect."
+                    )
                     "error" -> {
                         val errorObject = json.optJSONObject("error")
                         val code = errorObject?.optString("code").orEmpty()
@@ -219,14 +330,13 @@ class CobaltApiService(context: Context) {
                         val detail = listOf(code, context).filter { it.isNotBlank() }.joinToString(" ")
                         MediaResult(false, error = "Cobalt error${if (detail.isNotBlank()) " [$detail]" else ""}.")
                     }
-
                     else -> MediaResult(false, error = "Unexpected Cobalt status: '${json.optString("status", "unknown")}'.")
                 }
             }
         } catch (_: SocketTimeoutException) {
-            MediaResult(false, error = "Cobalt request timed out. Check that the self-hosted instance is running.")
+            MediaResult(false, error = "Request timed out.")
         } catch (e: Exception) {
-            MediaResult(false, error = e.localizedMessage ?: "Cobalt network request failed.")
+            MediaResult(false, error = e.localizedMessage ?: "Network request failed.")
         }
     }
 
@@ -239,23 +349,19 @@ class CobaltApiService(context: Context) {
                 media.port == 9000 && api.port == 9001
             ) {
                 raw.replaceFirst(Regex("^([a-zA-Z][a-zA-Z0-9+.-]*://[^/:]+):9000(?=/|$)"), "$1:9001")
-            } else {
-                raw
-            }
-        } catch (_: Exception) {
-            raw
-        }
+            } else raw
+        } catch (_: Exception) { raw }
     }
 
     private fun guessMime(filename: String): String {
         return when (filename.substringAfterLast('.', "").lowercase()) {
-            "mp3" -> "audio/mpeg"
-            "m4a" -> "audio/mp4"
-            "ogg" -> "audio/ogg"
-            "wav" -> "audio/wav"
+            "mp3"  -> "audio/mpeg"
+            "m4a"  -> "audio/mp4"
+            "ogg"  -> "audio/ogg"
+            "wav"  -> "audio/wav"
             "webm" -> "video/webm"
-            "gif" -> "image/gif"
-            else -> "video/mp4"
+            "gif"  -> "image/gif"
+            else   -> "video/mp4"
         }
     }
 }
