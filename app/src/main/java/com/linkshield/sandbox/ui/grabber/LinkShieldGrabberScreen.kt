@@ -102,11 +102,8 @@ fun LinkShieldGrabberScreen(
             try {
                 thumbnailUrl = extractYoutubeThumbnail(clean)
 
-                // KEY FIX: YouTube → YouTubeGrabber (yt-dlp)
-                //          All other platforms → CobaltApiService
                 if (YouTubeGrabber.isYouTubeUrl(clean)) {
                     val result = YouTubeGrabber.extract(
-                        context    = context,
                         pageUrl    = clean,
                         resolution = selectedResolution,
                         audioOnly  = audioOnly
@@ -124,7 +121,6 @@ fun LinkShieldGrabberScreen(
                         errorMsg = result.error ?: "YouTube extraction failed"
                     }
                 } else {
-                    // Facebook, Instagram, TikTok, Twitter etc → Cobalt
                     val result = cobaltService.fetchMediaUrl(
                         rawUrl     = clean,
                         audioOnly  = audioOnly,
@@ -259,7 +255,7 @@ fun LinkShieldGrabberScreen(
                             Text(
                                 when {
                                     isLoading && YouTubeGrabber.isYouTubeUrl(inputUrl.trim()) ->
-                                        "Fetching via yt-dlp..."
+                                        "Fetching via Piped..."
                                     isLoading -> "Fetching from Cobalt..."
                                     fetched   -> "✅ Ready"
                                     else      -> "🎬 Tap Fetch"
@@ -279,7 +275,7 @@ fun LinkShieldGrabberScreen(
                         Text(
                             when {
                                 isLoading && YouTubeGrabber.isYouTubeUrl(inputUrl.trim()) ->
-                                    "Fetching via yt-dlp..."
+                                    "Fetching via Piped..."
                                 isLoading -> "Fetching from Cobalt..."
                                 fetched   -> "Ready to download"
                                 else      -> "Paste URL and tap Fetch"
