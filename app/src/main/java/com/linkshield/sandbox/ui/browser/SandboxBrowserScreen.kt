@@ -16,8 +16,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.api.SecurityApiService
 import com.linkshield.sandbox.ui.ShieldState
 import com.linkshield.sandbox.ui.TopHeader
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @Composable
 fun SandboxBrowserScreen(
@@ -47,77 +45,118 @@ fun SandboxBrowserScreen(
     onWireGuardToggle: () -> Unit = {}
 ) {
     val webViewState = remember { mutableStateOf<WebView?>(null) }
-    val scope = rememberCoroutineScope()
     val securityService = remember { SecurityApiService() }
 
-    var shieldState by remember { mutableStateOf(ShieldState.SAFE) }
+    var shieldState by remember {
+        mutableStateOf(ShieldState.CHECKING)
+    }
 
-    // Safety check — currentUrl pe (jo WebView se aata hai, urlBarText nahi)
+    /*
+     * IMPORTANT:
+     * currentUrl comes from WebView navigation.
+     *
+     * LaunchedEffect automatically cancels the previous scan when
+     * currentUrl changes, preventing an old URL's result from replacing
+     * the new URL's result.
+     */
     LaunchedEffect(currentUrl) {
-        if (currentUrl.isBlank() || currentUrl == "about:blank") {
-            shieldState = ShieldState.SAFE
+
+        val url = currentUrl.trim()
+
+        if (
+            url.isBlank() ||
+            url == "about:blank"
+        ) {
+            shieldState = ShieldState.CHECKING
             return@LaunchedEffect
         }
+
         shieldState = ShieldState.CHECKING
-        scope.launch(Dispatchers.IO) {
-            try {
-                val result = securityService.checkUrl(currentUrl)
-                shieldState = when {
-                    result.isMalicious  -> ShieldState.DANGEROUS
-                    result.isSuspicious -> ShieldState.SUSPICIOUS
-                    else                -> ShieldState.SAFE
-                }
-            } catch (_: Exception) {
-                shieldState = ShieldState.SAFE
-            }
+
+        val result = securityService.checkUrl(url)
+
+        shieldState = when {
+            result.isError -> ShieldState.ERROR
+            result.isMalicious -> ShieldState.DANGEROUS
+            result.isSuspicious -> ShieldState.SUSPICIOUS
+            else -> ShieldState.SAFE
         }
     }
 
-    // startUrl change hone par WebView ko load karo — url != startUrl check hata diya
+    /*
+     * Load a newly requested URL.
+     */
     LaunchedEffect(startUrl) {
-        val wv = webViewState.value ?: return@LaunchedEffect
-        if (startUrl.isNotBlank() && startUrl != "about:blank") {
-            wv.loadUrl(startUrl)
+        val webView = webViewState.value ?: return@LaunchedEffect
+
+        if (
+            startUrl.isNotBlank() &&
+            startUrl != "about:blank" &&
+            webView.url != startUrl
+        ) {
+            webView.loadUrl(startUrl)
         }
     }
 
     key(generation) {
-        Column(modifier = Modifier.fillMaxSize()) {
+
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+
             TopHeader(
-                currentUrl    = currentUrl,
-                onUrlChange   = onUrlChange,
-                shieldState   = shieldState,
+                currentUrl = currentUrl,
+                onUrlChange = onUrlChange,
+                shieldState = shieldState,
                 trialDaysLeft = trialDaysLeft,
-                isProUser     = isProUser,
-                isDarkTheme   = isDarkTheme,
+                isProUser = isProUser,
+                isDarkTheme = isDarkTheme,
                 onThemeToggle = onThemeToggle,
-                canGoBack     = canGoBack,
-                canGoForward  = canGoForward,
-                onBack        = onBack,
-                onForward     = onForward,
-                onReload      = onReload,
-                onNavigate    = onNavigate,
-                isLoading     = isLoading
+                canGoBack = canGoBack,
+                canGoForward = canGoForward,
+                onBack = onBack,
+                onForward = onForward,
+                onReload = onReload,
+                onNavigate = onNavigate,
+                isLoading = isLoading
             )
 
             AndroidView(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
+
                 factory = { ctx ->
+
                     SandboxWebViewSession.get()?.also { existing ->
+
                         webViewState.value = existing
+
                         onReady(existing)
-                        if (startUrl.isNotBlank()) existing.loadUrl(startUrl)
+
+                        if (
+                            startUrl.isNotBlank() &&
+                            startUrl != "about:blank" &&
+                            existing.url != startUrl
+                        ) {
+                            existing.loadUrl(startUrl)
+                        }
+
                     } ?: WebView(ctx).apply {
+
                         setBackgroundColor(
-                            if (isDarkTheme) Color.parseColor("#FF0A0F14")
-                            else Color.parseColor("#FFF0F2F5")
+                            if (isDarkTheme) {
+                                Color.parseColor("#FF0A0F14")
+                            } else {
+                                Color.parseColor("#FFF0F2F5")
+                            }
                         )
+
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
+
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.databaseEnabled = true
@@ -127,45 +166,99 @@ fun SandboxBrowserScreen(
                         settings.setSupportMultipleWindows(false)
 
                         webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+
+                            override fun onPageStarted(
+                                view: WebView?,
+                                url: String?,
+                                favicon: Bitmap?
+                            ) {
                                 onLoading(true)
-                                url?.let(onUrlChanged)
+
+                                url?.let {
+                                    if (it != "about:blank") {
+                                        onUrlChanged(it)
+                                    }
+                                }
                             }
-                            override fun onPageFinished(view: WebView?, url: String?) {
+
+                            override fun onPageFinished(
+                                view: WebView?,
+                                url: String?
+                            ) {
                                 onLoading(false)
+
                                 onNavigation(
                                     view?.canGoBack() == true,
                                     view?.canGoForward() == true
                                 )
-                                url?.let { if (it != "about:blank") onUrlChanged(it) }
+
+                                url?.let {
+                                    if (it != "about:blank") {
+                                        onUrlChanged(it)
+                                    }
+                                }
                             }
-                            override fun onRenderProcessGone(
-                                view: WebView?,
-                                detail: android.webkit.RenderProcessGoneDetail?
-                            ): Boolean {
-                                onLoading(false)
-                                runCatching { view?.destroy() }
-                                webViewState.value = null
-                                SandboxWebViewSession.destroy()
-                                onRendererGone()
-                                return true
-                            }
+
                             override fun shouldOverrideUrlLoading(
                                 view: WebView?,
                                 request: WebResourceRequest?
                             ): Boolean {
-                                val scheme = request?.url?.scheme?.lowercase()
-                                return scheme != null && scheme !in setOf("http", "https")
+
+                                val scheme =
+                                    request?.url
+                                        ?.scheme
+                                        ?.lowercase()
+
+                                /*
+                                 * Only HTTP/HTTPS navigation is allowed.
+                                 * javascript:, file:, content:, intent:, etc.
+                                 * are not passed through the sandbox browser.
+                                 */
+                                return scheme != "http" &&
+                                    scheme != "https"
+                            }
+
+                            override fun onRenderProcessGone(
+                                view: WebView?,
+                                detail: android.webkit.RenderProcessGoneDetail?
+                            ): Boolean {
+
+                                onLoading(false)
+
+                                runCatching {
+                                    view?.destroy()
+                                }
+
+                                webViewState.value = null
+                                SandboxWebViewSession.destroy()
+
+                                onRendererGone()
+
+                                return true
                             }
                         }
+
                         webChromeClient = WebChromeClient()
+
                         webViewState.value = this
+
                         SandboxWebViewSession.attach(this)
+
                         onReady(this)
-                        if (startUrl.isNotBlank()) loadUrl(startUrl)
+
+                        if (
+                            startUrl.isNotBlank() &&
+                            startUrl != "about:blank"
+                        ) {
+                            loadUrl(startUrl)
+                        }
                     }
                 },
-                update = { webViewState.value = it; onReady(it) }
+
+                update = {
+                    webViewState.value = it
+                    onReady(it)
+                }
             )
         }
     }
