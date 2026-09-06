@@ -2,18 +2,14 @@ package com.linkshield.sandbox.ui.grabber
 
 // REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/grabber/YouTubeGrabber.kt
 
-import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 data class YouTubeResult(
     val success: Boolean,
@@ -27,35 +23,23 @@ object YouTubeGrabber {
 
     private const val TAG = "YouTubeGrabber"
 
-    // Piped public instances — fallback when yt-dlp fails
     private val PIPED_INSTANCES = listOf(
         "https://pipedapi.kavin.rocks",
         "https://piped-api.garudalinux.org",
         "https://api.piped.projectsegfault.com"
     )
 
-    private val initialized = AtomicBoolean(false)
+    private val INVIDIOUS_INSTANCES = listOf(
+        "https://invidious.privacyredirect.com",
+        "https://iv.datura.network",
+        "https://invidious.nerdvpn.de"
+    )
 
     private val httpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .build()
-    }
-
-    fun initialize(context: Context) {
-        if (initialized.get()) return
-        synchronized(this) {
-            if (initialized.get()) return
-            try {
-                YoutubeDL.getInstance().init(context.applicationContext)
-                initialized.set(true)
-                Log.i(TAG, "yt-dlp initialized")
-            } catch (t: Throwable) {
-                Log.e(TAG, "yt-dlp init failed: ${t.message}", t)
-                throw t
-            }
-        }
     }
 
     fun isYouTubeUrl(rawUrl: String): Boolean {
@@ -81,7 +65,6 @@ object YouTubeGrabber {
     }
 
     suspend fun extract(
-        context: Context,
         pageUrl: String,
         resolution: String = "1080p",
         audioOnly: Boolean = false
@@ -101,111 +84,36 @@ object YouTubeGrabber {
             else          -> 1080
         }
 
-        // Method 1: yt-dlp with Android player client
-        val ytdlpResult = tryYtDlp(context, pageUrl, quality, audioOnly)
-        if (ytdlpResult.success) {
-            Log.i(TAG, "yt-dlp succeeded")
-            return@withContext ytdlpResult
-        }
-        Log.w(TAG, "yt-dlp failed: ${ytdlpResult.error} — trying Piped fallback")
-
-        // Method 2: Piped API fallback
         val videoId = extractVideoId(pageUrl)
-        if (!videoId.isNullOrBlank()) {
-            val pipedResult = tryPiped(videoId, quality, audioOnly)
-            if (pipedResult.success) {
-                Log.i(TAG, "Piped fallback succeeded")
-                return@withContext pipedResult
-            }
-            Log.w(TAG, "Piped also failed: ${pipedResult.error}")
+            ?: return@withContext YouTubeResult(false, error = "Could not extract video ID")
+
+        // Method 1: Piped API
+        val pipedResult = tryPiped(videoId, quality, audioOnly)
+        if (pipedResult.success) {
+            Log.i(TAG, "Piped succeeded")
+            return@withContext pipedResult
         }
+        Log.w(TAG, "Piped failed: ${pipedResult.error} — trying Invidious")
+
+        // Method 2: Invidious API
+        val invidiousResult = tryInvidious(videoId, quality, audioOnly)
+        if (invidiousResult.success) {
+            Log.i(TAG, "Invidious succeeded")
+            return@withContext invidiousResult
+        }
+        Log.w(TAG, "Invidious failed: ${invidiousResult.error}")
 
         YouTubeResult(
             false,
-            error = "YouTube extraction failed. Try again later.\n(${ytdlpResult.error})"
+            error = "YouTube extraction failed. Try again later.\n(${pipedResult.error})"
         )
     }
 
-    // -----------------------------------------------------------------------
-    // Method 1: yt-dlp with Android YouTube client
-    // Spoofs request as Android YouTube app — bypasses bot detection
-    // -----------------------------------------------------------------------
-    private suspend fun tryYtDlp(
-        context: Context,
-        pageUrl: String,
-        quality: Int,
-        audioOnly: Boolean
-    ): YouTubeResult = withContext(Dispatchers.IO) {
-        try {
-            initialize(context)
-        } catch (t: Throwable) {
-            return@withContext YouTubeResult(false, error = "yt-dlp init failed: ${t.message}")
-        }
-
-        return@withContext try {
-            val request = YoutubeDLRequest(pageUrl).apply {
-                addOption("--no-playlist")
-                addOption("--no-warnings")
-                addOption("--no-check-certificates")
-
-                // KEY FIX: Spoof as Android YouTube app
-                // YouTube thinks request is from official Android app — no sign-in needed
-                addOption("--extractor-args", "youtube:player_client=android")
-                addOption(
-                    "--user-agent",
-                    "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip"
-                )
-
-                if (audioOnly) {
-                    addOption("-f", "bestaudio/best")
-                } else {
-                    addOption(
-                        "-f",
-                        "best[height<=$quality][ext=mp4]/best[height<=$quality]/best"
-                    )
-                }
-                addOption("-g")
-            }
-
-            val response = YoutubeDL.getInstance().execute(
-                request, null
-            ) { _: Float, _: Long, _: String -> }
-
-            val output = response.out?.trim().orEmpty()
-            val url = output.lines()
-                .map { it.trim() }
-                .firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
-
-            if (!url.isNullOrBlank()) {
-                val ext  = if (audioOnly) "mp3" else "mp4"
-                val mime = if (audioOnly) "audio/mpeg" else "video/mp4"
-                YouTubeResult(
-                    success  = true,
-                    url      = url,
-                    filename = "YouTube_${System.currentTimeMillis()}.$ext",
-                    mimeType = mime
-                )
-            } else {
-                YouTubeResult(false, error = response.err?.trim()
-                    ?.lines()?.firstOrNull { it.isNotBlank() }
-                    ?: "yt-dlp returned no URL")
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "yt-dlp error", t)
-            YouTubeResult(false, error = t.localizedMessage ?: "yt-dlp failed")
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Method 2: Piped API — open source YouTube frontend
-    // No auth needed, multiple public instances
-    // -----------------------------------------------------------------------
     private suspend fun tryPiped(
         videoId: String,
         quality: Int,
         audioOnly: Boolean
     ): YouTubeResult = withContext(Dispatchers.IO) {
-
         for (instance in PIPED_INSTANCES) {
             try {
                 val request = Request.Builder()
@@ -240,7 +148,6 @@ object YouTubeGrabber {
                         .mapNotNull { videoStreams.optJSONObject(it) }
                         .filter { it.optString("format").contains("MPEG_4", ignoreCase = true) }
 
-                    // Pick stream closest to requested quality
                     val best = streams
                         .filter { it.optInt("height", 0) <= quality }
                         .maxByOrNull { it.optInt("height", 0) }
@@ -263,7 +170,105 @@ object YouTubeGrabber {
                 continue
             }
         }
-
         YouTubeResult(false, error = "All Piped instances failed")
+    }
+
+    private suspend fun tryInvidious(
+        videoId: String,
+        quality: Int,
+        audioOnly: Boolean
+    ): YouTubeResult = withContext(Dispatchers.IO) {
+        for (instance in INVIDIOUS_INSTANCES) {
+            try {
+                val request = Request.Builder()
+                    .url("$instance/api/v1/videos/$videoId")
+                    .header("User-Agent", "LinkShield/2.6")
+                    .build()
+
+                val body = httpClient.newCall(request).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.body?.string()
+                } ?: continue
+
+                val json = JSONObject(body)
+                val title = json.optString("title", "video")
+
+                if (audioOnly) {
+                    val formats = json.optJSONArray("adaptiveFormats") ?: continue
+                    var bestAudio: JSONObject? = null
+                    var bestBitrate = 0
+                    for (i in 0 until formats.length()) {
+                        val fmt = formats.optJSONObject(i) ?: continue
+                        if (!fmt.optString("type").startsWith("audio/")) continue
+                        val bitrate = fmt.optInt("bitrate", 0)
+                        if (bitrate > bestBitrate) {
+                            bestBitrate = bitrate
+                            bestAudio = fmt
+                        }
+                    }
+                    val url = bestAudio?.optString("url").orEmpty()
+                    if (url.isNotBlank()) {
+                        return@withContext YouTubeResult(
+                            success  = true,
+                            url      = url,
+                            filename = "${title}.mp3",
+                            mimeType = "audio/mpeg"
+                        )
+                    }
+                } else {
+                    val adaptive = json.optJSONArray("adaptiveFormats")
+                    val muxed = json.optJSONArray("formatStreams")
+
+                    if (adaptive != null) {
+                        var bestVideo: JSONObject? = null
+                        var bestHeight = 0
+                        for (i in 0 until adaptive.length()) {
+                            val fmt = adaptive.optJSONObject(i) ?: continue
+                            if (!fmt.optString("type").startsWith("video/")) continue
+                            val h = fmt.optInt("height", 0)
+                            if (h <= quality && h > bestHeight) {
+                                bestHeight = h
+                                bestVideo = fmt
+                            }
+                        }
+                        val url = bestVideo?.optString("url").orEmpty()
+                        if (url.isNotBlank()) {
+                            return@withContext YouTubeResult(
+                                success  = true,
+                                url      = url,
+                                filename = "${title}_${bestHeight}p.mp4",
+                                mimeType = "video/mp4"
+                            )
+                        }
+                    }
+
+                    if (muxed != null) {
+                        var bestMuxed: JSONObject? = null
+                        var bestHeight = 0
+                        for (i in 0 until muxed.length()) {
+                            val fmt = muxed.optJSONObject(i) ?: continue
+                            val h = fmt.optInt("height", 0)
+                            if (h <= quality && h > bestHeight) {
+                                bestHeight = h
+                                bestMuxed = fmt
+                            }
+                        }
+                        val url = bestMuxed?.optString("url").orEmpty()
+                        if (url.isNotBlank()) {
+                            return@withContext YouTubeResult(
+                                success  = true,
+                                url      = url,
+                                filename = "${title}_${bestHeight}p.mp4",
+                                mimeType = "video/mp4"
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Invidious instance $instance failed: ${e.message}")
+                continue
+            }
+        }
+        YouTubeResult(false, error = "All Invidious instances failed")
     }
 }
