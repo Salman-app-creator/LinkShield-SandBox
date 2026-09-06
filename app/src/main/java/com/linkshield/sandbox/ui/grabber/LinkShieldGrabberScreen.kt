@@ -75,8 +75,12 @@ fun LinkShieldGrabberScreen(
     val remainingDownloads = if (effectivelyPro) Int.MAX_VALUE else dnsManager.getRemainingDownloads()
 
     fun resetResult() {
-        fetched = false; mediaUrl = ""; mediaFilename = ""
-        mediaMime = "video/mp4"; mediaTitle = ""; errorMsg = null
+        fetched = false
+        mediaUrl = ""
+        mediaFilename = ""
+        mediaMime = "video/mp4"
+        mediaTitle = ""
+        errorMsg = null
     }
 
     LaunchedEffect(initialUrl) {
@@ -89,55 +93,43 @@ fun LinkShieldGrabberScreen(
 
     fun doFetch() {
         val clean = inputUrl.trim()
-        if (clean.isBlank()) { errorMsg = "Enter a URL first"; return }
+
+        if (clean.isBlank()) {
+            errorMsg = "Enter a URL first"
+            return
+        }
+
         if (!effectivelyPro && remainingDownloads <= 0) {
-            errorMsg = "Download limit reached. Upgrade to continue."; return
+            errorMsg = "Download limit reached. Upgrade to continue."
+            return
         }
 
         isLoading = true
-        errorMsg  = null
+        errorMsg = null
         keyboardCtrl?.hide()
 
         scope.launch {
             try {
                 thumbnailUrl = extractYoutubeThumbnail(clean)
 
-                if (YouTubeGrabber.isYouTubeUrl(clean)) {
-                    val result = YouTubeGrabber.extract(
-                        pageUrl    = clean,
-                        resolution = selectedResolution,
-                        audioOnly  = audioOnly
-                    )
-                    if (result.success && result.url != null) {
-                        mediaUrl      = result.url
-                        mediaFilename = result.filename
-                            ?: "YouTube_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}"
-                        mediaTitle    = "YouTube Video"
-                        mediaMime     = result.mimeType ?: "video/mp4"
-                        fetched       = true
-                    } else {
-                        resetResult()
-                        thumbnailUrl = extractYoutubeThumbnail(clean)
-                        errorMsg = result.error ?: "YouTube extraction failed"
-                    }
+                // All media extraction is handled exclusively by CobaltApiService.
+                val result = cobaltService.fetchMediaUrl(
+                    rawUrl = clean,
+                    audioOnly = audioOnly,
+                    resolution = selectedResolution
+                )
+
+                if (result.success && result.url != null) {
+                    mediaUrl = result.url
+                    mediaFilename = result.filename
+                        ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
+                    mediaTitle = mediaFilename.substringBeforeLast(".")
+                    mediaMime = result.mimeType ?: "video/mp4"
+                    fetched = true
                 } else {
-                    val result = cobaltService.fetchMediaUrl(
-                        rawUrl     = clean,
-                        audioOnly  = audioOnly,
-                        resolution = selectedResolution
-                    )
-                    if (result.success && result.url != null) {
-                        mediaUrl      = result.url
-                        mediaFilename = result.filename
-                            ?: "LinkShield_download.${if (audioOnly) "mp3" else "mp4"}"
-                        mediaTitle    = mediaFilename.substringBeforeLast(".")
-                        mediaMime     = result.mimeType ?: "video/mp4"
-                        fetched       = true
-                    } else {
-                        resetResult()
-                        thumbnailUrl = extractYoutubeThumbnail(clean)
-                        errorMsg = result.error ?: "Failed to fetch media"
-                    }
+                    resetResult()
+                    thumbnailUrl = extractYoutubeThumbnail(clean)
+                    errorMsg = result.error ?: "Failed to fetch media"
                 }
             } catch (e: Exception) {
                 resetResult()
@@ -149,136 +141,268 @@ fun LinkShieldGrabberScreen(
     }
 
     fun downloadCurrent() {
-        if (!fetched || mediaUrl.isBlank()) { errorMsg = "Fetch the media first"; return }
+        if (!fetched || mediaUrl.isBlank()) {
+            errorMsg = "Fetch the media first"
+            return
+        }
+
         try {
             val safeFilename = mediaFilename
                 .replace(Regex("[/\\\\:*?\"<>|]"), "_")
                 .trim()
-                .ifBlank { "LinkShield_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}" }
+                .ifBlank {
+                    "LinkShield_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}"
+                }
 
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
             dm.enqueue(
                 DownloadManager.Request(Uri.parse(mediaUrl))
                     .setTitle(mediaTitle.ifBlank { "LinkShield Media" })
                     .setDescription("Downloading via LinkShield Sandbox")
                     .setMimeType(mediaMime)
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LinkShield/$safeFilename")
+                    .setNotificationVisibility(
+                        DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                    )
+                    .setDestinationInExternalPublicDir(
+                        Environment.DIRECTORY_DOWNLOADS,
+                        "LinkShield/$safeFilename"
+                    )
                     .setAllowedOverMetered(true)
                     .setAllowedOverRoaming(true)
             )
-            if (!effectivelyPro) dnsManager.consumeDownload()
-            Toast.makeText(context, "Download started ✓", Toast.LENGTH_LONG).show()
+
+            if (!effectivelyPro) {
+                dnsManager.consumeDownload()
+            }
+
+            Toast.makeText(
+                context,
+                "Download started ✓",
+                Toast.LENGTH_LONG
+            ).show()
         } catch (e: Exception) {
             errorMsg = "Download failed: ${e.localizedMessage}"
         }
     }
 
     Column(
-        Modifier.fillMaxSize().statusBarsPadding()
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBackToBrowser, modifier = Modifier.size(40.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onBackToBrowser,
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
             }
+
             Spacer(Modifier.width(6.dp))
-            Text("Grabber", style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+
+            Text(
+                "Grabber",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
         }
 
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            )
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(Modifier.weight(1f)) {
                     when {
                         effectivelyPro ->
-                            Text("👑 PRO Unlimited", fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "👑 PRO Unlimited",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
                         trialDaysLeft > 0 -> {
-                            Text("[ $remainingDownloads Free Downloads Remaining ]",
-                                fontWeight = FontWeight.Bold)
-                            Text("Trial: $trialDaysLeft days left • Upgrade for unlimited",
-                                fontSize = 12.sp)
+                            Text(
+                                "[ $remainingDownloads Free Downloads Remaining ]",
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Trial: $trialDaysLeft days left • Upgrade for unlimited",
+                                fontSize = 12.sp
+                            )
                         }
+
                         else -> {
-                            Text("Trial Ended", fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error)
-                            Text("Upgrade to Pro for unlimited downloads", fontSize = 12.sp)
+                            Text(
+                                "Trial Ended",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                "Upgrade to Pro for unlimited downloads",
+                                fontSize = 12.sp
+                            )
                         }
                     }
                 }
-                if (!effectivelyPro) TextButton(onClick = onUpgradeClick) {
-                    Icon(Icons.Default.Upgrade, null, Modifier.size(17.dp))
-                    Spacer(Modifier.width(3.dp)); Text("Upgrade")
+
+                if (!effectivelyPro) {
+                    TextButton(onClick = onUpgradeClick) {
+                        Icon(
+                            Icons.Default.Upgrade,
+                            null,
+                            Modifier.size(17.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text("Upgrade")
+                    }
                 }
             }
         }
 
         OutlinedTextField(
             value = inputUrl,
-            onValueChange = { inputUrl = it; if (fetched || errorMsg != null) resetResult() },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            placeholder = { Text("Paste video link here...") },
-            leadingIcon = { Icon(Icons.Default.PlayCircle, null) },
-            trailingIcon = {
-                if (inputUrl.isNotEmpty()) IconButton(onClick = {
-                    inputUrl = ""; resetResult(); thumbnailUrl = ""
-                }) { Icon(Icons.Default.Close, "Clear", Modifier.size(18.dp)) }
+            onValueChange = {
+                inputUrl = it
+                if (fetched || errorMsg != null) resetResult()
             },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = {
-                if (!isLoading) { if (fetched) downloadCurrent() else doFetch() }
-            }),
-            shape = RoundedCornerShape(12.dp), isError = errorMsg != null
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("Paste video link here...") },
+            leadingIcon = {
+                Icon(Icons.Default.PlayCircle, null)
+            },
+            trailingIcon = {
+                if (inputUrl.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            inputUrl = ""
+                            resetResult()
+                            thumbnailUrl = ""
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            "Clear",
+                            Modifier.size(18.dp)
+                        )
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Go
+            ),
+            keyboardActions = KeyboardActions(
+                onGo = {
+                    if (!isLoading) {
+                        if (fetched) downloadCurrent() else doFetch()
+                    }
+                }
+            ),
+            shape = RoundedCornerShape(12.dp),
+            isError = errorMsg != null
         )
-        errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
 
-        Card(Modifier.fillMaxWidth().height(180.dp), shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        errorMsg?.let {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp
+            )
+        }
+
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 if (thumbnailUrl.isNotBlank()) {
                     AsyncImage(
-                        model = ImageRequest.Builder(context).data(thumbnailUrl).crossfade(true).build(),
-                        contentDescription = "Thumbnail", modifier = Modifier.fillMaxSize(),
+                        model = ImageRequest.Builder(context)
+                            .data(thumbnailUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Thumbnail",
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
+
                     Box(
-                        Modifier.fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Color.Black.copy(alpha = 0.5f),
+                                RoundedCornerShape(14.dp)
+                            ),
                         contentAlignment = Alignment.BottomStart
                     ) {
                         Column(Modifier.padding(10.dp)) {
                             Text(
                                 when {
-                                    isLoading && YouTubeGrabber.isYouTubeUrl(inputUrl.trim()) ->
-                                        "Fetching via Piped..."
                                     isLoading -> "Fetching from Cobalt..."
-                                    fetched   -> "✅ Ready"
-                                    else      -> "🎬 Tap Fetch"
+                                    fetched -> "✅ Ready"
+                                    else -> "🎬 Tap Fetch"
                                 },
-                                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
                             )
-                            if (mediaTitle.isNotBlank())
-                                Text(mediaTitle, fontSize = 11.sp,
-                                    color = Color.White.copy(alpha = 0.85f), maxLines = 2)
+
+                            if (mediaTitle.isNotBlank()) {
+                                Text(
+                                    mediaTitle,
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    maxLines = 2
+                                )
+                            }
                         }
                     }
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.PlayCircle, null, Modifier.size(54.dp),
-                            tint = MaterialTheme.colorScheme.primary)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.PlayCircle,
+                            null,
+                            Modifier.size(54.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+
                         Spacer(Modifier.height(8.dp))
+
                         Text(
                             when {
-                                isLoading && YouTubeGrabber.isYouTubeUrl(inputUrl.trim()) ->
-                                    "Fetching via Piped..."
                                 isLoading -> "Fetching from Cobalt..."
-                                fetched   -> "Ready to download"
-                                else      -> "Paste URL and tap Fetch"
+                                fetched -> "Ready to download"
+                                else -> "Paste URL and tap Fetch"
                             },
                             fontWeight = FontWeight.SemiBold
                         )
@@ -287,44 +411,93 @@ fun LinkShieldGrabberScreen(
             }
         }
 
-        Text("Options:", fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = audioOnly, onCheckedChange = { audioOnly = it; resetResult() },
-                enabled = !isLoading)
-            Text("Audio Only (MP3)", fontSize = 13.sp)
+        Text(
+            "Options:",
+            fontWeight = FontWeight.Bold
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = audioOnly,
+                onCheckedChange = {
+                    audioOnly = it
+                    resetResult()
+                },
+                enabled = !isLoading
+            )
+
+            Text(
+                "Audio Only (MP3)",
+                fontSize = 13.sp
+            )
         }
 
         if (!audioOnly) {
-            Text("Select Resolution:", fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "Select Resolution:",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 resolutions.forEach { res ->
                     FilterChip(
                         selected = selectedResolution == res,
-                        onClick  = { selectedResolution = res; resetResult() },
-                        enabled  = !isLoading,
-                        label    = { Text(res, fontSize = 12.sp) },
-                        shape    = RoundedCornerShape(8.dp)
+                        onClick = {
+                            selectedResolution = res
+                            resetResult()
+                        },
+                        enabled = !isLoading,
+                        label = {
+                            Text(
+                                res,
+                                fontSize = 12.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
                     )
                 }
             }
         }
 
-        if (fetched) Text(
-            "Quality: ${if (audioOnly) "MP3 Audio" else "$selectedResolution • MP4"}",
-            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold
-        )
+        if (fetched) {
+            Text(
+                "Quality: ${if (audioOnly) "MP3 Audio" else "$selectedResolution • MP4"}",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
         Spacer(Modifier.height(4.dp))
 
         Button(
-            onClick  = { if (fetched) downloadCurrent() else doFetch() },
-            enabled  = inputUrl.isNotBlank() && !isLoading,
-            modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(12.dp)
+            onClick = {
+                if (fetched) downloadCurrent() else doFetch()
+            },
+            enabled = inputUrl.isNotBlank() && !isLoading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Default.Download,
+                null
+            )
+
+            Spacer(Modifier.width(8.dp))
+
             Text(
-                when { isLoading -> "Fetching..."; fetched -> "Download"; else -> "Fetch Media" },
+                when {
+                    isLoading -> "Fetching..."
+                    fetched -> "Download"
+                    else -> "Fetch Media"
+                },
                 fontWeight = FontWeight.Bold
             )
         }
@@ -335,14 +508,27 @@ fun LinkShieldGrabberScreen(
 
 private fun extractYoutubeThumbnail(url: String): String {
     return try {
-        val uri  = Uri.parse(url.trim())
+        val uri = Uri.parse(url.trim())
         val host = uri.host?.lowercase(Locale.US).orEmpty()
-        val vid  = when {
+
+        val vid = when {
             host == "youtu.be" -> uri.lastPathSegment
-            host.endsWith("youtube.com") -> uri.getQueryParameter("v")
-                ?: uri.path?.substringAfter("/shorts/")?.substringBefore("/")
+
+            host.endsWith("youtube.com") ->
+                uri.getQueryParameter("v")
+                    ?: uri.path
+                        ?.substringAfter("/shorts/")
+                        ?.substringBefore("/")
+
             else -> null
         }
-        if (!vid.isNullOrBlank()) "https://img.youtube.com/vi/$vid/hqdefault.jpg" else ""
-    } catch (_: Exception) { "" }
+
+        if (!vid.isNullOrBlank()) {
+            "https://img.youtube.com/vi/$vid/hqdefault.jpg"
+        } else {
+            ""
+        }
+    } catch (_: Exception) {
+        ""
+    }
 }
