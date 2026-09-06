@@ -1,7 +1,5 @@
 package com.linkshield.sandbox.ui.browser
 
-// REPO PATH: app/src/main/java/com/linkshield/sandbox/ui/browser/SandboxBrowserScreen.kt
-
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.view.ViewGroup
@@ -43,7 +41,6 @@ fun SandboxBrowserScreen(
     onLoading: (Boolean) -> Unit,
     onNavigation: (Boolean, Boolean) -> Unit,
     onRendererGone: () -> Unit,
-    // VPN params — kept for backward compat, ignored
     isShieldProtectionEnabled: Boolean = true,
     onShieldProtectionToggle: () -> Unit = {},
     isWireGuardEnabled: Boolean = false,
@@ -53,10 +50,9 @@ fun SandboxBrowserScreen(
     val scope = rememberCoroutineScope()
     val securityService = remember { SecurityApiService() }
 
-    // Shield state — updates when URL changes
     var shieldState by remember { mutableStateOf(ShieldState.SAFE) }
 
-    // Check URL with Safe Browsing API whenever URL changes
+    // Safety check — currentUrl pe (jo WebView se aata hai, urlBarText nahi)
     LaunchedEffect(currentUrl) {
         if (currentUrl.isBlank() || currentUrl == "about:blank") {
             shieldState = ShieldState.SAFE
@@ -77,10 +73,11 @@ fun SandboxBrowserScreen(
         }
     }
 
+    // startUrl change hone par WebView ko load karo — url != startUrl check hata diya
     LaunchedEffect(startUrl) {
-        val currentWebView = webViewState.value
-        if (currentWebView != null && startUrl.isNotBlank() && currentWebView.url != startUrl) {
-            currentWebView.loadUrl(startUrl)
+        val wv = webViewState.value ?: return@LaunchedEffect
+        if (startUrl.isNotBlank() && startUrl != "about:blank") {
+            wv.loadUrl(startUrl)
         }
     }
 
@@ -104,14 +101,14 @@ fun SandboxBrowserScreen(
             )
 
             AndroidView(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 factory = { ctx ->
                     SandboxWebViewSession.get()?.also { existing ->
                         webViewState.value = existing
                         onReady(existing)
-                        if (startUrl.isNotBlank() && existing.url != startUrl) {
-                            existing.loadUrl(startUrl)
-                        }
+                        if (startUrl.isNotBlank()) existing.loadUrl(startUrl)
                     } ?: WebView(ctx).apply {
                         setBackgroundColor(
                             if (isDarkTheme) Color.parseColor("#FF0A0F14")
@@ -136,7 +133,10 @@ fun SandboxBrowserScreen(
                             }
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 onLoading(false)
-                                onNavigation(view?.canGoBack() == true, view?.canGoForward() == true)
+                                onNavigation(
+                                    view?.canGoBack() == true,
+                                    view?.canGoForward() == true
+                                )
                                 url?.let { if (it != "about:blank") onUrlChanged(it) }
                             }
                             override fun onRenderProcessGone(
