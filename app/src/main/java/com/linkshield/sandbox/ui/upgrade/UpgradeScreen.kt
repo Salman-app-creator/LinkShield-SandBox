@@ -283,7 +283,7 @@ private fun PaymentInformationCard(context: Context) {
                 context = context
             )
             Text(
-                "Secure your entire digital world for just Rs. 350 or 1.25 usdt only.",
+                "Secure your entire digital world for just Rs. 499 or 1.8 usdt only.",
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
