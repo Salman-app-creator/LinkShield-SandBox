@@ -16,8 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.api.SecurityApiService
-import com.linkshield.sandbox.ui.components.ShieldState
-import com.linkshield.sandbox.ui.components.TopHeader
+import com.linkshield.sandbox.ui.ShieldState
+import com.linkshield.sandbox.ui.TopHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
