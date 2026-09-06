@@ -78,9 +78,5 @@ dependencies {
     implementation 'io.coil-kt:coil-compose:2.5.0'
     implementation 'io.coil-kt:coil:2.5.0'
 
-    // YouTube extraction via yt-dlp
-    implementation 'io.github.junkfood02.youtubedl-android:library:0.17.2'
-    implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2'
-
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
 }
