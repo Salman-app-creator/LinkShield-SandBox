@@ -9,6 +9,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      SAFE_BROWSING_API_KEY: ${{ secrets.SAFE_BROWSING_API_KEY }}
+      URLHAUS_API_KEY: ${{ secrets.URLHAUS_API_KEY }}
+      THREATFOX_API_KEY: ${{ secrets.THREATFOX_API_KEY }}
+      OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
+      COBALT_BASE_URL: ${{ secrets.COBALT_BASE_URL }}
+      COBALT_API_KEY: ${{ secrets.COBALT_API_KEY }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -31,7 +39,7 @@ jobs:
           gradle --version
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace -PSAFE_BROWSING_API_KEY="${{ secrets.SAFE_BROWSING_API_KEY }}"
+        run: gradle assembleDebug --stacktrace -PSAFE_BROWSING_API_KEY="${{ secrets.SAFE_BROWSING_API_KEY }}" -PURLHAUS_API_KEY="${{ secrets.URLHAUS_API_KEY }}" -PTHREATFOX_API_KEY="${{ secrets.THREATFOX_API_KEY }}" -POTX_API_KEY="${{ secrets.OTX_API_KEY }}"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
