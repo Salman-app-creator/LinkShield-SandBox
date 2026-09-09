@@ -1,42 +1,3 @@
-package com.linkshield.sandbox.ui.browser
-
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.view.ViewGroup
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.webkit.CookieManager
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
-import com.linkshield.sandbox.api.SecurityApiService
-import com.linkshield.sandbox.ui.ShieldState
-import com.linkshield.sandbox.ui.TopHeader
-
-/**
- * SECURITY FIX (browser-security-fix branch):
- *
- * Bug: jab SecurityApiService se isError aata tha (Safe Browsing API key
- * missing / network down), yeh screen poori website load hone se ROK deti
- * thi aur full-screen "Security check unavailable" block page dikhati thi.
- * Is wajah se app on hote hi har website block — app unusable.
- *
- * Fix: security check ka result sirf TopHeader ke badge ko drive karta hai.
- * WebView page load KABHI security check ki wajah se block nahi hota:
- *   - isError  -> badge "⚠️ Unverified" (orange), page normally load hota hai
- *   - isMalicious -> badge "🚨 Dangerous!", page phir bhi load hota hai
- *     (user apni marzi se back kar sakta hai — warning, not a wall)
- *   - clean    -> badge "🛡️ Safe"
- *
- * Note: agar aapki branch ke purane version mein isError/isMalicious pe
- * `return`/block/`loadUrl("about:blank")` wala code hai, woh yahan se
- * REMOVE ho chuka hai — neeche LaunchedEffect sirf badge update karta hai.
- */
 @Composable
 fun SandboxBrowserScreen(
     generation: Int,
@@ -78,8 +39,6 @@ fun SandboxBrowserScreen(
      * LaunchedEffect automatically cancels the previous scan when
      * currentUrl changes, preventing an old URL's result from replacing
      * the new URL's result.
-     *
-     * FIX: yeh block page load ko KABHI control nahi karta — sirf badge.
      */
     LaunchedEffect(currentUrl) {
 
@@ -97,7 +56,6 @@ fun SandboxBrowserScreen(
 
         val result = securityService.checkUrl(url)
 
-        // SECURITY FIX: isError pe page block NAHI — sirf ERROR badge.
         shieldState = when {
             result.isError -> ShieldState.ERROR
             result.isMalicious -> ShieldState.DANGEROUS
@@ -107,7 +65,9 @@ fun SandboxBrowserScreen(
     }
 
     /*
-     * Load a newly requested URL.
+     * FIX: Load startUrl whenever it changes — including when returning
+     * from Grabber tab. Previously, if startUrl value didn't change,
+     * LaunchedEffect didn't fire and WebView loaded homepage instead.
      */
     LaunchedEffect(startUrl) {
         val webView = webViewState.value ?: return@LaunchedEffect
@@ -246,11 +206,6 @@ fun SandboxBrowserScreen(
                                         ?.scheme
                                         ?.lowercase()
 
-                                /*
-                                 * Only HTTP/HTTPS navigation is allowed.
-                                 * javascript:, file:, content:, intent:, etc.
-                                 * are not passed through the sandbox browser.
-                                 */
                                 return scheme != "http" &&
                                     scheme != "https"
                             }
