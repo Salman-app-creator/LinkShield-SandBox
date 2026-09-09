@@ -14,8 +14,17 @@ android {
         versionCode 12
         versionName "2.6.0"
 
+        // ── Security API Keys (Multi-Source Threat Detection) ──
         buildConfigField "String", "SAFE_BROWSING_API_KEY",
             "\"${project.findProperty('SAFE_BROWSING_API_KEY') ?: ''}\""
+        buildConfigField "String", "URLHAUS_API_KEY",
+            "\"${project.findProperty('URLHAUS_API_KEY') ?: ''}\""
+        buildConfigField "String", "THREATFOX_API_KEY",
+            "\"${project.findProperty('THREATFOX_API_KEY') ?: ''}\""
+        buildConfigField "String", "OTX_API_KEY",
+            "\"${project.findProperty('OTX_API_KEY') ?: ''}\""
+        
+        // ── Existing Keys (Unchanged) ──
         buildConfigField "String", "VIRUSTOTAL_API_KEY", '""'
         buildConfigField "String", "PHISHTANK_APP_KEY",  '""'
         buildConfigField "String", "COBALT_BASE_URL",    '"http://141.148.223.177:9001/"'
