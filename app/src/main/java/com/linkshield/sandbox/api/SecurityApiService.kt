@@ -2,12 +2,17 @@ package com.linkshield.sandbox.api
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 data class ThreatCheckResult(
     val checkedUrl: String,
@@ -28,15 +33,20 @@ data class ExpandedUrlResult(
 
 class SecurityApiService {
 
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+
     /**
      * SECURITY FIX (browser-security-fix branch):
-     *
+     * 
      * Pehle wala behavior: Safe Browsing API key missing / network error
      * hone par isError=true return hota tha, aur UI us error ko itna
      * seriously leti thi ke POORI WEBSITE load hi nahi hoti thi —
      * user ko "Security check unavailable" wali block screen mil ti thi
      * chahe internet theek ho.
-     *
+     * 
      * Naya behavior:
      *   - Remote check fail ho ya API key na ho  -> OFFLINE fallback
      *     (repo ka existing SecurityChecker engine, 100% local, no network).
@@ -81,25 +91,53 @@ class SecurityApiService {
             }
 
             // Google Safe Browsing (authoritative) — with OFFLINE fallback.
-            return@withContext try {
-                val remote = checkWithGoogleSafeBrowsing(cleanUrl)
-                if (remote.isError) {
-                    // Key missing, quota exhausted, ya network down —
-                    // offline engine se decide karo, browsing block NAHI.
-                    offlineFallback(cleanUrl)
-                } else {
-                    remote
-                }
-            } catch (e: Exception) {
-                offlineFallback(cleanUrl)
+            val googleResult = checkWithGoogleSafeBrowsing(cleanUrl)
+            if (googleResult.isError) {
+                return@withContext offlineFallback(cleanUrl)
             }
+            if (googleResult.isMalicious || googleResult.isSuspicious) {
+                return@withContext googleResult
+            }
+
+            // URLhaus Check
+            val urlhausResult = checkWithUrlhaus(cleanUrl)
+            if (urlhausResult.isMalicious || urlhausResult.isSuspicious) {
+                return@withContext urlhausResult
+            }
+            
+            // AlienVault OTX Check
+            val otxResult = checkWithAlienVaultOTX(cleanUrl)
+            if (otxResult.isMalicious || otxResult.isSuspicious) {
+                return@withContext otxResult
+            }
+
+            // ThreatFox Check
+            val threatfoxResult = checkWithThreatFox(cleanUrl)
+            if (threatfoxResult.isMalicious || threatfoxResult.isSuspicious) {
+                return@withContext threatfoxResult
+            }
+
+            // PhishStats Check
+            val phishStatsResult = checkWithPhishStats(cleanUrl)
+            if (phishStatsResult.isMalicious || phishStatsResult.isSuspicious) {
+                return@withContext phishStatsResult
+            }
+
+            // Tranco Rank Check
+            val trancoResult = checkWithTranco(cleanUrl)
+            if (trancoResult.isSuspicious) {
+                return@withContext trancoResult
+            }
+
+            // Final fallback: Offline engine
+            offlineFallback(cleanUrl)
         }
 
     /**
      * Fully offline decision engine. Yeh repo ke existing
      * [com.linkshield.sandbox.SecurityChecker] ko use karta hai:
      * score + warnings, koi network call nahi.
-     *
+     * 
      * isError = false by design — offline mode mein hum sirf warn karte
      * hain, page load nahi rokte (malicious hone pe bhi warning, block nahi).
      */
@@ -196,6 +234,9 @@ class SecurityApiService {
         }
     }
 
+    /**
+     * Google Safe Browsing API v4 — authoritative check.
+     */
     private fun checkWithGoogleSafeBrowsing(url: String): ThreatCheckResult {
         val apiKey = runCatching {
             Class.forName("com.linkshield.sandbox.BuildConfig")
@@ -205,9 +246,6 @@ class SecurityApiService {
         }.getOrNull()
 
         if (apiKey.isNullOrBlank() || apiKey == "null") {
-            // FIX: pehle yahan hard isError=true return hota tha jo poori
-            // site ko block kar deta tha. Ab caller offlineFallback() pe
-            // chala jata hai — key na ho to app phir bhi protect karta hai.
             return ThreatCheckResult(
                 checkedUrl = url,
                 isMalicious = false,
@@ -290,7 +328,7 @@ class SecurityApiService {
                     }
                 )
             }
-
+            
             connection.outputStream.use { output ->
                 output.write(
                     body.toString().toByteArray(Charsets.UTF_8)
@@ -358,6 +396,410 @@ class SecurityApiService {
             )
         } finally {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * URLhaus API — malware URL distribution tracking.
+     */
+    private fun checkWithUrlhaus(url: String): ThreatCheckResult {
+        val apiKey = runCatching {
+            Class.forName("com.linkshield.sandbox.BuildConfig")
+                .getField("URLHAUS_API_KEY")
+                .get(null)
+                ?.toString()
+        }.getOrNull()
+
+        if (apiKey.isNullOrBlank() || apiKey == "null") {
+            return ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "URLhaus API key not configured — skipped",
+                source = "URLhaus"
+            )
+        }
+
+        return try {
+            val jsonBody = JSONObject()
+                .put("url", url)
+                .toString()
+
+            val request = Request.Builder()
+                .url("https://urlhaus-api.abuse.ch/v1/url/")
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .header("Auth-Key", apiKey)
+                .header("Content-Type", "application/json")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "URLhaus API error (HTTP ${response.code}) — skipped",
+                        source = "URLhaus"
+                    )
+                }
+
+                val json = JSONObject(body)
+                val queryStatus = json.optString("query_status")
+
+                if (queryStatus == "ok" && json.optString("url_status") == "malicious") {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = true,
+                        isSuspicious = true,
+                        isError = false,
+                        threatType = "malware",
+                        message = "URLhaus identified this URL as malicious",
+                        source = "URLhaus"
+                    )
+                } else {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "No threat detected by URLhaus",
+                        source = "URLhaus"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "URLhaus check failed: ${e.message} — skipped",
+                source = "URLhaus"
+            )
+        }
+    }
+
+    /**
+     * AlienVault OTX API — community-driven threat intelligence.
+     */
+    private fun checkWithAlienVaultOTX(url: String): ThreatCheckResult {
+        val apiKey = runCatching {
+            Class.forName("com.linkshield.sandbox.BuildConfig")
+                .getField("OTX_API_KEY")
+                .get(null)
+                ?.toString()
+        }.getOrNull()
+
+        if (apiKey.isNullOrBlank() || apiKey == "null") {
+            return ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "AlienVault OTX API key not configured — skipped",
+                source = "AlienVault OTX"
+            )
+        }
+
+        return try {
+            val host = URI(url).host
+                ?: return ThreatCheckResult(
+                    checkedUrl = url,
+                    isMalicious = false,
+                    isSuspicious = false,
+                    isError = false,
+                    message = "Could not extract host — skipped",
+                    source = "AlienVault OTX"
+                )
+
+            val request = Request.Builder()
+                .url("https://otx.alienvault.com/api/v1/indicators/domain/$host/general")
+                .header("X-OTX-API-KEY", apiKey)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "AlienVault OTX API error (HTTP ${response.code}) — skipped",
+                        source = "AlienVault OTX"
+                    )
+                }
+
+                val json = JSONObject(body)
+                val pulses = json.optJSONArray("pulses")
+                val pulseCount = pulses?.length() ?: 0
+
+                if (pulseCount > 0) {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = true,
+                        isSuspicious = true,
+                        isError = false,
+                        threatType = "community-threat",
+                        message = "AlienVault OTX found $pulseCount threat pulses for this domain",
+                        source = "AlienVault OTX"
+                    )
+                } else {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "No threat detected by AlienVault OTX",
+                        source = "AlienVault OTX"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "AlienVault OTX check failed: ${e.message} — skipped",
+                source = "AlienVault OTX"
+            )
+        }
+    }
+
+    /**
+     * ThreatFox API — IOC sharing.
+     */
+    private fun checkWithThreatFox(url: String): ThreatCheckResult {
+        val apiKey = runCatching {
+            Class.forName("com.linkshield.sandbox.BuildConfig")
+                .getField("THREATFOX_API_KEY")
+                .get(null)
+                ?.toString()
+        }.getOrNull()
+
+        if (apiKey.isNullOrBlank() || apiKey == "null") {
+            return ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "ThreatFox API key not configured — skipped",
+                source = "ThreatFox"
+            )
+        }
+
+        return try {
+            val host = URI(url).host
+                ?: return ThreatCheckResult(
+                    checkedUrl = url,
+                    isMalicious = false,
+                    isSuspicious = false,
+                    isError = false,
+                    message = "Could not extract host — skipped",
+                    source = "ThreatFox"
+                )
+
+            val jsonBody = JSONObject()
+                .put("query", "search_ioc")
+                .put("search_term", host)
+                .put("exact_match", true)
+                .toString()
+
+            val request = Request.Builder()
+                .url("https://threatfox-api.abuse.ch/api/v1/")
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .header("Auth-Key", apiKey)
+                .header("Content-Type", "application/json")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "ThreatFox API error (HTTP ${response.code}) — skipped",
+                        source = "ThreatFox"
+                    )
+                }
+
+                val json = JSONObject(body)
+                val queryStatus = json.optString("query_status")
+
+                if (queryStatus == "ok" && json.optInt("data_count", 0) > 0) {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = true,
+                        isSuspicious = true,
+                        isError = false,
+                        threatType = "ioc",
+                        message = "ThreatFox found this domain in IOC database",
+                        source = "ThreatFox"
+                    )
+                } else {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "No threat detected by ThreatFox",
+                        source = "ThreatFox"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "ThreatFox check failed: ${e.message} — skipped",
+                source = "ThreatFox"
+            )
+        }
+    }
+    
+    /**
+     * PhishStats API — phishing domain detection.
+     */
+    private fun checkWithPhishStats(url: String): ThreatCheckResult {
+        return try {
+            val host = URI(url).host
+                ?: return ThreatCheckResult(
+                    checkedUrl = url,
+                    isMalicious = false,
+                    isSuspicious = false,
+                    isError = false,
+                    message = "Could not extract host — skipped",
+                    source = "PhishStats"
+                )
+
+            val request = Request.Builder()
+                .url("https://api.phishstats.info/api/search?domain=$host")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "PhishStats API error (HTTP ${response.code}) — skipped",
+                        source = "PhishStats"
+                    )
+                }
+
+                val json = JSONObject(body)
+                val resultCount = json.optInt("num_results", 0)
+
+                if (resultCount > 0) {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = true,
+                        isSuspicious = true,
+                        isError = false,
+                        threatType = "phishing",
+                        message = "PhishStats found this domain in phishing database",
+                        source = "PhishStats"
+                    )
+                } else {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "No threat detected by PhishStats",
+                        source = "PhishStats"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "PhishStats check failed: ${e.message} — skipped",
+                source = "PhishStats"
+            )
+        }
+    }
+
+    /**
+     * Tranco Rank Check — low rank = potentially suspicious.
+     */
+    private fun checkWithTranco(url: String): ThreatCheckResult {
+        return try {
+            val host = URI(url).host
+                ?: return ThreatCheckResult(
+                    checkedUrl = url,
+                    isMalicious = false,
+                    isSuspicious = false,
+                    isError = false,
+                    message = "Could not extract host — skipped",
+                    source = "Tranco"
+                )
+
+            val request = Request.Builder()
+                .url("https://siterank.redirect2.me/api/rank.json?domain=$host")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "Tranco API error (HTTP ${response.code}) — skipped",
+                        source = "Tranco"
+                    )
+                }
+
+                val json = JSONObject(body)
+                val rank = json.optInt("rank", Int.MAX_VALUE)
+
+                if (rank > 100000) {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = true,
+                        isError = false,
+                        message = "Tranco rank is low (potential suspicious site)",
+                        source = "Tranco"
+                    )
+                } else {
+                    ThreatCheckResult(
+                        checkedUrl = url,
+                        isMalicious = false,
+                        isSuspicious = false,
+                        isError = false,
+                        message = "Tranco rank is high (trusted site)",
+                        source = "Tranco"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            ThreatCheckResult(
+                checkedUrl = url,
+                isMalicious = false,
+                isSuspicious = false,
+                isError = false,
+                message = "Tranco check failed: ${e.message} — skipped",
+                source = "Tranco"
+            )
         }
     }
 
