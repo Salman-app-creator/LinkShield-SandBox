@@ -7,6 +7,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.CookieManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -179,13 +180,27 @@ fun SandboxBrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
 
+                        // ── Security Hardening ──
                         settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.databaseEnabled = true
-                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.domStorageEnabled = false  // No localStorage persistence
+                        settings.databaseEnabled = false    // No WebSQL persistence
+                        settings.mediaPlaybackRequiresUserGesture = true
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
                         settings.setSupportMultipleWindows(false)
+
+                        // ── Block file/content access ──
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.allowFileAccessFromFileURLs = false
+                        settings.allowUniversalAccessFromFileURLs = false
+
+                        // ── Mixed Content Blocking ──
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+                        // ── Cookies ──
+                        CookieManager.getInstance().setAcceptCookie(false)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
 
                         webViewClient = object : WebViewClient() {
 
