@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'incoming/*.zip'
+
   workflow_dispatch:
     inputs:
       zip_path:
@@ -48,28 +49,41 @@ jobs:
         shell: bash
         run: |
           set -e
+
           rm -rf _zip_extract
           mkdir -p _zip_extract
+
           unzip -q "$ZIP" -d _zip_extract
+
           echo "Extracted contents:"
           find _zip_extract -type f | sort
 
-      - name: Detect and strip wrapper folder
+      - name: Detect ZIP structure
         shell: bash
         run: |
           set -e
 
-          # Agar zip mein ek wrapper folder hai (jaise LinkShield-SandBox-main/)
-          # to uske andar ki files use karo
-          ITEMS=$(find _zip_extract -mindepth 1 -maxdepth 1 | wc -l)
-          FIRST=$(find _zip_extract -mindepth 1 -maxdepth 1 | head -1)
+          # IMPORTANT:
+          # If ZIP contains app/ at the top level,
+          # keep app/ because repo structure is app/src/...
+          if [ -d "_zip_extract/app" ]; then
 
-          if [ "$ITEMS" -eq 1 ] && [ -d "$FIRST" ]; then
-            echo "Wrapper folder detected: $FIRST"
-            echo "MERGE_ROOT=$FIRST" >> "$GITHUB_ENV"
-          else
-            echo "No wrapper folder — using zip root directly"
+            echo "Android app folder detected at ZIP root."
             echo "MERGE_ROOT=_zip_extract" >> "$GITHUB_ENV"
+
+          else
+
+            ITEMS=$(find _zip_extract -mindepth 1 -maxdepth 1 | wc -l)
+            FIRST=$(find _zip_extract -mindepth 1 -maxdepth 1 | head -1)
+
+            if [ "$ITEMS" -eq 1 ] && [ -d "$FIRST" ]; then
+              echo "Wrapper folder detected: $FIRST"
+              echo "MERGE_ROOT=$FIRST" >> "$GITHUB_ENV"
+            else
+              echo "No wrapper folder detected."
+              echo "MERGE_ROOT=_zip_extract" >> "$GITHUB_ENV"
+            fi
+
           fi
 
       - name: Merge files into repo
@@ -79,8 +93,6 @@ jobs:
 
           echo "Merging from: $MERGE_ROOT"
 
-          # Sirf zip ki files copy karo repo mein — baaki repo untouched rahe
-          # .git, .github, incoming folders ko skip karo
           rsync -av \
             --exclude '.git/' \
             --exclude '.github/' \
@@ -89,7 +101,8 @@ jobs:
             --exclude '*.zip' \
             "$MERGE_ROOT/" ./
 
-          echo "Merge complete"
+          echo "Merge complete."
+
           echo "Changed files:"
           git diff --name-only || true
 
@@ -104,6 +117,7 @@ jobs:
         shell: bash
         run: |
           set -e
+
           ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
@@ -124,7 +138,9 @@ jobs:
         shell: bash
         run: |
           set -e
+
           rm -f "$ZIP"
+
           echo "Deleted: $ZIP"
 
       - name: Commit changes
@@ -137,12 +153,19 @@ jobs:
 
           git add -A
 
+          # Do not commit generated Gradle build files.
+          git reset --quiet -- app/build 2>/dev/null || true
+
           if git diff --cached --quiet; then
-            echo "No changes to commit"
+            echo "No changes to commit."
             exit 0
           fi
 
           git commit -m "chore: merge files from ZIP import"
-          git push origin HEAD:main
 
-          echo "Changes committed and pushed"
+          # IMPORTANT:
+          # Push back to the branch that started this workflow.
+          # This prevents accidental pushes to main.
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          echo "Changes committed and pushed to ${GITHUB_REF_NAME}"
