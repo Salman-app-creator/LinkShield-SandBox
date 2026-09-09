@@ -216,13 +216,22 @@ fun UnblockShieldScreen(
                         canGoForward = canForward,
                         onBack = { webView?.goBack() },
                         onForward = { webView?.goForward() },
-                        onReload = { webView?.reload() },
+                        onReload = {
+                            val current = webView?.url.orEmpty()
+                            if (current.isNotBlank()) {
+                                browserUrl = current
+                                urlBarText = current
+                            }
+                        },
                         onNavigate = {
                             val target = normalizeUrl(urlBarText)
                             if (target.isNotBlank()) {
+                                /*
+                                 * SandboxBrowserScreen performs the security
+                                 * preflight before calling WebView.loadUrl().
+                                 */
                                 browserUrl = target
                                 urlBarText = target
-                                webView?.loadUrl(target)
                             }
                         },
                         isLoading = isLoading,

@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <!-- HTTPS is the default for the entire application. -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <certificates src="system"/>
+            <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <!--
+        Legacy Cobalt/Grabber endpoint currently used by the existing
+        Grabber implementation. This exception keeps that working path
+        unchanged while preventing arbitrary HTTP traffic elsewhere.
+    -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">141.148.223.177</domain>
         <domain includeSubdomains="true">localhost</domain>

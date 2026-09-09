@@ -16,6 +16,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.api.SecurityApiService
 import com.linkshield.sandbox.ui.ShieldState
 import com.linkshield.sandbox.ui.TopHeader
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 @Composable
 fun SandboxBrowserScreen(
@@ -46,27 +48,21 @@ fun SandboxBrowserScreen(
 ) {
     val webViewState = remember { mutableStateOf<WebView?>(null) }
     val securityService = remember { SecurityApiService() }
+    val scope = rememberCoroutineScope()
+    var navigationSecurityJob by remember { mutableStateOf<Job?>(null) }
 
     var shieldState by remember {
         mutableStateOf(ShieldState.CHECKING)
     }
 
     /*
-     * IMPORTANT:
-     * currentUrl comes from WebView navigation.
-     *
-     * LaunchedEffect automatically cancels the previous scan when
-     * currentUrl changes, preventing an old URL's result from replacing
-     * the new URL's result.
+     * Status-only verification for URLs that arrive from WebView history or
+     * other navigation paths. Actual new loads are gated by safeLoadUrl().
      */
     LaunchedEffect(currentUrl) {
-
         val url = currentUrl.trim()
 
-        if (
-            url.isBlank() ||
-            url == "about:blank"
-        ) {
+        if (url.isBlank() || url == "about:blank") {
             shieldState = ShieldState.CHECKING
             return@LaunchedEffect
         }
@@ -84,8 +80,49 @@ fun SandboxBrowserScreen(
     }
 
     /*
-     * Load a newly requested URL.
+     * Every app-requested navigation passes through the security service
+     * before WebView.loadUrl(). A malicious, suspicious, or unverifiable URL
+     * is never loaded.
      */
+    fun safeLoadUrl(webView: WebView, rawUrl: String) {
+        val requested = rawUrl.trim()
+        if (requested.isBlank() || requested == "about:blank") return
+
+        navigationSecurityJob?.cancel()
+        navigationSecurityJob = scope.launch {
+            shieldState = ShieldState.CHECKING
+            onLoading(true)
+
+            val result = securityService.checkUrl(requested)
+
+            when {
+                result.isMalicious -> {
+                    shieldState = ShieldState.DANGEROUS
+                    onLoading(false)
+                }
+
+                result.isSuspicious -> {
+                    shieldState = ShieldState.SUSPICIOUS
+                    onLoading(false)
+                }
+
+                result.isError -> {
+                    // Offline/API failure is NEVER represented as Safe.
+                    shieldState = ShieldState.ERROR
+                    onLoading(false)
+                }
+
+                else -> {
+                    shieldState = ShieldState.SAFE
+                    val verifiedUrl = result.checkedUrl
+                    onUrlChanged(verifiedUrl)
+                    onUrlChange(verifiedUrl)
+                    webView.loadUrl(verifiedUrl)
+                }
+            }
+        }
+    }
+
     LaunchedEffect(startUrl) {
         val webView = webViewState.value ?: return@LaunchedEffect
 
@@ -94,16 +131,14 @@ fun SandboxBrowserScreen(
             startUrl != "about:blank" &&
             webView.url != startUrl
         ) {
-            webView.loadUrl(startUrl)
+            safeLoadUrl(webView, startUrl)
         }
     }
 
     key(generation) {
-
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-
             TopHeader(
                 currentUrl = currentUrl,
                 onUrlChange = onUrlChange,
@@ -125,13 +160,9 @@ fun SandboxBrowserScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-
                 factory = { ctx ->
-
                     SandboxWebViewSession.get()?.also { existing ->
-
                         webViewState.value = existing
-
                         onReady(existing)
 
                         if (
@@ -139,11 +170,9 @@ fun SandboxBrowserScreen(
                             startUrl != "about:blank" &&
                             existing.url != startUrl
                         ) {
-                            existing.loadUrl(startUrl)
+                            safeLoadUrl(existing, startUrl)
                         }
-
                     } ?: WebView(ctx).apply {
-
                         setBackgroundColor(
                             if (isDarkTheme) {
                                 Color.parseColor("#FF0A0F14")
@@ -165,6 +194,15 @@ fun SandboxBrowserScreen(
                         settings.loadWithOverviewMode = true
                         settings.setSupportMultipleWindows(false)
 
+                        /*
+                         * Do not allow file/content URLs to participate in the
+                         * sandbox. WebView remains HTTP/HTTPS only.
+                         */
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.allowFileAccessFromFileURLs = false
+                        settings.allowUniversalAccessFromFileURLs = false
+
                         webViewClient = object : WebViewClient() {
 
                             override fun onPageStarted(
@@ -172,6 +210,7 @@ fun SandboxBrowserScreen(
                                 url: String?,
                                 favicon: Bitmap?
                             ) {
+                                shieldState = ShieldState.CHECKING
                                 onLoading(true)
 
                                 url?.let {
@@ -203,26 +242,51 @@ fun SandboxBrowserScreen(
                                 view: WebView?,
                                 request: WebResourceRequest?
                             ): Boolean {
+                                val target = request?.url?.toString().orEmpty()
+                                val scheme = request?.url?.scheme?.lowercase()
 
-                                val scheme =
-                                    request?.url
-                                        ?.scheme
-                                        ?.lowercase()
+                                if (scheme != "http" && scheme != "https") {
+                                    return true
+                                }
+
+                                if (view == null || target.isBlank()) {
+                                    return true
+                                }
 
                                 /*
-                                 * Only HTTP/HTTPS navigation is allowed.
-                                 * javascript:, file:, content:, intent:, etc.
-                                 * are not passed through the sandbox browser.
+                                 * Returning true prevents WebView from loading
+                                 * first. safeLoadUrl performs the threat check
+                                 * and only then calls loadUrl().
                                  */
-                                return scheme != "http" &&
-                                    scheme != "https"
+                                safeLoadUrl(view, target)
+                                return true
+                            }
+
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                url: String?
+                            ): Boolean {
+                                if (url.isNullOrBlank()) return true
+
+                                val scheme =
+                                    runCatching {
+                                        java.net.URI(url).scheme?.lowercase()
+                                    }.getOrNull()
+
+                                if (scheme != "http" && scheme != "https") {
+                                    return true
+                                }
+
+                                if (view == null) return true
+
+                                safeLoadUrl(view, url)
+                                return true
                             }
 
                             override fun onRenderProcessGone(
                                 view: WebView?,
                                 detail: android.webkit.RenderProcessGoneDetail?
                             ): Boolean {
-
                                 onLoading(false)
 
                                 runCatching {
@@ -231,7 +295,6 @@ fun SandboxBrowserScreen(
 
                                 webViewState.value = null
                                 SandboxWebViewSession.destroy()
-
                                 onRendererGone()
 
                                 return true
@@ -241,20 +304,17 @@ fun SandboxBrowserScreen(
                         webChromeClient = WebChromeClient()
 
                         webViewState.value = this
-
                         SandboxWebViewSession.attach(this)
-
                         onReady(this)
 
                         if (
                             startUrl.isNotBlank() &&
                             startUrl != "about:blank"
                         ) {
-                            loadUrl(startUrl)
+                            safeLoadUrl(this, startUrl)
                         }
                     }
                 },
-
                 update = {
                     webViewState.value = it
                     onReady(it)
