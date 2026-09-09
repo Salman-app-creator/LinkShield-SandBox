@@ -2,6 +2,7 @@ package com.linkshield.sandbox.ui.browser
 
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.CookieManager
 
 /**
  * Owns the single WebView used by the sandbox browser session.
@@ -59,17 +60,31 @@ object SandboxWebViewSession {
         get()?.reload()
     }
 
+    /**
+     * Destroy session — clear all cookies, cache, and history before destroying.
+     * Ensures NO data persistence across sessions.
+     */
     @Synchronized
     fun destroy() {
         val view = webView ?: return
         webView = null
 
         runCatching {
+            // ── Clear all session data ──
+            view.clearCache(true)   // Clear HTTP cache
+            view.clearHistory()     // Clear navigation history
+            view.clearFormData()    // Clear form data
+
+            // ── Clear cookies ──
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().removeSessionCookies(null)
+            CookieManager.getInstance().flush()
+
+            // ── Destroy WebView ──
             view.stopLoading()
             view.webChromeClient = null
             view.webViewClient = WebViewClient()
             view.loadUrl("about:blank")
-            view.clearHistory()
             view.removeAllViews()
             view.destroy()
         }
