@@ -11,9 +11,9 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 8,
-      "versionName": "2.3.2",
-      "outputFile": "LinkShield-v2.3.2.apk"
+      "versionCode": 12,
+      "versionName": "2.6.0",
+      "outputFile": "LinkShield-v2.6.0.apk"
     }
   ],
   "elementType": "File",

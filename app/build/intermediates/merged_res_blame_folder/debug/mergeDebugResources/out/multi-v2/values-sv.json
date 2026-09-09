@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.linkshield.sandbox.app-mergeDebugResources-63:/values-sv/values-sv.xml",
+            "outputFile": "com.linkshield.sandbox.app-mergeDebugResources-62:/values-sv/values-sv.xml",
             "map": [
                 {
                     "source": "/home/runner/.gradle/caches/9.7.1/transforms/72f2150ecb719010eaf8545fa9a8a686/transformed/jetified-foundation-release/res/values-sv/values-sv.xml",
