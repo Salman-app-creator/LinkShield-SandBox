@@ -107,15 +107,32 @@ class SandboxWebViewClient(
         request: WebResourceRequest
     ): WebResourceResponse? {
         val url = request.url.toString()
+        
+        // ── Block non-http/https schemes ──
+        val scheme = request.url?.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") {
+            return WebResourceResponse("text/plain", "utf-8", 200, "OK",
+                emptyMap(), ByteArrayInputStream(ByteArray(0)))
+        }
+        
+        // ── Ad/Tracker Blocking ──
         if (isAdOrTracker(url)) {
             return WebResourceResponse("text/plain", "utf-8", 200, "OK",
                 emptyMap(), ByteArrayInputStream(ByteArray(0)))
         }
+        
         inspectResource(url, request.requestHeaders["Content-Type"], view.url.orEmpty())
         return super.shouldInterceptRequest(view, request)
     }
 
     override fun shouldInterceptRequest(view: WebView, url: String): WebResourceResponse? {
+        // ── Block non-http/https schemes ──
+        val scheme = url.substringBefore("://").lowercase()
+        if (scheme != "http" && scheme != "https") {
+            return WebResourceResponse("text/plain", "utf-8", 200, "OK",
+                emptyMap(), ByteArrayInputStream(ByteArray(0)))
+        }
+        
         if (isAdOrTracker(url)) {
             return WebResourceResponse("text/plain", "utf-8", 200, "OK",
                 emptyMap(), ByteArrayInputStream(ByteArray(0)))
