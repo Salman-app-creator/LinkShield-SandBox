@@ -5,9 +5,8 @@ import android.webkit.WebViewClient
 
 /**
  * Owns the single WebView used by the sandbox browser session.
- *
- * The session survives Compose/navigation changes and is destroyed
- * only when explicitly requested.
+ * The stored instance is reused across Compose/navigation changes, but a
+ * destroyed or unusable instance is never returned to the UI.
  */
 object SandboxWebViewSession {
 
@@ -15,79 +14,72 @@ object SandboxWebViewSession {
 
     @Synchronized
     fun attach(view: WebView) {
-        if (webView === view) {
-            return
-        }
+        if (webView === view) return
 
         webView?.let { old ->
-            try {
-                old.stopLoading()
-            } catch (_: Exception) {
-            }
+            runCatching { old.stopLoading() }
         }
-
         webView = view
     }
 
     @Synchronized
     fun get(): WebView? {
-        return webView
+        val view = webView ?: return null
+        if (isUsable(view)) return view
+
+        webView = null
+        runCatching { view.destroy() }
+        return null
     }
 
     @Synchronized
-    fun hasSession(): Boolean {
-        return webView != null
-    }
+    fun hasSession(): Boolean = get() != null
 
-    fun currentUrl(): String {
-        return webView?.url.orEmpty()
-    }
+    @Synchronized
+    fun currentUrl(): String = get()?.url.orEmpty()
 
+    @Synchronized
     fun goBack(): Boolean {
-        val view = webView ?: return false
-
-        if (!view.canGoBack()) {
-            return false
-        }
-
+        val view = get() ?: return false
+        if (!view.canGoBack()) return false
         view.goBack()
         return true
     }
 
+    @Synchronized
     fun goForward(): Boolean {
-        val view = webView ?: return false
-
-        if (!view.canGoForward()) {
-            return false
-        }
-
+        val view = get() ?: return false
+        if (!view.canGoForward()) return false
         view.goForward()
         return true
     }
-        fun reload() {
-        webView?.reload()
+
+    @Synchronized
+    fun reload() {
+        get()?.reload()
     }
 
     @Synchronized
     fun destroy() {
         val view = webView ?: return
-
         webView = null
 
-        try {
+        runCatching {
             view.stopLoading()
-
             view.webChromeClient = null
-
-            // WebViewClient is non-null in the Kotlin API.
-            // Never assign null here.
             view.webViewClient = WebViewClient()
-
             view.loadUrl("about:blank")
             view.clearHistory()
             view.removeAllViews()
             view.destroy()
-        } catch (_: Exception) {
         }
+    }
+
+    private fun isUsable(view: WebView): Boolean {
+        return runCatching {
+            // Accessing settings is a useful destroyed-WebView guard.
+            view.settings
+            true
+        }.getOrDefault(false)
     }
 }
