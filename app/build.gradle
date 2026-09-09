@@ -15,20 +15,12 @@ android {
         versionName "2.6.0"
 
         // ── Security API Keys (Multi-Source Threat Detection) ──
-        def safeBrowsingKey = System.getenv("SAFE_BROWSING_API_KEY") ?: ""
-        def urlhausKey = System.getenv("URLHAUS_API_KEY") ?: ""
-        def threatfoxKey = System.getenv("THREATFOX_API_KEY") ?: ""
-        def otxKey = System.getenv("OTX_API_KEY") ?: ""
-        def cobaltBaseUrl = System.getenv("COBALT_BASE_URL") ?: "http://141.148.223.177:9001/"
-        def cobaltApiKey = System.getenv("COBALT_API_KEY") ?: ""
-
-        // Safely escape strings for BuildConfig
-        safeBrowsingKey = safeBrowsingKey.replace('"', '\\"')
-        urlhausKey = urlhausKey.replace('"', '\\"')
-        threatfoxKey = threatfoxKey.replace('"', '\\"')
-        otxKey = otxKey.replace('"', '\\"')
-        cobaltBaseUrl = cobaltBaseUrl.replace('"', '\\"')
-        cobaltApiKey = cobaltApiKey.replace('"', '\\"')
+        def safeBrowsingKey = (System.getenv("SAFE_BROWSING_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
+        def urlhausKey = (System.getenv("URLHAUS_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
+        def threatfoxKey = (System.getenv("THREATFOX_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
+        def otxKey = (System.getenv("OTX_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
+        def cobaltBaseUrl = (System.getenv("COBALT_BASE_URL") ?: "http://141.148.223.177:9001/").replace('"', '\\"').replace('\n', '').replace('\r', '')
+        def cobaltApiKey = (System.getenv("COBALT_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
 
         buildConfigField "String", "SAFE_BROWSING_API_KEY", "\"${safeBrowsingKey}\""
         buildConfigField "String", "URLHAUS_API_KEY", "\"${urlhausKey}\""
