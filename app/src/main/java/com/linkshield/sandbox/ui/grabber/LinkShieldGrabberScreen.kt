@@ -67,7 +67,7 @@ fun LinkShieldGrabberScreen(
     var audioOnly          by rememberSaveable { mutableStateOf(false) }
     var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
 
-    val resolutions   = listOf("360p", "480p", "720p", "1080p", "4K")
+    val resolutions   = listOf("360p", "480p", "720p", "1080p")
     val dnsManager    = remember { DnsManager(context.applicationContext) }
     val cobaltService = remember { CobaltApiService(context.applicationContext) }
 
