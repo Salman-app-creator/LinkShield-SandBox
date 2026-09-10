@@ -23,12 +23,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.linkshield.sandbox.R
@@ -62,58 +65,55 @@ fun TopHeader(
     isWireGuardEnabled: Boolean = false,
     onWireGuardToggle: () -> Unit = {}
 ) {
-    val keyboardController =
-        LocalSoftwareKeyboardController.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
+    /*
+     * ── FIX (Bug 2): TextFieldValue use karo (String ke bajaye) ──
+     * 
+     * String selection track nahi karta — is wajah se paste karne par
+     * naya text purane text ke saath append ho jata tha (mixed URL).
+     * 
+     * TextFieldValue selection track karta hai, jisse hum focus par
+     * poora text select kar sakte hain (browser ki tarah).
+     */
     var editingUrl by remember {
-        mutableStateOf(currentUrl)
+        mutableStateOf(TextFieldValue(currentUrl))
     }
-
-    var isEditing by remember {
-        mutableStateOf(false)
-    }
+    var isEditing by remember { mutableStateOf(false) }
+    var wasFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentUrl) {
         if (!isEditing) {
-            editingUrl = currentUrl
+            editingUrl = TextFieldValue(currentUrl)
         }
     }
 
     val shieldColor by animateColorAsState(
         targetValue = when (shieldState) {
-            ShieldState.SAFE ->
-                Color(0xFF4CAF50)
-
-            ShieldState.SUSPICIOUS ->
-                Color(0xFFFFC107)
-
-            ShieldState.DANGEROUS ->
-                Color(0xFFF44336)
-
-            ShieldState.CHECKING ->
-                Color(0xFF9E9E9E)
-
-            ShieldState.ERROR ->
-                Color(0xFFFF9800)
+            ShieldState.SAFE       -> Color(0xFF4CAF50)
+            ShieldState.SUSPICIOUS -> Color(0xFFFFC107)
+            ShieldState.DANGEROUS  -> Color(0xFFF44336)
+            ShieldState.CHECKING   -> Color(0xFF9E9E9E)
+            ShieldState.ERROR      -> Color(0xFFFF9800)
         },
         animationSpec = tween(350),
         label = "shieldColor"
     )
 
     val shieldEmoji = when (shieldState) {
-        ShieldState.SAFE -> "🛡️"
+        ShieldState.SAFE       -> "🛡️"
         ShieldState.SUSPICIOUS -> "⚠️"
-        ShieldState.DANGEROUS -> "🚨"
-        ShieldState.CHECKING -> "🔍"
-        ShieldState.ERROR -> "⚠️"
+        ShieldState.DANGEROUS  -> "🚨"
+        ShieldState.CHECKING   -> "🔍"
+        ShieldState.ERROR      -> "⚠️"
     }
 
     val shieldLabel = when (shieldState) {
-        ShieldState.SAFE -> "Safe"
+        ShieldState.SAFE       -> "Safe"
         ShieldState.SUSPICIOUS -> "Suspicious"
-        ShieldState.DANGEROUS -> "Dangerous!"
-        ShieldState.CHECKING -> "Checking..."
-        ShieldState.ERROR -> "Unverified"
+        ShieldState.DANGEROUS  -> "Dangerous!"
+        ShieldState.CHECKING   -> "Checking..."
+        ShieldState.ERROR      -> "Unverified"
     }
 
     Row(
@@ -121,17 +121,12 @@ fun TopHeader(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
-            .padding(
-                horizontal = 8.dp,
-                vertical = 6.dp
-            ),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
 
         Image(
-            painter = painterResource(
-                id = R.drawable.ic_app_logo
-            ),
+            painter = painterResource(id = R.drawable.ic_app_logo),
             contentDescription = "App Logo",
             modifier = Modifier
                 .size(56.dp)
@@ -148,8 +143,7 @@ fun TopHeader(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement =
-                    Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
 
                 Surface(
@@ -161,86 +155,52 @@ fun TopHeader(
                         shape = RoundedCornerShape(14.dp)
                     )
                 ) {
-
                     Row(
-                        modifier = Modifier.padding(
-                            horizontal = 8.dp,
-                            vertical = 2.dp
-                        ),
-                        verticalAlignment =
-                            Alignment.CenterVertically,
-                        horizontalArrangement =
-                            Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-
-                        Text(
-                            text = shieldEmoji,
-                            fontSize = 11.sp
-                        )
-
-                        Text(
-                            text = shieldLabel,
-                            fontSize = 10.sp,
-                            color = shieldColor
-                        )
+                        Text(text = shieldEmoji, fontSize = 11.sp)
+                        Text(text = shieldLabel, fontSize = 10.sp, color = shieldColor)
                     }
                 }
 
                 Row(
-                    verticalAlignment =
-                        Alignment.CenterVertically,
-                    horizontalArrangement =
-                        Arrangement.spacedBy(2.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-
                     Text("☀️", fontSize = 10.sp)
-
                     Switch(
                         checked = isDarkTheme,
                         onCheckedChange = onThemeToggle,
                         modifier = Modifier.scale(0.6f)
                     )
-
                     Text("🌙", fontSize = 10.sp)
                 }
 
                 if (isProUser) {
-
                     Surface(
                         color = Color(0xFFFFD700),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-
                         Text(
                             "👑 PRO",
                             color = Color.Black,
-                            style =
-                                MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall,
                             fontSize = 10.sp,
-                            modifier = Modifier.padding(
-                                horizontal = 6.dp,
-                                vertical = 2.dp
-                            )
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
-
                 } else {
-
                     Surface(
-                        color =
-                            MaterialTheme.colorScheme.primaryContainer,
+                        color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(10.dp)
                     ) {
-
                         Text(
                             "⏳ Trial: ${trialDaysLeft}d",
-                            style =
-                                MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall,
                             fontSize = 10.sp,
-                            modifier = Modifier.padding(
-                                horizontal = 6.dp,
-                                vertical = 2.dp
-                            )
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -248,10 +208,8 @@ fun TopHeader(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment =
-                    Alignment.CenterVertically,
-                horizontalArrangement =
-                    Arrangement.spacedBy(4.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
 
                 IconButton(
@@ -259,16 +217,14 @@ fun TopHeader(
                     enabled = canGoBack,
                     modifier = Modifier.size(32.dp)
                 ) {
-
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         "Back",
                         modifier = Modifier.size(18.dp),
-                        tint =
-                            if (canGoBack)
-                                MaterialTheme.colorScheme.onSurface
-                            else
-                                Color.Gray.copy(alpha = 0.4f)
+                        tint = if (canGoBack)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            Color.Gray.copy(alpha = 0.4f)
                     )
                 }
 
@@ -277,16 +233,14 @@ fun TopHeader(
                     enabled = canGoForward,
                     modifier = Modifier.size(32.dp)
                 ) {
-
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
                         "Forward",
                         modifier = Modifier.size(18.dp),
-                        tint =
-                            if (canGoForward)
-                                MaterialTheme.colorScheme.onSurface
-                            else
-                                Color.Gray.copy(alpha = 0.4f)
+                        tint = if (canGoForward)
+                            MaterialTheme.colorScheme.onSurface
+                        else
+                            Color.Gray.copy(alpha = 0.4f)
                     )
                 }
 
@@ -294,7 +248,6 @@ fun TopHeader(
                     onClick = onReload,
                     modifier = Modifier.size(32.dp)
                 ) {
-
                     Icon(
                         Icons.Default.Refresh,
                         "Reload",
@@ -302,43 +255,18 @@ fun TopHeader(
                     )
                 }
 
-                val textColor =
-                    if (isDarkTheme)
-                        Color.White
-                    else
-                        Color(0xFF1E293B)
-
-                val barBgColor =
-                    if (isDarkTheme)
-                        Color(0xFF1E293B)
-                    else
-                        Color(0xFFF1F5F9)
-
-                val borderColor =
-                    if (isDarkTheme)
-                        Color(0xFF334155)
-                    else
-                        Color(0xFFCBD5E1)
+                val textColor = if (isDarkTheme) Color.White else Color(0xFF1E293B)
+                val barBgColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                val borderColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
 
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .height(34.dp)
-                        .background(
-                            barBgColor,
-                            RoundedCornerShape(17.dp)
-                        )
-                        .border(
-                            1.dp,
-                            borderColor,
-                            RoundedCornerShape(17.dp)
-                        )
-                        .padding(
-                            start = 10.dp,
-                            end = 4.dp
-                        ),
-                    verticalAlignment =
-                        Alignment.CenterVertically
+                        .background(barBgColor, RoundedCornerShape(17.dp))
+                        .border(1.dp, borderColor, RoundedCornerShape(17.dp))
+                        .padding(start = 10.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
 
                     Icon(
@@ -348,82 +276,77 @@ fun TopHeader(
                         tint = Color(0xFF4CAF50)
                     )
 
-                    Spacer(
-                        Modifier.width(6.dp)
-                    )
+                    Spacer(Modifier.width(6.dp))
 
                     BasicTextField(
                         value = editingUrl,
                         onValueChange = {
                             editingUrl = it
                             isEditing = true
-                            onUrlChange(it)
+                            onUrlChange(it.text)
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            /*
+                             * ── FIX (Bug 2): Focus par poora text select ──
+                             * Jab user URL bar par tap kare, toh poora
+                             * existing URL select ho jaye. Phir paste
+                             * karne par purana text replace ho jayega,
+                             * append nahi hoga.
+                             */
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused && !wasFocused) {
+                                    editingUrl = editingUrl.copy(
+                                        selection = TextRange(
+                                            0,
+                                            editingUrl.text.length
+                                        )
+                                    )
+                                }
+                                wasFocused = focusState.isFocused
+                            },
                         singleLine = true,
                         textStyle = TextStyle(
                             color = textColor,
                             fontSize = 12.sp
                         ),
-                        cursorBrush =
-                            SolidColor(textColor),
-                        keyboardOptions =
-                            KeyboardOptions(
-                                imeAction = ImeAction.Go
-                            ),
-                        keyboardActions =
-                            KeyboardActions(
-                                onGo = {
-                                    keyboardController?.hide()
-                                    isEditing = false
-                                    onNavigate()
-                                }
-                            ),
+                        cursorBrush = SolidColor(textColor),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(
+                            onGo = {
+                                keyboardController?.hide()
+                                isEditing = false
+                                onNavigate()
+                            }
+                        ),
                         decorationBox = { inner ->
-
-                            Box(
-                                contentAlignment =
-                                    Alignment.CenterStart
-                            ) {
-
-                                if (editingUrl.isEmpty()) {
-
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (editingUrl.text.isEmpty()) {
                                     Text(
                                         "Search or type URL",
-                                        color =
-                                            if (isDarkTheme)
-                                                Color.Gray
-                                            else
-                                                Color.DarkGray,
+                                        color = if (isDarkTheme) Color.Gray else Color.DarkGray,
                                         fontSize = 12.sp
                                     )
                                 }
-
                                 inner()
                             }
                         }
                     )
 
-                    if (editingUrl.isNotEmpty()) {
-
+                    if (editingUrl.text.isNotEmpty()) {
                         IconButton(
                             onClick = {
-                                editingUrl = ""
+                                editingUrl = TextFieldValue("")
                                 isEditing = false
                                 onUrlChange("")
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
-
                             Icon(
                                 Icons.Default.Close,
                                 "Clear",
                                 modifier = Modifier.size(14.dp),
-                                tint =
-                                    if (isDarkTheme)
-                                        Color.LightGray
-                                    else
-                                        Color.Gray
+                                tint = if (isDarkTheme) Color.LightGray else Color.Gray
                             )
                         }
                     }
@@ -437,13 +360,11 @@ fun TopHeader(
                     },
                     modifier = Modifier.size(32.dp)
                 ) {
-
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
                         "Go",
                         modifier = Modifier.size(18.dp),
-                        tint =
-                            MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
