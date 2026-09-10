@@ -1,0 +1,39 @@
+# ── Gradle ──
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ── Android Studio / IntelliJ ──
+*.iml
+.idea/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ── Generated files ──
+app/build/
+app/release/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Logs ──
+*.log
+
+# ── Keystore ──
+*.jks
+*.keystore
+
+# ── Secrets ──
+secrets.properties
