@@ -115,7 +115,7 @@ class CobaltApiService(context: Context) {
                 if (!response.isSuccessful || body.isBlank()) {
                     return@withContext MediaResult(
                         false,
-                        error = "YouTube server error (HTTP ${response.code})"
+                        error = "Yeh video abhi available nahi hai. Doosri video try karein."
                     )
                 }
 
@@ -127,7 +127,7 @@ class CobaltApiService(context: Context) {
                             "YouTube_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}"
                         }
                         if (url.isBlank()) {
-                            MediaResult(false, error = "YouTube server returned no URL")
+                            MediaResult(false, error = "Video ka download link nahi mila. Doosri video try karein.")
                         } else {
                             MediaResult(
                                 success  = true,
@@ -138,17 +138,15 @@ class CobaltApiService(context: Context) {
                         }
                     }
                     "error" -> {
-                        val code = json.optJSONObject("error")
-                            ?.optString("code") ?: "unknown"
-                        MediaResult(false, error = "YouTube extraction failed: $code")
+                        MediaResult(false, error = "Video extract nahi ho payi. Network check karein ya doosri video try karein.")
                     }
-                    else -> MediaResult(false, error = "Unexpected response from YouTube server")
+                    else -> MediaResult(false, error = "Server ne unexpected response diya. Thodi der baad try karein.")
                 }
             }
         } catch (_: SocketTimeoutException) {
-            MediaResult(false, error = "YouTube server timed out.")
+            MediaResult(false, error = "Server slow hai. Thodi der baad try karein.")
         } catch (e: Exception) {
-            MediaResult(false, error = e.localizedMessage ?: "YouTube server request failed")
+            MediaResult(false, error = "Internet connection check karein.")
         }
     }
 
@@ -163,7 +161,7 @@ class CobaltApiService(context: Context) {
             val host = Uri.parse(cleanedUrl).host?.lowercase().orEmpty()
 
             if (cleanedUrl.isBlank() || !cleanedUrl.startsWith("http", ignoreCase = true)) {
-                return@withContext MediaResult(false, error = "Invalid media URL")
+                return@withContext MediaResult(false, error = "Yeh link valid nahi hai. Dobara check karein.")
             }
 
             // YouTube → yt-dlp server
@@ -208,15 +206,15 @@ class CobaltApiService(context: Context) {
                     return@withContext MediaResult(
                         success = false,
                         error = when (response.code) {
-                            401, 403 -> "Cobalt authentication/access denied (HTTP ${response.code})."
-                            429      -> "Cobalt rate limit reached. Please try again shortly."
-                            else     -> "Cobalt server returned HTTP ${response.code}."
+                            401, 403 -> "Yeh content accessible nahi hai. Doosra link try karein."
+                            429      -> "Bohat zyada requests. Thodi der baad try karein."
+                            else     -> "Server abhi busy hai. Thodi der baad try karein."
                         }
                     )
                 }
                 if (body.isBlank()) {
                     return@withContext MediaResult(
-                        false, error = "Cobalt returned an empty response."
+                        false, error = "Server se koi response nahi aaya. Dobara try karein."
                     )
                 }
 
@@ -225,7 +223,7 @@ class CobaltApiService(context: Context) {
                     "tunnel", "redirect" -> {
                         val mediaUrl = normalizeCobaltMediaUrl(json.optString("url"), cobaltUrl())
                         if (mediaUrl.isBlank()) {
-                            MediaResult(false, error = "Cobalt returned no media URL.")
+                            MediaResult(false, error = "Media ka link nahi mila. Doosra link try karein.")
                         } else {
                             val fallbackExt = if (audioOnly) "mp3" else "mp4"
                             val filename = json.optString("filename").ifBlank {
@@ -242,7 +240,7 @@ class CobaltApiService(context: Context) {
                     "picker" -> {
                         val picker = json.optJSONArray("picker")
                         if (picker == null || picker.length() == 0) {
-                            MediaResult(false, error = "Cobalt returned an empty media picker.")
+                            MediaResult(false, error = "Is link par koi media nahi mili.")
                         } else {
                             var chosen = picker.optJSONObject(0)
                             for (i in 0 until picker.length()) {
@@ -255,7 +253,7 @@ class CobaltApiService(context: Context) {
                                 chosen?.optString("url").orEmpty(), cobaltUrl()
                             )
                             if (mediaUrl.isBlank()) {
-                                MediaResult(false, error = "Cobalt picker item contained no media URL.")
+                                MediaResult(false, error = "Media ka link nahi mila. Doosra link try karein.")
                             } else {
                                 MediaResult(
                                     success  = true,
@@ -268,29 +266,24 @@ class CobaltApiService(context: Context) {
                     }
                     "local-processing" -> MediaResult(
                         success = false,
-                        error   = "Cobalt requires local processing. Configure server to return tunnel/redirect."
+                        error   = "Yeh link abhi supported nahi hai. Doosra link try karein."
                     )
                     "error" -> {
-                        val errorObject = json.optJSONObject("error")
-                        val code    = errorObject?.optString("code").orEmpty()
-                        val context = errorObject?.optString("context").orEmpty()
-                        val detail  = listOf(code, context)
-                            .filter { it.isNotBlank() }.joinToString(" ")
                         MediaResult(
                             false,
-                            error = "Cobalt error${if (detail.isNotBlank()) " [$detail]" else ""}."
+                            error = "Yeh media download nahi ho payi. Doosra link try karein."
                         )
                     }
                     else -> MediaResult(
                         false,
-                        error = "Unexpected Cobalt status: '${json.optString("status", "unknown")}'."
+                        error = "Server ne unexpected response diya. Thodi der baad try karein."
                     )
                 }
             }
         } catch (_: SocketTimeoutException) {
-            MediaResult(false, error = "Request timed out.")
+            MediaResult(false, error = "Server slow hai. Thodi der baad try karein.")
         } catch (e: Exception) {
-            MediaResult(false, error = e.localizedMessage ?: "Network request failed.")
+            MediaResult(false, error = "Internet connection check karein.")
         }
     }
 
