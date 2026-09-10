@@ -97,6 +97,26 @@ fun UnblockShieldScreen(
     }
     var urlBarText by rememberSaveable { mutableStateOf(browserUrl) }
 
+    /*
+     * ── FIX (Bug 1): Incoming URL from other apps ──
+     * Jab WhatsApp/Telegram/Email se link aata hai, MainActivity se
+     * naya initialUrl aata hai. Yeh effect browser ko update karta hai
+     * aur WebView ko naya URL load karne deta hai.
+     * 
+     * Pehle: purana URL stick ho jata tha (rememberSaveable ki wajah se)
+     * Ab: har naye intent par browser update hoga
+     */
+    LaunchedEffect(initialUrl) {
+        if (initialUrl.isNotBlank()) {
+            val target = normalizeUrl(initialUrl)
+            if (target.isNotBlank() && target != browserUrl) {
+                browserUrl = target
+                urlBarText = target
+                selectedTab = MainTab.BROWSE.name
+            }
+        }
+    }
+
     // Share Intent se URL aaye to Grabber tab pe switch karo
     LaunchedEffect(sharedGrabUrl) {
         if (!sharedGrabUrl.isNullOrBlank()) {
@@ -123,18 +143,6 @@ fun UnblockShieldScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var webViewGeneration by remember { mutableIntStateOf(0) }
 
-    // A new ACTION_VIEW intent must replace the current browser page even when
-    // MainActivity is already alive as the default browser.
-    LaunchedEffect(initialUrl) {
-        val target = normalizeUrl(initialUrl)
-        if (target.isNotBlank() && target != browserUrl) {
-            browserUrl = target
-            urlBarText = target
-            webView?.loadUrl(target)
-            selectedTab = MainTab.BROWSE.name
-        }
-    }
-
     val tab = try { MainTab.valueOf(selectedTab) } catch (e: Exception) { MainTab.BROWSE }
 
     BackHandler {
@@ -157,8 +165,6 @@ fun UnblockShieldScreen(
                         selected = tab == item,
                         onClick = {
                             if (item == MainTab.GRAB) {
-                                // Snapshot the exact page before leaving the browser tab.
-                                // This is what Grabber will restore when Back is pressed.
                                 webView?.url?.takeIf { it.isNotBlank() }?.let { current ->
                                     browserUrl = current
                                     urlBarText = current
@@ -213,10 +219,10 @@ fun UnblockShieldScreen(
                                         isPsiphonConnected = result.isSuccess
                                         if (result.isFailure) {
                                             Toast.makeText(
-    context,
-    "VPN connection failed",
-    Toast.LENGTH_SHORT
-).show()
+                                                context,
+                                                "VPN connection failed",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 }
