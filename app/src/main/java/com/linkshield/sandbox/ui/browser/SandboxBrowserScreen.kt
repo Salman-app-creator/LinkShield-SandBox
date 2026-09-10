@@ -7,13 +7,11 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.api.SecurityApiService
 import com.linkshield.sandbox.ui.ShieldState
@@ -46,7 +44,6 @@ fun SandboxBrowserScreen(
     isWireGuardEnabled: Boolean = false,
     onWireGuardToggle: () -> Unit = {}
 ) {
-    val context = LocalContext.current
     val webViewState = remember { mutableStateOf<WebView?>(null) }
     val securityService = remember { SecurityApiService() }
 
@@ -78,13 +75,7 @@ fun SandboxBrowserScreen(
 
         val result = securityService.checkUrl(url)
 
-        // ⚠️ TEMPORARY DEBUG TOAST — API keys verify karne ke liye
-        // TODO: Production se pehle ise remove karein
-        Toast.makeText(
-            context,
-            "Source: ${result.source}\n${result.message}",
-            Toast.LENGTH_LONG
-        ).show()
+    
 
         shieldState = when {
             result.isError -> ShieldState.ERROR
