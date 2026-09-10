@@ -14,24 +14,20 @@ android {
         versionCode 12
         versionName "2.6.0"
 
-        // ── Security API Keys (Multi-Source Threat Detection) ──
-        def safeBrowsingKey = (System.getenv("SAFE_BROWSING_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
-        def urlhausKey = (System.getenv("URLHAUS_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
-        def threatfoxKey = (System.getenv("THREATFOX_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
-        def otxKey = (System.getenv("OTX_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
-        def cobaltBaseUrl = (System.getenv("COBALT_BASE_URL") ?: "http://141.148.223.177:9001/").replace('"', '\\"').replace('\n', '').replace('\r', '')
-        def cobaltApiKey = (System.getenv("COBALT_API_KEY") ?: "").replace('"', '\\"').replace('\n', '').replace('\r', '')
+        // ── Security API Keys ──
+        // ⚠️ YAHAN xxxxx KI JAGAH APNI KEYS DAALEIN
+        buildConfigField "String", "SAFE_BROWSING_API_KEY", "\"AIzaSyCV71sWSuHkjqjsFa0CPOnomgF5LWGW394\""
+        buildConfigField "String", "URLHAUS_API_KEY", "\"df80b746cadaae7f6b2709429084cc37134414a022f6d6bd\""
+        buildConfigField "String", "THREATFOX_API_KEY", "\"df80b746cadaae7f6b2709429084cc37134414a022f6d6bd\""
+        buildConfigField "String", "OTX_API_KEY", "\"639e94701367ae2f6b3f96d1950a35a4bfd540c2682d24a0dad9a47dea237ff5\""
 
-        buildConfigField "String", "SAFE_BROWSING_API_KEY", "\"${safeBrowsingKey}\""
-        buildConfigField "String", "URLHAUS_API_KEY", "\"${urlhausKey}\""
-        buildConfigField "String", "THREATFOX_API_KEY", "\"${threatfoxKey}\""
-        buildConfigField "String", "OTX_API_KEY", "\"${otxKey}\""
-        buildConfigField "String", "COBALT_BASE_URL", "\"${cobaltBaseUrl}\""
-        buildConfigField "String", "COBALT_API_KEY", "\"${cobaltApiKey}\""
+        // ── Cobalt (Grabber) ──
+        buildConfigField "String", "COBALT_BASE_URL", "\"http://141.148.223.177:9001/\""
+        buildConfigField "String", "COBALT_API_KEY", "\"\""
 
-        // ── Remaining Existing Fields (Unchanged) ──
-        buildConfigField "String", "VIRUSTOTAL_API_KEY", '""'
-        buildConfigField "String", "PHISHTANK_APP_KEY", '""'
+        // ── Unused (Empty) ──
+        buildConfigField "String", "VIRUSTOTAL_API_KEY", "\"\""
+        buildConfigField "String", "PHISHTANK_APP_KEY", "\"\""
     }
 
     buildFeatures {
