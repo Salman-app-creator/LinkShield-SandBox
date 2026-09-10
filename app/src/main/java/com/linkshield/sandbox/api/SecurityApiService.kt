@@ -66,19 +66,17 @@ class SecurityApiService {
             }
 
             // Google Safe Browsing is authoritative for known threats.
+            // SECURITY FIX: agar API key missing ho ya network down ho,
+            // toh offline fallback use karein — browsing block NAHI.
             return@withContext try {
-                checkWithGoogleSafeBrowsing(cleanUrl)
+                val remote = checkWithGoogleSafeBrowsing(cleanUrl)
+                if (remote.isError) {
+                    offlineFallback(cleanUrl)
+                } else {
+                    remote
+                }
             } catch (e: Exception) {
-                ThreatCheckResult(
-                    checkedUrl = cleanUrl,
-                    isMalicious = false,
-                    isSuspicious = false,
-                    isError = true,
-                    message = "Security check unavailable: ${
-                        e.message ?: "network error"
-                    }",
-                    source = "Google Safe Browsing"
-                )
+                offlineFallback(cleanUrl)
             }
         }
 
@@ -316,6 +314,32 @@ class SecurityApiService {
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * Fully offline decision engine. Local SecurityChecker use karta hai:
+     * score + warnings, koi network call nahi.
+     * 
+     * isError = false by design — offline mode mein hum sirf warn karte
+     * hain, page load nahi rokte.
+     */
+    private fun offlineFallback(url: String): ThreatCheckResult {
+        val scan = com.linkshield.sandbox.SecurityChecker.analyzeUrl(url)
+
+        return ThreatCheckResult(
+            checkedUrl = url,
+            isMalicious = scan.isDangerous,
+            isSuspicious = scan.warnings.isNotEmpty(),
+            isError = false,
+            threatType = if (scan.isDangerous) "LOCAL_HEURISTIC" else "",
+            message = when {
+                scan.warnings.isEmpty() ->
+                    "Offline protection active — no local threats detected"
+                else ->
+                    "Offline protection: ${scan.warnings.first()} (score ${scan.score}/100)"
+            },
+            source = "Offline SecurityChecker"
+        )
     }
 
     suspend fun expandUrl(
