@@ -58,19 +58,17 @@ fun SandboxBrowserScreen(
     // ── QR SCANNER STATE ──
     var showQrScanner by remember { mutableStateOf(false) }
 
+    // ── QR SE SCAN KIYA GAYA URL (pending load ke liye) ──
+    var pendingQrUrl by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(currentUrl) {
-
         val url = currentUrl.trim()
-
         if (url.isBlank() || url == "about:blank") {
             shieldState = ShieldState.CHECKING
             return@LaunchedEffect
         }
-
         shieldState = ShieldState.CHECKING
-
         val result = securityService.checkUrl(url)
-
         shieldState = when {
             result.isError -> ShieldState.ERROR
             result.isMalicious -> ShieldState.DANGEROUS
@@ -81,7 +79,6 @@ fun SandboxBrowserScreen(
 
     LaunchedEffect(startUrl) {
         val webView = webViewState.value ?: return@LaunchedEffect
-
         if (
             startUrl.isNotBlank() &&
             startUrl != "about:blank" &&
@@ -92,21 +89,36 @@ fun SandboxBrowserScreen(
         }
     }
 
+    // ── QR SE SCAN KIYA GAYA URL LOAD KAREIN ──
+    // Jab scanner band ho jaye aur webView available ho, tab URL load karein
+    LaunchedEffect(showQrScanner, webViewState.value) {
+        if (!showQrScanner) {
+            val pendingUrl = pendingQrUrl
+            val webView = webViewState.value
+            if (pendingUrl != null && webView != null) {
+                webView.loadUrl(pendingUrl)
+                onUrlChanged(pendingUrl)
+                onUrlChange(pendingUrl)
+                pendingQrUrl = null
+            }
+        }
+    }
+
     // ── QR SCANNER OVERLAY ──
     if (showQrScanner) {
         QrScannerScreen(
             onQrScanned = { scannedValue ->
-                showQrScanner = false
-                val url = if (scannedValue.startsWith("http://") ||
-                    scannedValue.startsWith("https://")) {
-                    scannedValue
-                } else if (scannedValue.contains(".") &&
-                    !scannedValue.contains(" ")) {
-                    "https://$scannedValue"
-                } else {
-                    "https://www.google.com/search?q=${scannedValue}"
+                // URL normalize karein
+                val url = when {
+                    scannedValue.startsWith("http://") ||
+                    scannedValue.startsWith("https://") -> scannedValue
+                    scannedValue.contains(".") &&
+                    !scannedValue.contains(" ") -> "https://$scannedValue"
+                    else -> "https://www.google.com/search?q=${scannedValue}"
                 }
-                webViewState.value?.loadUrl(url)
+                // Pending URL save karein — scanner band hone ke baad load hoga
+                pendingQrUrl = url
+                showQrScanner = false
             },
             onBackPressed = { showQrScanner = false }
         )
@@ -114,11 +126,9 @@ fun SandboxBrowserScreen(
     }
 
     key(generation) {
-
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-
             TopHeader(
                 currentUrl = currentUrl,
                 onUrlChange = onUrlChange,
@@ -153,12 +163,9 @@ fun SandboxBrowserScreen(
                     .fillMaxWidth(),
 
                 factory = { ctx ->
-
                     SandboxWebViewSession.get()?.also { existing ->
-
                         webViewState.value = existing
                         onReady(existing)
-
                         if (
                             startUrl.isNotBlank() &&
                             startUrl != "about:blank" &&
@@ -166,9 +173,7 @@ fun SandboxBrowserScreen(
                         ) {
                             existing.loadUrl(startUrl)
                         }
-
                     } ?: WebView(ctx).apply {
-
                         setBackgroundColor(
                             if (isDarkTheme) {
                                 Color.parseColor("#FF0A0F14")
@@ -191,7 +196,6 @@ fun SandboxBrowserScreen(
                         settings.setSupportMultipleWindows(false)
 
                         webViewClient = object : WebViewClient() {
-
                             override fun onPageStarted(
                                 view: WebView?,
                                 url: String?,
