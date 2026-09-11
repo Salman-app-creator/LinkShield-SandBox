@@ -10,7 +10,7 @@ import android.webkit.WebView
  */
 object ReaderModeManager {
 
-    private const val READER_MODE_JS = """
+    private val READER_MODE_JS = """
         (function() {
             // ── Remove clutter elements ──
             var removeSelectors = [
