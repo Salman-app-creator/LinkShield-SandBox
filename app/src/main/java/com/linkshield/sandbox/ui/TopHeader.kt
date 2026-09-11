@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -65,9 +66,11 @@ fun TopHeader(
     onShieldProtectionToggle: () -> Unit = {},
     isWireGuardEnabled: Boolean = false,
     onWireGuardToggle: () -> Unit = {},
-    // ── READER MODE (NEW) ──
+    // ── READER MODE ──
     isReaderModeEnabled: Boolean = false,
-    onReaderModeToggle: () -> Unit = {}
+    onReaderModeToggle: () -> Unit = {},
+    // ── QR SCANNER (NEW) ──
+    onQrScanClick: () -> Unit = {}
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -250,7 +253,7 @@ fun TopHeader(
                     )
                 }
 
-                // ── READER MODE BUTTON (NEW) ──
+                // ── READER MODE BUTTON ──
                 IconButton(
                     onClick = onReaderModeToggle,
                     modifier = Modifier.size(32.dp)
@@ -263,6 +266,18 @@ fun TopHeader(
                             MaterialTheme.colorScheme.primary
                         else
                             MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // ── QR SCANNER BUTTON (NEW) ──
+                IconButton(
+                    onClick = onQrScanClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.QrCodeScanner,
+                        "Scan QR",
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
