@@ -55,7 +55,7 @@ fun SandboxBrowserScreen(
     // ── READER MODE STATE ──
     var isReaderModeEnabled by remember { mutableStateOf(false) }
 
-    // ── QR SCANNER STATE (NEW) ──
+    // ── QR SCANNER STATE ──
     var showQrScanner by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentUrl) {
@@ -92,7 +92,7 @@ fun SandboxBrowserScreen(
         }
     }
 
-    // ── QR SCANNER OVERLAY (NEW) ──
+    // ── QR SCANNER OVERLAY ──
     if (showQrScanner) {
         QrScannerScreen(
             onQrScanned = { scannedValue ->
@@ -134,7 +134,6 @@ fun SandboxBrowserScreen(
                 onReload = onReload,
                 onNavigate = onNavigate,
                 isLoading = isLoading,
-                // ── READER MODE ──
                 isReaderModeEnabled = isReaderModeEnabled,
                 onReaderModeToggle = {
                     val webView = webViewState.value ?: return@TopHeader
@@ -145,7 +144,6 @@ fun SandboxBrowserScreen(
                         ReaderModeManager.disable(webView)
                     }
                 },
-                // ── QR SCANNER (NEW) ──
                 onQrScanClick = { showQrScanner = true }
             )
 
@@ -199,4 +197,71 @@ fun SandboxBrowserScreen(
                                 url: String?,
                                 favicon: Bitmap?
                             ) {
-                               
+                                onLoading(true)
+                                url?.let {
+                                    if (it != "about:blank") {
+                                        onUrlChanged(it)
+                                    }
+                                }
+                            }
+
+                            override fun onPageFinished(
+                                view: WebView?,
+                                url: String?
+                            ) {
+                                onLoading(false)
+                                onNavigation(
+                                    view?.canGoBack() == true,
+                                    view?.canGoForward() == true
+                                )
+                                url?.let {
+                                    if (it != "about:blank") {
+                                        onUrlChanged(it)
+                                    }
+                                }
+                            }
+
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): Boolean {
+                                val scheme = request?.url?.scheme?.lowercase()
+                                return scheme != "http" && scheme != "https"
+                            }
+
+                            override fun onRenderProcessGone(
+                                view: WebView?,
+                                detail: android.webkit.RenderProcessGoneDetail?
+                            ): Boolean {
+                                onLoading(false)
+                                runCatching { view?.destroy() }
+                                webViewState.value = null
+                                SandboxWebViewSession.destroy()
+                                onRendererGone()
+                                return true
+                            }
+                        }
+
+                        webChromeClient = WebChromeClient()
+
+                        webViewState.value = this
+                        SandboxWebViewSession.attach(this)
+                        onReady(this)
+
+                        if (
+                            startUrl.isNotBlank() &&
+                            startUrl != "about:blank"
+                        ) {
+                            loadUrl(startUrl)
+                        }
+                    }
+                },
+
+                update = {
+                    webViewState.value = it
+                    onReady(it)
+                }
+            )
+        }
+    }
+}
