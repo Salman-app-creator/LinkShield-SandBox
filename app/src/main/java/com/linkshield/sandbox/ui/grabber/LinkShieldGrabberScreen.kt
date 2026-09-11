@@ -67,9 +67,6 @@ fun LinkShieldGrabberScreen(
     var audioOnly          by rememberSaveable { mutableStateOf(false) }
     var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
 
-    // ── YouTube Login Consent Dialog State ──
-    var showYouTubeConsent by remember { mutableStateOf(false) }
-
     val resolutions   = listOf("360p", "480p", "720p", "1080p")
     val dnsManager    = remember { DnsManager(context.applicationContext) }
     val cobaltService = remember { CobaltApiService(context.applicationContext) }
@@ -142,13 +139,6 @@ fun LinkShieldGrabberScreen(
             return
         }
 
-        // ── YouTube URL check ──
-        if (isYouTubeUrl(clean)) {
-            showYouTubeConsent = true
-            return
-        }
-
-        // ── Non-YouTube → normal flow ──
         performFetch()
     }
 
@@ -515,20 +505,6 @@ fun LinkShieldGrabberScreen(
         }
 
         Spacer(Modifier.navigationBarsPadding())
-    }
-
-    // ── YouTube Login Consent Dialog ──
-    if (showYouTubeConsent) {
-        YouTubeLoginConsentDialog(
-            onAgree = {
-                showYouTubeConsent = false
-                // Next phase: YouTube login WebView khulega
-                errorMsg = "YouTube login feature coming soon. Filhal doosri apps try karein."
-            },
-            onCancel = {
-                showYouTubeConsent = false
-            }
-        )
     }
 }
 
