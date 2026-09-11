@@ -16,6 +16,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.linkshield.sandbox.api.SecurityApiService
 import com.linkshield.sandbox.ui.ShieldState
 import com.linkshield.sandbox.ui.TopHeader
+import com.linkshield.sandbox.ui.qr.QrScannerScreen
 
 @Composable
 fun SandboxBrowserScreen(
@@ -54,6 +55,9 @@ fun SandboxBrowserScreen(
     // ── READER MODE STATE ──
     var isReaderModeEnabled by remember { mutableStateOf(false) }
 
+    // ── QR SCANNER STATE (NEW) ──
+    var showQrScanner by remember { mutableStateOf(false) }
+
     LaunchedEffect(currentUrl) {
 
         val url = currentUrl.trim()
@@ -84,9 +88,29 @@ fun SandboxBrowserScreen(
             webView.url != startUrl
         ) {
             webView.loadUrl(startUrl)
-            // ── Naya URL load hone par reader mode reset karein ──
             isReaderModeEnabled = false
         }
+    }
+
+    // ── QR SCANNER OVERLAY (NEW) ──
+    if (showQrScanner) {
+        QrScannerScreen(
+            onQrScanned = { scannedValue ->
+                showQrScanner = false
+                val url = if (scannedValue.startsWith("http://") ||
+                    scannedValue.startsWith("https://")) {
+                    scannedValue
+                } else if (scannedValue.contains(".") &&
+                    !scannedValue.contains(" ")) {
+                    "https://$scannedValue"
+                } else {
+                    "https://www.google.com/search?q=${scannedValue}"
+                }
+                webViewState.value?.loadUrl(url)
+            },
+            onBackPressed = { showQrScanner = false }
+        )
+        return
     }
 
     key(generation) {
@@ -120,7 +144,9 @@ fun SandboxBrowserScreen(
                     } else {
                         ReaderModeManager.disable(webView)
                     }
-                }
+                },
+                // ── QR SCANNER (NEW) ──
+                onQrScanClick = { showQrScanner = true }
             )
 
             AndroidView(
@@ -173,71 +199,4 @@ fun SandboxBrowserScreen(
                                 url: String?,
                                 favicon: Bitmap?
                             ) {
-                                onLoading(true)
-                                url?.let {
-                                    if (it != "about:blank") {
-                                        onUrlChanged(it)
-                                    }
-                                }
-                            }
-
-                            override fun onPageFinished(
-                                view: WebView?,
-                                url: String?
-                            ) {
-                                onLoading(false)
-                                onNavigation(
-                                    view?.canGoBack() == true,
-                                    view?.canGoForward() == true
-                                )
-                                url?.let {
-                                    if (it != "about:blank") {
-                                        onUrlChanged(it)
-                                    }
-                                }
-                            }
-
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView?,
-                                request: WebResourceRequest?
-                            ): Boolean {
-                                val scheme = request?.url?.scheme?.lowercase()
-                                return scheme != "http" && scheme != "https"
-                            }
-
-                            override fun onRenderProcessGone(
-                                view: WebView?,
-                                detail: android.webkit.RenderProcessGoneDetail?
-                            ): Boolean {
-                                onLoading(false)
-                                runCatching { view?.destroy() }
-                                webViewState.value = null
-                                SandboxWebViewSession.destroy()
-                                onRendererGone()
-                                return true
-                            }
-                        }
-
-                        webChromeClient = WebChromeClient()
-
-                        webViewState.value = this
-                        SandboxWebViewSession.attach(this)
-                        onReady(this)
-
-                        if (
-                            startUrl.isNotBlank() &&
-                            startUrl != "about:blank"
-                        ) {
-                            loadUrl(startUrl)
-                        }
-                    }
-                },
-
-                update = {
-                    webViewState.value = it
-                    onReady(it)
-                }
-            )
-        }
-    }
-}
+                               
