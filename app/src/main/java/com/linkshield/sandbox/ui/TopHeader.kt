@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,19 +64,13 @@ fun TopHeader(
     isShieldProtectionEnabled: Boolean = true,
     onShieldProtectionToggle: () -> Unit = {},
     isWireGuardEnabled: Boolean = false,
-    onWireGuardToggle: () -> Unit = {}
+    onWireGuardToggle: () -> Unit = {},
+    // ── READER MODE (NEW) ──
+    isReaderModeEnabled: Boolean = false,
+    onReaderModeToggle: () -> Unit = {}
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    /*
-     * ── FIX (Bug 2): TextFieldValue use karo (String ke bajaye) ──
-     * 
-     * String selection track nahi karta — is wajah se paste karne par
-     * naya text purane text ke saath append ho jata tha (mixed URL).
-     * 
-     * TextFieldValue selection track karta hai, jisse hum focus par
-     * poora text select kar sakte hain (browser ki tarah).
-     */
     var editingUrl by remember {
         mutableStateOf(TextFieldValue(currentUrl))
     }
@@ -255,6 +250,22 @@ fun TopHeader(
                     )
                 }
 
+                // ── READER MODE BUTTON (NEW) ──
+                IconButton(
+                    onClick = onReaderModeToggle,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.MenuBook,
+                        "Reader Mode",
+                        modifier = Modifier.size(18.dp),
+                        tint = if (isReaderModeEnabled)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
                 val textColor = if (isDarkTheme) Color.White else Color(0xFF1E293B)
                 val barBgColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                 val borderColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
@@ -287,13 +298,6 @@ fun TopHeader(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            /*
-                             * ── FIX (Bug 2): Focus par poora text select ──
-                             * Jab user URL bar par tap kare, toh poora
-                             * existing URL select ho jaye. Phir paste
-                             * karne par purana text replace ho jayega,
-                             * append nahi hoga.
-                             */
                             .onFocusChanged { focusState ->
                                 if (focusState.isFocused && !wasFocused) {
                                     editingUrl = editingUrl.copy(
