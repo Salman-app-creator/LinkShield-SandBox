@@ -116,6 +116,20 @@ fun UnblockShieldScreen(
             }
         }
     }
+    /*
+     * Naya URL aane par browser update karein.
+     * WhatsApp/Telegram se link tap hone par yeh trigger hota hai.
+     */
+    LaunchedEffect(initialUrl) {
+        if (initialUrl.isNotBlank()) {
+            val target = normalizeUrl(initialUrl)
+            if (target.isNotBlank() && target != browserUrl) {
+                browserUrl = target
+                urlBarText = target
+                selectedTab = MainTab.BROWSE.name
+            }
+        }
+    }
 
     // Share Intent se URL aaye to Grabber tab pe switch karo
     LaunchedEffect(sharedGrabUrl) {
