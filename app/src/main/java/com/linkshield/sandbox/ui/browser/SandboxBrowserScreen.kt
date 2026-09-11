@@ -51,22 +51,14 @@ fun SandboxBrowserScreen(
         mutableStateOf(ShieldState.CHECKING)
     }
 
-    /*
-     * IMPORTANT:
-     * currentUrl comes from WebView navigation.
-     *
-     * LaunchedEffect automatically cancels the previous scan when
-     * currentUrl changes, preventing an old URL's result from replacing
-     * the new URL's result.
-     */
+    // ── READER MODE STATE ──
+    var isReaderModeEnabled by remember { mutableStateOf(false) }
+
     LaunchedEffect(currentUrl) {
 
         val url = currentUrl.trim()
 
-        if (
-            url.isBlank() ||
-            url == "about:blank"
-        ) {
+        if (url.isBlank() || url == "about:blank") {
             shieldState = ShieldState.CHECKING
             return@LaunchedEffect
         }
@@ -74,8 +66,6 @@ fun SandboxBrowserScreen(
         shieldState = ShieldState.CHECKING
 
         val result = securityService.checkUrl(url)
-
-    
 
         shieldState = when {
             result.isError -> ShieldState.ERROR
@@ -85,9 +75,6 @@ fun SandboxBrowserScreen(
         }
     }
 
-    /*
-     * Load a newly requested URL.
-     */
     LaunchedEffect(startUrl) {
         val webView = webViewState.value ?: return@LaunchedEffect
 
@@ -97,6 +84,8 @@ fun SandboxBrowserScreen(
             webView.url != startUrl
         ) {
             webView.loadUrl(startUrl)
+            // ── Naya URL load hone par reader mode reset karein ──
+            isReaderModeEnabled = false
         }
     }
 
@@ -120,7 +109,18 @@ fun SandboxBrowserScreen(
                 onForward = onForward,
                 onReload = onReload,
                 onNavigate = onNavigate,
-                isLoading = isLoading
+                isLoading = isLoading,
+                // ── READER MODE ──
+                isReaderModeEnabled = isReaderModeEnabled,
+                onReaderModeToggle = {
+                    val webView = webViewState.value ?: return@TopHeader
+                    isReaderModeEnabled = !isReaderModeEnabled
+                    if (isReaderModeEnabled) {
+                        ReaderModeManager.enable(webView)
+                    } else {
+                        ReaderModeManager.disable(webView)
+                    }
+                }
             )
 
             AndroidView(
@@ -133,7 +133,6 @@ fun SandboxBrowserScreen(
                     SandboxWebViewSession.get()?.also { existing ->
 
                         webViewState.value = existing
-
                         onReady(existing)
 
                         if (
@@ -175,7 +174,6 @@ fun SandboxBrowserScreen(
                                 favicon: Bitmap?
                             ) {
                                 onLoading(true)
-
                                 url?.let {
                                     if (it != "about:blank") {
                                         onUrlChanged(it)
@@ -188,12 +186,10 @@ fun SandboxBrowserScreen(
                                 url: String?
                             ) {
                                 onLoading(false)
-
                                 onNavigation(
                                     view?.canGoBack() == true,
                                     view?.canGoForward() == true
                                 )
-
                                 url?.let {
                                     if (it != "about:blank") {
                                         onUrlChanged(it)
@@ -205,37 +201,19 @@ fun SandboxBrowserScreen(
                                 view: WebView?,
                                 request: WebResourceRequest?
                             ): Boolean {
-
-                                val scheme =
-                                    request?.url
-                                        ?.scheme
-                                        ?.lowercase()
-
-                                /*
-                                 * Only HTTP/HTTPS navigation is allowed.
-                                 * javascript:, file:, content:, intent:, etc.
-                                 * are not passed through the sandbox browser.
-                                 */
-                                return scheme != "http" &&
-                                    scheme != "https"
+                                val scheme = request?.url?.scheme?.lowercase()
+                                return scheme != "http" && scheme != "https"
                             }
 
                             override fun onRenderProcessGone(
                                 view: WebView?,
                                 detail: android.webkit.RenderProcessGoneDetail?
                             ): Boolean {
-
                                 onLoading(false)
-
-                                runCatching {
-                                    view?.destroy()
-                                }
-
+                                runCatching { view?.destroy() }
                                 webViewState.value = null
                                 SandboxWebViewSession.destroy()
-
                                 onRendererGone()
-
                                 return true
                             }
                         }
@@ -243,9 +221,7 @@ fun SandboxBrowserScreen(
                         webChromeClient = WebChromeClient()
 
                         webViewState.value = this
-
                         SandboxWebViewSession.attach(this)
-
                         onReady(this)
 
                         if (
