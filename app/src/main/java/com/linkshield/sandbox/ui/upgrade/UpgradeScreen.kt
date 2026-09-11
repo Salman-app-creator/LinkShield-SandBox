@@ -48,7 +48,7 @@ fun UpgradeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding() // Top Header ko Status Bar se neeche shift karega
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -95,12 +95,12 @@ fun UpgradeScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                
+
                 OutlinedTextField(
                     value = key,
-                    onValueChange = { 
+                    onValueChange = {
                         key = it.uppercase().take(32)
-                        message = null 
+                        message = null
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -178,7 +178,7 @@ private fun ProBenefitsCard() {
             modifier = Modifier
                 .background(gradient, RoundedCornerShape(22.dp))
                 .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
@@ -209,6 +209,9 @@ private fun ProBenefitsCard() {
                 }
             }
 
+            Spacer(Modifier.height(2.dp))
+
+            // ── Premium Benefits with Fixed Alignment ──
             PremiumBenefit("Unlimited media download access")
             PremiumBenefit("Higher-quality download choices")
             PremiumBenefit("Priority access to future engine integrations")
@@ -221,11 +224,22 @@ private fun ProBenefitsCard() {
 private fun PremiumBenefit(text: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        /*
+         * ── FIX: Alignment fixed ──
+         * Pehle `Alignment.CenterVertically` tha, jisse icon text ke
+         * vertical center par aata tha. Multi-line text ke saath
+         * yeh acha nahi lagta tha.
+         *
+         * Ab `Alignment.Top` use kiya hai — icon text ki pehli line
+         * ke saath align hoga, chahe text ek line ka ho ya do line ka.
+         */
+        verticalAlignment = Alignment.Top
     ) {
+        // ── Icon container with fixed top padding ──
         Surface(
             shape = RoundedCornerShape(50),
-            color = Color(0xFF00D6A3).copy(alpha = 0.18f)
+            color = Color(0xFF00D6A3).copy(alpha = 0.18f),
+            modifier = Modifier.padding(top = 2.dp) // text ki pehli line ke saath align
         ) {
             Icon(
                 Icons.Default.Check,
@@ -239,7 +253,9 @@ private fun PremiumBenefit(text: String) {
             text,
             color = Color.White,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 18.sp,
+            modifier = Modifier.weight(1f) // text ko baaki jagah mile
         )
     }
 }
