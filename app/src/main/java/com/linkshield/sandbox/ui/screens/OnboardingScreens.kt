@@ -117,9 +117,10 @@ fun EnableShieldScreen(
         Spacer(Modifier.height(20.dp))
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Feature("Sandbox browser")
+                Feature("Sandbox Browser")
                 Feature("Media Grabber")
-                Feature("Secure Network entry point")
+                Feature("Reader Mode")
+                Feature("QR Code Scanner")
             }
         }
         Spacer(Modifier.height(24.dp))
