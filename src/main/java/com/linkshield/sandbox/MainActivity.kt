@@ -144,9 +144,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun incomingBrowserUrl(intent: Intent?): String? =
-        intent?.dataString?.takeIf { it.isNotBlank() }
-            ?: intent?.getStringExtra("url")?.takeIf { it.isNotBlank() }
+    /**
+     * Incoming browser URL extract karta hai.
+     * 
+     * Priority:
+     * 1. intent.data (WhatsApp/Telegram/browser links)
+     * 2. intent.getStringExtra("url") (custom intent)
+     * 3. intent.getStringExtra(Intent.EXTRA_TEXT) (share text)
+     */
+    private fun incomingBrowserUrl(intent: Intent?): String? {
+        if (intent == null) return null
+
+        // 1. ACTION_VIEW se aaya hua URL (WhatsApp, Chrome, etc.)
+        intent.dataString?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // 2. Custom "url" extra
+        intent.getStringExtra("url")?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // 3. EXTRA_TEXT (share intent se)
+        intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let {
+            // Agar text mein URL hai, toh extract karein
+            val urlRegex = Regex("https?://[^\\s]+")
+            return urlRegex.find(it)?.value ?: it
+        }
+
+        return null
+    }
 
     private fun handleShareIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_SEND &&
