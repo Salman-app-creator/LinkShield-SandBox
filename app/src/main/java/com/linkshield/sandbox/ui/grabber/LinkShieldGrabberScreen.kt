@@ -67,6 +67,9 @@ fun LinkShieldGrabberScreen(
     var audioOnly          by rememberSaveable { mutableStateOf(false) }
     var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
 
+    // ── YouTube Login Consent Dialog State ──
+    var showYouTubeConsent by remember { mutableStateOf(false) }
+
     val resolutions   = listOf("360p", "480p", "720p", "1080p")
     val dnsManager    = remember { DnsManager(context.applicationContext) }
     val cobaltService = remember { CobaltApiService(context.applicationContext) }
@@ -83,26 +86,13 @@ fun LinkShieldGrabberScreen(
         errorMsg = null
     }
 
-    LaunchedEffect(initialUrl) {
-        if (!initialUrl.isNullOrBlank() && initialUrl != "about:blank") {
-            inputUrl = initialUrl
-            resetResult()
-            thumbnailUrl = extractYoutubeThumbnail(initialUrl)
-        }
+    fun isYouTubeUrl(url: String): Boolean {
+        val lower = url.lowercase(Locale.US)
+        return lower.contains("youtube.com") || lower.contains("youtu.be")
     }
 
-    fun doFetch() {
+    fun performFetch() {
         val clean = inputUrl.trim()
-
-        if (clean.isBlank()) {
-            errorMsg = "Enter a URL first"
-            return
-        }
-
-        if (!effectivelyPro && remainingDownloads <= 0) {
-            errorMsg = "Download limit reached. Upgrade to continue."
-            return
-        }
 
         isLoading = true
         errorMsg = null
@@ -112,7 +102,6 @@ fun LinkShieldGrabberScreen(
             try {
                 thumbnailUrl = extractYoutubeThumbnail(clean)
 
-                // All media extraction is handled exclusively by CobaltApiService.
                 val result = cobaltService.fetchMediaUrl(
                     rawUrl = clean,
                     audioOnly = audioOnly,
@@ -138,6 +127,29 @@ fun LinkShieldGrabberScreen(
                 isLoading = false
             }
         }
+    }
+
+    fun doFetch() {
+        val clean = inputUrl.trim()
+
+        if (clean.isBlank()) {
+            errorMsg = "Enter a URL first"
+            return
+        }
+
+        if (!effectivelyPro && remainingDownloads <= 0) {
+            errorMsg = "Download limit reached. Upgrade to continue."
+            return
+        }
+
+        // ── YouTube URL check ──
+        if (isYouTubeUrl(clean)) {
+            showYouTubeConsent = true
+            return
+        }
+
+        // ── Non-YouTube → normal flow ──
+        performFetch()
     }
 
     fun downloadCurrent() {
@@ -366,7 +378,7 @@ fun LinkShieldGrabberScreen(
                         Column(Modifier.padding(10.dp)) {
                             Text(
                                 when {
-                                    isLoading -> "Fetching from Cobalt..."
+                                    isLoading -> "Fetching..."
                                     fetched -> "✅ Ready"
                                     else -> "🎬 Tap Fetch"
                                 },
@@ -400,7 +412,7 @@ fun LinkShieldGrabberScreen(
 
                         Text(
                             when {
-                                isLoading -> "Fetching from Cobalt..."
+                                isLoading -> "Fetching..."
                                 fetched -> "Ready to download"
                                 else -> "Paste URL and tap Fetch"
                             },
@@ -503,6 +515,20 @@ fun LinkShieldGrabberScreen(
         }
 
         Spacer(Modifier.navigationBarsPadding())
+    }
+
+    // ── YouTube Login Consent Dialog ──
+    if (showYouTubeConsent) {
+        YouTubeLoginConsentDialog(
+            onAgree = {
+                showYouTubeConsent = false
+                // Next phase: YouTube login WebView khulega
+                errorMsg = "YouTube login feature coming soon. Filhal doosri apps try karein."
+            },
+            onCancel = {
+                showYouTubeConsent = false
+            }
+        )
     }
 }
 
