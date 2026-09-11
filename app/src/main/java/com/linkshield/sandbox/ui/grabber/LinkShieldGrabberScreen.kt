@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.linkshield.sandbox.api.CobaltApiService
 import com.linkshield.sandbox.dns.DnsManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -53,6 +54,7 @@ fun LinkShieldGrabberScreen(
     val context       = LocalContext.current
     val scope         = rememberCoroutineScope()
     val keyboardCtrl  = LocalSoftwareKeyboardController.current
+    val dm            = remember { context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager }
 
     var inputUrl         by remember { mutableStateOf(initialUrl ?: "") }
     var fetched          by remember { mutableStateOf(false) }
@@ -66,6 +68,16 @@ fun LinkShieldGrabberScreen(
 
     var audioOnly          by rememberSaveable { mutableStateOf(false) }
     var selectedResolution by rememberSaveable { mutableStateOf("1080p") }
+
+    // ── Download Progress State ──
+    var activeDownloadId   by remember { mutableStateOf<Long?>(null) }
+    var downloadProgress   by remember { mutableStateOf(0) }
+    var downloadedBytes    by remember { mutableStateOf(0L) }
+    var totalBytes         by remember { mutableStateOf(0L) }
+    var isDownloading      by remember { mutableStateOf(false) }
+    var downloadSpeed      by remember { mutableStateOf(0L) }
+    var lastBytesSnapshot  by remember { mutableStateOf(0L) }
+    var lastTimeSnapshot   by remember { mutableStateOf(0L) }
 
     val resolutions   = listOf("360p", "480p", "720p", "1080p")
     val dnsManager    = remember { DnsManager(context.applicationContext) }
@@ -81,11 +93,6 @@ fun LinkShieldGrabberScreen(
         mediaMime = "video/mp4"
         mediaTitle = ""
         errorMsg = null
-    }
-
-    fun isYouTubeUrl(url: String): Boolean {
-        val lower = url.lowercase(Locale.US)
-        return lower.contains("youtube.com") || lower.contains("youtu.be")
     }
 
     fun performFetch() {
@@ -156,9 +163,7 @@ fun LinkShieldGrabberScreen(
                     "LinkShield_${System.currentTimeMillis()}.${if (audioOnly) "mp3" else "mp4"}"
                 }
 
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-
-            dm.enqueue(
+            val downloadId = dm.enqueue(
                 DownloadManager.Request(Uri.parse(mediaUrl))
                     .setTitle(mediaTitle.ifBlank { "LinkShield Media" })
                     .setDescription("Downloading via LinkShield Sandbox")
@@ -174,6 +179,15 @@ fun LinkShieldGrabberScreen(
                     .setAllowedOverRoaming(true)
             )
 
+            activeDownloadId = downloadId
+            isDownloading = true
+            downloadProgress = 0
+            downloadedBytes = 0L
+            totalBytes = 0L
+            downloadSpeed = 0L
+            lastBytesSnapshot = 0L
+            lastTimeSnapshot = System.currentTimeMillis()
+
             if (!effectivelyPro) {
                 dnsManager.consumeDownload()
             }
@@ -185,6 +199,73 @@ fun LinkShieldGrabberScreen(
             ).show()
         } catch (e: Exception) {
             errorMsg = "Download failed: ${e.localizedMessage}"
+            isDownloading = false
+        }
+    }
+
+    // ── Download progress polling with speed calculation ──
+    LaunchedEffect(activeDownloadId, isDownloading) {
+        val id = activeDownloadId
+
+        if (id == null || !isDownloading) return@LaunchedEffect
+
+        lastBytesSnapshot = 0L
+        lastTimeSnapshot = System.currentTimeMillis()
+
+        while (isDownloading) {
+            val query = DownloadManager.Query().setFilterById(id)
+            val cursor = dm.query(query)
+
+            if (cursor != null) {
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(
+                        cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    )
+                    val bytesDownloaded = cursor.getLong(
+                        cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                    )
+                    val bytesTotal = cursor.getLong(
+                        cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                    )
+
+                    val now = System.currentTimeMillis()
+                    val timeDiff = now - lastTimeSnapshot
+                    if (timeDiff > 0) {
+                        val bytesDiff = bytesDownloaded - lastBytesSnapshot
+                        downloadSpeed = if (bytesDiff > 0) (bytesDiff * 1000) / timeDiff else 0L
+                    }
+                    lastBytesSnapshot = bytesDownloaded
+                    lastTimeSnapshot = now
+
+                    downloadedBytes = bytesDownloaded
+                    totalBytes = bytesTotal
+
+                    if (bytesTotal > 0) {
+                        downloadProgress = ((bytesDownloaded * 100) / bytesTotal).toInt()
+                    }
+
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            downloadProgress = 100
+                            downloadSpeed = 0L
+                            isDownloading = false
+                            Toast.makeText(
+                                context,
+                                "Download complete ✓",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            isDownloading = false
+                            downloadSpeed = 0L
+                            errorMsg = "Download failed. Dobara try karein."
+                        }
+                    }
+                }
+                cursor.close()
+            }
+
+            delay(1000)
         }
     }
 
@@ -315,7 +396,7 @@ fun LinkShieldGrabberScreen(
             ),
             keyboardActions = KeyboardActions(
                 onGo = {
-                    if (!isLoading) {
+                    if (!isLoading && !isDownloading) {
                         if (fetched) downloadCurrent() else doFetch()
                     }
                 }
@@ -330,6 +411,111 @@ fun LinkShieldGrabberScreen(
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 12.sp
             )
+        }
+
+        // ── Download Progress Card with Speed and Cancel ──
+        if (isDownloading || downloadProgress > 0) {
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            if (isDownloading) "Downloading..." else "Download Complete ✓",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "$downloadProgress%",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        if (isDownloading) {
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(
+                                onClick = {
+                                    activeDownloadId?.let { id -> dm.remove(id) }
+                                    isDownloading = false
+                                    downloadSpeed = 0L
+                                    downloadProgress = 0
+                                    downloadedBytes = 0L
+                                    totalBytes = 0L
+                                    activeDownloadId = null
+                                    Toast.makeText(
+                                        context,
+                                        "Download cancelled",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    "Cancel",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { downloadProgress / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+
+                        if (isDownloading && downloadSpeed > 0) {
+                            Text(
+                                "⚡ ${formatSpeed(downloadSpeed)}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (isDownloading && downloadSpeed > 0 && totalBytes > downloadedBytes) {
+                        val remainingBytes = totalBytes - downloadedBytes
+                        val secondsLeft = remainingBytes / downloadSpeed
+                        Text(
+                            "⏱ ${formatTime(secondsLeft)} remaining",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
         }
 
         Card(
@@ -427,7 +613,7 @@ fun LinkShieldGrabberScreen(
                     audioOnly = it
                     resetResult()
                 },
-                enabled = !isLoading
+                enabled = !isLoading && !isDownloading
             )
 
             Text(
@@ -454,7 +640,7 @@ fun LinkShieldGrabberScreen(
                             selectedResolution = res
                             resetResult()
                         },
-                        enabled = !isLoading,
+                        enabled = !isLoading && !isDownloading,
                         label = {
                             Text(
                                 res,
@@ -481,7 +667,7 @@ fun LinkShieldGrabberScreen(
             onClick = {
                 if (fetched) downloadCurrent() else doFetch()
             },
-            enabled = inputUrl.isNotBlank() && !isLoading,
+            enabled = inputUrl.isNotBlank() && !isLoading && !isDownloading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
@@ -497,6 +683,7 @@ fun LinkShieldGrabberScreen(
             Text(
                 when {
                     isLoading -> "Fetching..."
+                    isDownloading -> "Downloading..."
                     fetched -> "Download"
                     else -> "Fetch Media"
                 },
@@ -505,6 +692,45 @@ fun LinkShieldGrabberScreen(
         }
 
         Spacer(Modifier.navigationBarsPadding())
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+
+    return when {
+        gb >= 1.0 -> String.format(Locale.US, "%.2f GB", gb)
+        mb >= 1.0 -> String.format(Locale.US, "%.2f MB", mb)
+        kb >= 1.0 -> String.format(Locale.US, "%.2f KB", kb)
+        else -> "$bytes B"
+    }
+}
+
+private fun formatSpeed(bytesPerSecond: Long): String {
+    if (bytesPerSecond <= 0) return "0 B/s"
+    val kb = bytesPerSecond / 1024.0
+    val mb = kb / 1024.0
+
+    return when {
+        mb >= 1.0 -> String.format(Locale.US, "%.2f MB/s", mb)
+        kb >= 1.0 -> String.format(Locale.US, "%.2f KB/s", kb)
+        else -> "$bytesPerSecond B/s"
+    }
+}
+
+private fun formatTime(seconds: Long): String {
+    if (seconds <= 0) return "0s"
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val secs = seconds % 60
+
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m ${secs}s"
+        else -> "${secs}s"
     }
 }
 
