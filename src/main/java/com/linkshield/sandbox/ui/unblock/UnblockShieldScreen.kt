@@ -52,6 +52,7 @@ private enum class MainTab(val label: String) {
 @Composable
 fun UnblockShieldScreen(
     initialUrl: String = "",
+    urlTrigger: Long = 0L,          // NEW — trigger counter
     sharedGrabUrl: String? = null,
     onSharedUrlConsumed: () -> Unit = {},
     isDarkTheme: Boolean = true,
@@ -98,32 +99,20 @@ fun UnblockShieldScreen(
     var urlBarText by rememberSaveable { mutableStateOf(browserUrl) }
 
     /*
-     * ── FIX (Bug 1): Incoming URL from other apps ──
-     * Jab WhatsApp/Telegram/Email se link aata hai, MainActivity se
-     * naya initialUrl aata hai. Yeh effect browser ko update karta hai
-     * aur WebView ko naya URL load karne deta hai.
-     * 
-     * Pehle: purana URL stick ho jata tha (rememberSaveable ki wajah se)
-     * Ab: har naye intent par browser update hoga
+     * ── FIX: Incoming URL from other apps ──
+     *
+     * Pehle LaunchedEffect(initialUrl) tha — lekin MutableStateFlow same
+     * value dobara emit nahi karta, isliye same URL dobara tap karne par
+     * fire nahi hota tha.
+     *
+     * Ab LaunchedEffect(urlTrigger) hai — urlTrigger har naye intent par
+     * badhta hai (MainActivity se), isliye LaunchedEffect hamesha fire
+     * hota hai, chahe URL same ho ya different.
      */
-    LaunchedEffect(initialUrl) {
+    LaunchedEffect(urlTrigger) {
         if (initialUrl.isNotBlank()) {
             val target = normalizeUrl(initialUrl)
-            if (target.isNotBlank() && target != browserUrl) {
-                browserUrl = target
-                urlBarText = target
-                selectedTab = MainTab.BROWSE.name
-            }
-        }
-    }
-    /*
-     * Naya URL aane par browser update karein.
-     * WhatsApp/Telegram se link tap hone par yeh trigger hota hai.
-     */
-    LaunchedEffect(initialUrl) {
-        if (initialUrl.isNotBlank()) {
-            val target = normalizeUrl(initialUrl)
-            if (target.isNotBlank() && target != browserUrl) {
+            if (target.isNotBlank()) {
                 browserUrl = target
                 urlBarText = target
                 selectedTab = MainTab.BROWSE.name
@@ -256,7 +245,6 @@ fun UnblockShieldScreen(
                             if (target.isNotBlank()) {
                                 browserUrl = target
                                 urlBarText = target
-                                webView?.loadUrl(target)
                             }
                         },
                         isLoading = isLoading,
