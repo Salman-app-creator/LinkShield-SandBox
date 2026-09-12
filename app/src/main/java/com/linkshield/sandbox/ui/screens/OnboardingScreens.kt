@@ -105,12 +105,12 @@ fun EnableShieldScreen(
             title = { Text("Are you sure?", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Agar aap default browser set nahi karenge:\n\n" +
-                    "❌ WhatsApp ke links Chrome mein khulenge\n" +
-                    "❌ Chrome aapka data save karega\n" +
-                    "❌ Phishing links detect nahi honge\n\n" +
-                    "Aap baad mein Settings se bhi set kar sakte hain.\n\n" +
-                    "Abhi set karein?"
+                    "If you don't set LinkShield as your default browser:\n\n" +
+                    "❌ WhatsApp links will open in Chrome\n" +
+                    "❌ Chrome will save your data\n" +
+                    "❌ Phishing links won't be detected\n\n" +
+                    "You can set it later from Settings.\n\n" +
+                    "Set it now?"
                 )
             },
             confirmButton = {
@@ -118,7 +118,7 @@ fun EnableShieldScreen(
                     showSkipDialog = false
                     onRequestBrowserRole()
                 }) {
-                    Text("Haan, Set karein", fontWeight = FontWeight.Bold)
+                    Text("Yes, Set it", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -126,7 +126,7 @@ fun EnableShieldScreen(
                     showSkipDialog = false
                     onSkip()
                 }) {
-                    Text("Baad mein")
+                    Text("Later")
                 }
             }
         )
@@ -144,11 +144,16 @@ fun EnableShieldScreen(
             modifier = Modifier.size(110.dp).clip(CircleShape)
         )
         Spacer(Modifier.height(14.dp))
-        Text(if (isDefault) "Shield Enabled!" else "Why LinkShield?", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(
+            if (isDefault) "Shield Enabled!" else "Why LinkShield?",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
         Spacer(Modifier.height(10.dp))
         Text(
             if (isDefault) "LinkShield is now your default browser."
-            else "Aapke WhatsApp aur Email par jo links aate hain, woh Chrome mein khulte hain. Chrome woh links, unke cookies, aur aapki browsing history sab save karta hai.",
+            else "Every link you receive on WhatsApp and Email opens in Chrome. Chrome saves those links, their cookies, and your browsing history.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -166,12 +171,12 @@ fun EnableShieldScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Chrome vs LinkShield", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(2.dp))
-                ComparisonRow(false, "Chrome: Sab data save karta hai")
-                ComparisonRow(true, "LinkShield: Sab data delete karta hai")
-                ComparisonRow(false, "Chrome: Trackers follow karte hain")
+                ComparisonRow(false, "Chrome: Saves all your data")
+                ComparisonRow(true, "LinkShield: Deletes all your data")
+                ComparisonRow(false, "Chrome: Trackers follow you")
                 ComparisonRow(true, "LinkShield: Zero tracking")
-                ComparisonRow(false, "Chrome: Phishing links open ho jate hain")
-                ComparisonRow(true, "LinkShield: Har link pehle check hota hai")
+                ComparisonRow(false, "Chrome: Opens phishing links")
+                ComparisonRow(true, "LinkShield: Checks every link first")
             }
         }
 
@@ -218,7 +223,7 @@ fun EnableShieldScreen(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Aap bina default browser set kiye bhi app use kar sakte hain. Sirf manual URL typing ke saath.",
+                text = "You can use the app without setting it as default — just type URLs manually.",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -229,7 +234,7 @@ fun EnableShieldScreen(
 
             // ── Manual Settings Link ──
             Text(
-                text = "Button kaam nahi kar raha? Open Settings Manually",
+                text = "Button not working? Open Settings Manually",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.primary,
                 textDecoration = TextDecoration.Underline,
@@ -301,7 +306,7 @@ fun checkIsDefaultBrowser(context: Context): Boolean {
             context.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
         } else {
             val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
-            val resolveInfo = context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            val resolveInfo = context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_PACKAGE_DEFAULT_ONLY)
             resolveInfo?.activityInfo?.packageName == context.packageName
         }
     }.getOrDefault(false)
