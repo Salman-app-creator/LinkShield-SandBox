@@ -52,6 +52,7 @@ private enum class MainTab(val label: String) {
 @Composable
 fun UnblockShieldScreen(
     initialUrl: String = "",
+    urlTrigger: Long = 0L,          // ← NEW
     sharedGrabUrl: String? = null,
     onSharedUrlConsumed: () -> Unit = {},
     isDarkTheme: Boolean = true,
@@ -96,6 +97,21 @@ fun UnblockShieldScreen(
         mutableStateOf(normalizeUrl(initialUrl).ifBlank { "https://www.google.com" })
     }
     var urlBarText by rememberSaveable { mutableStateOf(browserUrl) }
+
+    /*
+     * ── FIX: Incoming URL from other apps ──
+     * urlTrigger har naye intent par badhta hai (MainActivity se).
+     */
+    LaunchedEffect(urlTrigger) {
+        if (initialUrl.isNotBlank()) {
+            val target = normalizeUrl(initialUrl)
+            if (target.isNotBlank()) {
+                browserUrl = target
+                urlBarText = target
+                selectedTab = MainTab.BROWSE.name
+            }
+        }
+    }
 
     // Share Intent se URL aaye to Grabber tab pe switch karo
     LaunchedEffect(sharedGrabUrl) {
@@ -199,10 +215,10 @@ fun UnblockShieldScreen(
                                         isPsiphonConnected = result.isSuccess
                                         if (result.isFailure) {
                                             Toast.makeText(
-    context,
-    "VPN connection failed",
-    Toast.LENGTH_SHORT
-).show()
+                                                context,
+                                                "VPN connection failed",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 }
@@ -222,7 +238,8 @@ fun UnblockShieldScreen(
                             if (target.isNotBlank()) {
                                 browserUrl = target
                                 urlBarText = target
-                                webView?.loadUrl(target)
+                                // NOTE: webView?.loadUrl(target) REMOVE — 
+                                // LaunchedEffect(startUrl) handle karega
                             }
                         },
                         isLoading = isLoading,
