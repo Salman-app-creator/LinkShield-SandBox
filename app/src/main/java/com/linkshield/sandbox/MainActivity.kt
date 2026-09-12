@@ -123,13 +123,17 @@ class MainActivity : ComponentActivity() {
                             }
                         )
 
-                        !hasBrowserSet -> EnableShieldScreen(
+                      !hasBrowserSet -> EnableShieldScreen(
                             onBrowserSet = {
                                 disclaimerManager.markBrowserSet()
                                 hasBrowserSet = true
                             },
                             onRequestBrowserRole = {
                                 launchBrowserRolePicker()
+                            },
+                            onSkip = {
+                                disclaimerManager.markBrowserSet()
+                                hasBrowserSet = true
                             }
                         )
 
