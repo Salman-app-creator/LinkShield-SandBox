@@ -16,9 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,7 +69,7 @@ fun TopHeader(
     // ── READER MODE ──
     isReaderModeEnabled: Boolean = false,
     onReaderModeToggle: () -> Unit = {},
-    // ── QR SCANNER (NEW) ──
+    // ── QR SCANNER ──
     onQrScanClick: () -> Unit = {}
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -123,6 +123,7 @@ fun TopHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
 
+        // ── LOGO (spans both rows) ──
         Image(
             painter = painterResource(id = R.drawable.ic_app_logo),
             contentDescription = "App Logo",
@@ -135,15 +136,19 @@ fun TopHeader(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
 
+            // ═══════════════════════════════════════════════════════════
+            // ROW 1: Shield Badge | Reader | QR | Theme | Pro/Trial
+            // ═══════════════════════════════════════════════════════════
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
 
+                // Group 1: Shield badge
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = shieldColor.copy(alpha = 0.15f),
@@ -154,71 +159,118 @@ fun TopHeader(
                     )
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(text = shieldEmoji, fontSize = 11.sp)
-                        Text(text = shieldLabel, fontSize = 10.sp, color = shieldColor)
+                        Text(text = shieldEmoji, fontSize = 12.sp)
+                        Text(text = shieldLabel, fontSize = 11.sp, color = shieldColor)
                     }
                 }
 
+                // Group 2: Action icons (Reader + QR)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Reader Mode
+                    IconButton(
+                        onClick = onReaderModeToggle,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MenuBook,
+                            "Reader Mode",
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isReaderModeEnabled)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // QR Scanner
+                    IconButton(
+                        onClick = onQrScanClick,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            "Scan QR",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Group 3: Theme + Pro/Trial
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text("☀️", fontSize = 10.sp)
-                    Switch(
-                        checked = isDarkTheme,
-                        onCheckedChange = onThemeToggle,
-                        modifier = Modifier.scale(0.6f)
-                    )
-                    Text("🌙", fontSize = 10.sp)
-                }
 
-                if (isProUser) {
-                    Surface(
-                        color = Color(0xFFFFD700),
-                        shape = RoundedCornerShape(10.dp)
+                    // Theme Toggle
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "👑 PRO",
-                            color = Color.Black,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        Text("☀️", fontSize = 10.sp)
+                        Switch(
+                            checked = isDarkTheme,
+                            onCheckedChange = onThemeToggle,
+                            modifier = Modifier.scale(0.55f)
                         )
+                        Text("🌙", fontSize = 10.sp)
                     }
-                } else {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            "⏳ Trial: ${trialDaysLeft}d",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+
+                    // Pro / Trial Badge
+                    if (isProUser) {
+                        Surface(
+                            color = Color(0xFFFFD700),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                "👑 PRO",
+                                color = Color.Black,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                "⏳ ${trialDaysLeft}d",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
                     }
                 }
             }
 
+            // ═══════════════════════════════════════════════════════════
+            // ROW 2: Back | Forward | Reload | URL BAR (big) | Go
+            // ═══════════════════════════════════════════════════════════
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
 
+                // ── Back ──
                 IconButton(
                     onClick = onBack,
                     enabled = canGoBack,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         "Back",
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = if (canGoBack)
                             MaterialTheme.colorScheme.onSurface
                         else
@@ -226,15 +278,16 @@ fun TopHeader(
                     )
                 }
 
+                // ── Forward ──
                 IconButton(
                     onClick = onForward,
                     enabled = canGoForward,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
                         "Forward",
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = if (canGoForward)
                             MaterialTheme.colorScheme.onSurface
                         else
@@ -242,45 +295,19 @@ fun TopHeader(
                     )
                 }
 
+                // ── Reload ──
                 IconButton(
                     onClick = onReload,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
                         Icons.Default.Refresh,
                         "Reload",
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                // ── READER MODE BUTTON ──
-                IconButton(
-                    onClick = onReaderModeToggle,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.MenuBook,
-                        "Reader Mode",
-                        modifier = Modifier.size(18.dp),
-                        tint = if (isReaderModeEnabled)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                // ── QR SCANNER BUTTON (NEW) ──
-                IconButton(
-                    onClick = onQrScanClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.QrCodeScanner,
-                        "Scan QR",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
+                // ── URL BAR (bigger) ──
                 val textColor = if (isDarkTheme) Color.White else Color(0xFF1E293B)
                 val barBgColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                 val borderColor = if (isDarkTheme) Color(0xFF334155) else Color(0xFFCBD5E1)
@@ -288,10 +315,10 @@ fun TopHeader(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .height(34.dp)
-                        .background(barBgColor, RoundedCornerShape(17.dp))
-                        .border(1.dp, borderColor, RoundedCornerShape(17.dp))
-                        .padding(start = 10.dp, end = 4.dp),
+                        .height(40.dp)
+                        .background(barBgColor, RoundedCornerShape(20.dp))
+                        .border(1.dp, borderColor, RoundedCornerShape(20.dp))
+                        .padding(start = 12.dp, end = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
 
@@ -302,7 +329,7 @@ fun TopHeader(
                         tint = Color(0xFF4CAF50)
                     )
 
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
 
                     BasicTextField(
                         value = editingUrl,
@@ -327,7 +354,7 @@ fun TopHeader(
                         singleLine = true,
                         textStyle = TextStyle(
                             color = textColor,
-                            fontSize = 12.sp
+                            fontSize = 13.sp
                         ),
                         cursorBrush = SolidColor(textColor),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -344,7 +371,7 @@ fun TopHeader(
                                     Text(
                                         "Search or type URL",
                                         color = if (isDarkTheme) Color.Gray else Color.DarkGray,
-                                        fontSize = 12.sp
+                                        fontSize = 13.sp
                                     )
                                 }
                                 inner()
@@ -359,30 +386,31 @@ fun TopHeader(
                                 isEditing = false
                                 onUrlChange("")
                             },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 "Clear",
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(15.dp),
                                 tint = if (isDarkTheme) Color.LightGray else Color.Gray
                             )
                         }
                     }
                 }
 
+                // ── Go ──
                 IconButton(
                     onClick = {
                         keyboardController?.hide()
                         isEditing = false
                         onNavigate()
                     },
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(34.dp)
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
                         "Go",
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
