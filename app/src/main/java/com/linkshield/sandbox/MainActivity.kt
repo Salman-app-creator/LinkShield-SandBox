@@ -36,9 +36,18 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private val interceptedUrlFlow = MutableStateFlow<String?>(null)
-    private val sharedUrlFlow      = MutableStateFlow<String?>(null)
-    private val resumeTickFlow     = MutableStateFlow(0)
+    private val interceptedUrlFlow    = MutableStateFlow<String?>(null)
+    /*
+     * ── FIX: URL Trigger Counter ──
+     *
+     * MutableStateFlow same value dobara emit nahi karta. Isliye jab WhatsApp
+     * se same URL dobara tap hota hai (app already open), LaunchedEffect
+     * fire nahi hota. Yeh counter har naye intent par badhta hai — isse
+     * LaunchedEffect hamesha fire hoga, chahe URL same ho ya different.
+     */
+    private val interceptedUrlTrigger = MutableStateFlow(0L)
+    private val sharedUrlFlow         = MutableStateFlow<String?>(null)
+    private val resumeTickFlow        = MutableStateFlow(0)
 
     private lateinit var browserRoleLauncher: ActivityResultLauncher<Intent>
 
@@ -46,7 +55,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        interceptedUrlFlow.value = intent?.getStringExtra("url")
+        // Initial URL — cold start
+        incomingBrowserUrl(intent)?.let { url ->
+            interceptedUrlFlow.value = url
+            interceptedUrlTrigger.value = System.currentTimeMillis()
+        }
         handleShareIntent(intent)
 
         browserRoleLauncher = registerForActivityResult(
@@ -60,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val interceptedUrl by interceptedUrlFlow.collectAsState()
+            val urlTrigger     by interceptedUrlTrigger.collectAsState()
             val sharedUrl      by sharedUrlFlow.collectAsState()
             val resumeTick     by resumeTickFlow.collectAsState()
             val context        = LocalContext.current
@@ -121,6 +135,7 @@ class MainActivity : ComponentActivity() {
 
                         else -> UnblockShieldScreen(
                             initialUrl    = interceptedUrl ?: "",
+                            urlTrigger    = urlTrigger,
                             sharedGrabUrl = sharedUrl,
                             onSharedUrlConsumed = { sharedUrlFlow.value = null },
                             isDarkTheme   = isDarkTheme,
@@ -144,11 +159,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Intent se URL extract karein. Multiple sources check karta hai:
+     *   1. intent.dataString  (ACTION_VIEW — WhatsApp, Telegram, Gmail)
+     *   2. intent "url" extra (LinkInterceptorActivity legacy)
+     *   3. intent EXTRA_TEXT  (ACTION_SEND — Share sheet)
+     */
+    private fun incomingBrowserUrl(intent: Intent?): String? {
+        intent ?: return null
+
+        // 1. Direct data URI — most common for link taps
+        intent.dataString?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // 2. "url" extra — legacy from LinkInterceptorActivity
+        intent.getStringExtra("url")?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // 3. EXTRA_TEXT — ACTION_SEND from WhatsApp/Telegram share
+        if (intent.action == Intent.ACTION_SEND) {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.let { text ->
+                val urlRegex = Regex("https?://[^\\s]+")
+                urlRegex.find(text)?.value?.takeIf { it.isNotBlank() }?.let { return it }
+            }
+        }
+
+        return null
+    }
+
     private fun handleShareIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_SEND &&
             intent.type?.startsWith("text") == true) {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
-            // URL extract karo shared text se
             val urlRegex = Regex("https?://[^\\s]+")
             val url = urlRegex.find(sharedText)?.value ?: sharedText.trim()
             if (url.isNotBlank()) {
@@ -159,7 +199,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent?) {
         super.onNewIntent(intent)
-        intent?.getStringExtra("url")?.let { interceptedUrlFlow.value = it }
+        setIntent(intent)
+
+        // Naya URL aaye toh flow + trigger dono update karein
+        incomingBrowserUrl(intent)?.let { url ->
+            interceptedUrlFlow.value = url
+            interceptedUrlTrigger.value = System.currentTimeMillis()
+        }
         handleShareIntent(intent)
     }
 
