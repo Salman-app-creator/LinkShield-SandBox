@@ -306,7 +306,7 @@ fun checkIsDefaultBrowser(context: Context): Boolean {
             context.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
         } else {
             val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://"))
-            val resolveInfo = context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_PACKAGE_DEFAULT_ONLY)
+            val resolveInfo = context.packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
             resolveInfo?.activityInfo?.packageName == context.packageName
         }
     }.getOrDefault(false)
